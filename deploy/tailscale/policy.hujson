@@ -1,0 +1,29 @@
+// Tailnet policy for the hub. Admin console > Access controls.
+//
+// STEP 1 (required, safe): add the tagOwners block to your current policy so you
+// can create an auth key tagged tag:hub. Keep everything else as it is.
+//
+// STEP 2 (optional hardening): replace your allow-all grant with the grants below.
+// Before saving, check the Machines page: add grants for any tagged devices you
+// already use, and list any subnet routes you advertise.
+{
+  "tagOwners": {
+    "tag:hub": ["autogroup:admin"],
+  },
+
+  "grants": [
+    // Your own (untagged) devices can reach each other, as before.
+    { "src": ["autogroup:member"], "dst": ["autogroup:member"], "ip": ["*"] },
+
+    // Keep using exit nodes.
+    { "src": ["autogroup:member"], "dst": ["autogroup:internet"], "ip": ["*"] },
+
+    // Keep reaching advertised subnet routes (replace with your own CIDRs, or delete).
+    // { "src": ["autogroup:member"], "dst": ["192.0.2.0/24"], "ip": ["*"] },
+
+    // Only you can open the hub, and only over HTTPS.
+    { "src": ["<YOUR_TAILSCALE_LOGIN>"], "dst": ["tag:hub"], "ip": ["tcp:443"] },
+  ],
+
+  // Keep your existing "ssh" section here unchanged.
+}

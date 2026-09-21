@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/
+.e2e-data/
+.env
+*.db
+*.db-*
+*.sqlite3
+test-results/
+playwright-report/
+.DS_Store
+private/

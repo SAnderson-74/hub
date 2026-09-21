@@ -1,0 +1,85 @@
+@import "tailwindcss";
+@source "../modules";
+
+/*
+  Design tokens. The default Tailwind palette is removed on purpose: use these
+  names (bg-mantle, text-muted, ring-surface-0, bg-accent, text-accent-text...).
+  Base colors follow Catppuccin Mocha (MIT). The accent is set at runtime from
+  the user's setting, see src/client/theme.ts.
+*/
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-crust: #11111b;
+  --color-mantle: #181825;
+  --color-base: #1e1e2e;
+  --color-surface-0: #313244;
+  --color-surface-1: #45475a;
+  --color-surface-2: #585b70;
+  --color-faint: #9399b2;
+  --color-muted: #a6adc8;
+  --color-fg: #cdd6f4;
+  --color-ok: #a6e3a1;
+  --color-warn: #f9e2af;
+  --color-danger: #f38ba8;
+
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-control: 0.875rem;
+  --radius-tile: 1.125rem;
+  --radius-panel: 1.625rem;
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-on-accent: var(--on-accent);
+}
+
+:root {
+  --accent: #22d3ee;
+  --accent-text: #22d3ee;
+  --on-accent: #11111b;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-base);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100dvh;
+    background-color: var(--color-base);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 3px;
+  }
+}
+
+/* Status light, like the link LEDs on a switch. Color comes from currentColor. */
+@utility led {
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, currentColor 18%, transparent),
+    0 0 12px color-mix(in oklab, currentColor 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

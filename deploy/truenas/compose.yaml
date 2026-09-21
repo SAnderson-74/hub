@@ -1,0 +1,54 @@
+# TrueNAS custom app: Apps > Discover Apps > ⋮ > Install via YAML. App name: hub
+# Replace every <PLACEHOLDER>. See docs/SETUP.md. Nothing here is published on your LAN;
+# the app is reachable only at https://hub.<your-tailnet>.ts.net
+services:
+  ts:
+    image: ghcr.io/tailscale/tailscale:stable
+    hostname: hub
+    environment:
+      TS_AUTHKEY: <TAILSCALE_AUTH_KEY>
+      TS_AUTH_ONCE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: 127.0.0.1:9002
+    volumes:
+      - /mnt/<POOL>/apps/hub/tailscale/state:/var/lib/tailscale
+      - /mnt/<POOL>/apps/hub/tailscale/config:/config:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  hub:
+    image: ghcr.io/<GITHUB_OWNER>/<REPO>:stable
+    network_mode: service:ts
+    user: "568:568"
+    depends_on:
+      ts:
+        condition: service_healthy
+        restart: true
+    environment:
+      HUB_OWNER_LOGIN: <YOUR_TAILSCALE_LOGIN>
+      HUB_TIMEZONE: <IANA_TIME_ZONE>
+      HUB_APP_NAME: Hub
+    volumes:
+      - /mnt/<POOL>/apps/hub/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
