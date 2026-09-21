@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Build tools are only needed if better-sqlite3 has to compile from source.
-FROM node:24-bookworm-slim AS toolchain
+FROM node:25-bookworm-slim AS toolchain
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
@@ -16,7 +16,7 @@ RUN npm run build
 FROM toolchain AS prod-deps
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 ARG HUB_VERSION=dev
 ENV NODE_ENV=production \
     HUB_VERSION=${HUB_VERSION} \
