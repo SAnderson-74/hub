@@ -1,6 +1,14 @@
 import { and, asc, count, eq, inArray, isNull, lte, type SQL, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, notFound } from "../../server/errors";
+import {
+  addDays,
+  daysBetween,
+  describeRecurrence,
+  nextDueDate,
+  type Recurrence,
+  type RecurrenceFrequency,
+} from "../../shared/recurrence";
 import type {
   TaskCreate,
   TaskListQuery,
@@ -27,6 +35,7 @@ export type TaskJson = {
   dueDate: string | null;
   sortOrder: number;
   completedAt: string | null;
+  recurrence: { frequency: RecurrenceFrequency; interval: number } | null;
   createdAt: string;
   updatedAt: string;
   tags: TagJson[];
@@ -68,6 +77,9 @@ function withExtras(db: Queryable, rows: TaskRow[]): TaskJson[] {
     dueDate: row.dueDate,
     sortOrder: row.sortOrder,
     completedAt: row.completedAt?.toISOString() ?? null,
+    recurrence: row.recurrence
+      ? { frequency: row.recurrence.frequency, interval: row.recurrence.interval }
+      : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     tags: tagMap.get(row.id) ?? [],
@@ -184,6 +196,8 @@ export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetail
       { id: null, parentId: input.parentId ?? null, projectId: input.projectId ?? null },
       input.projectId,
     );
+    const recurrence = input.recurrence ?? null;
+    if (recurrence && place.parentId !== null) throw badRequest(SUBTASKS_DONT_REPEAT);
     const status = input.status ?? "todo";
     const now = new Date();
     const row = tx
@@ -197,6 +211,7 @@ export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetail
         dueDate: input.dueDate ?? null,
         sortOrder: nextSortOrder(tx),
         completedAt: status === "done" ? now : null,
+        recurrence,
         createdAt: now,
         updatedAt: now,
       })
@@ -213,6 +228,9 @@ export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetail
   });
 }
 
+const SUBTASKS_DONT_REPEAT =
+  "Subtasks can't repeat. Set the repeat on the parent task, or stop this one repeating first.";
+
 const tracked = (row: TaskRow) => ({
   title: row.title,
   notes: row.notes,
@@ -221,9 +239,81 @@ const tracked = (row: TaskRow) => ({
   dueDate: row.dueDate,
   projectId: row.projectId,
   parentId: row.parentId,
+  repeat: row.recurrence ? describeRecurrence(row.recurrence) : null,
 });
 
-export function updateTask(db: Db, id: number, patch: TaskUpdate, actor: string): TaskDetailJson {
+/**
+ * Creates the next task in a repeating series from one just completed: same title,
+ * notes, priority, project, and tags, the subtasks reopened, and the next due date.
+ */
+function createNextInSeries(
+  tx: Queryable,
+  done: TaskRow,
+  rule: Recurrence,
+  today: string,
+  actor: string,
+): void {
+  const from = done.dueDate ?? today;
+  const dueDate = nextDueDate(rule, from, today);
+  const shift = daysBetween(from, dueDate);
+  const monthDay =
+    rule.frequency === "monthly" ? (rule.monthDay ?? Number(from.slice(8))) : undefined;
+  const now = new Date();
+  const copy = (source: TaskRow, parentId: number | null) =>
+    tx
+      .insert(tasks)
+      .values({
+        projectId: done.projectId,
+        parentId,
+        title: source.title,
+        notes: source.notes,
+        status: "todo",
+        priority: source.priority,
+        dueDate: parentId === null ? dueDate : source.dueDate && addDays(source.dueDate, shift),
+        sortOrder: nextSortOrder(tx),
+        recurrence:
+          parentId === null
+            ? { frequency: rule.frequency, interval: rule.interval, ...(monthDay && { monthDay }) }
+            : null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+
+  const created = [copy(done, null)];
+  const [parent] = created;
+  if (!parent) return;
+  const tagNames = (tagsFor(tx, "task", [done.id]).get(done.id) ?? []).map((tag) => tag.name);
+  if (tagNames.length > 0) setTags(tx, { type: "task", id: parent.id }, tagNames);
+  const subtasks = tx
+    .select()
+    .from(tasks)
+    .where(eq(tasks.parentId, done.id))
+    .orderBy(...inOrder)
+    .all();
+  for (const subtask of subtasks) created.push(copy(subtask, parent.id));
+  for (const task of created) {
+    recordActivity(tx, {
+      entity: { type: "task", id: task.id },
+      action: "created",
+      label: task.title,
+      actor,
+    });
+  }
+}
+
+/**
+ * Applies a change. Completing a repeating task creates the next one (see
+ * createNextInSeries); `today` is the local date that "late" is measured against.
+ */
+export function updateTask(
+  db: Db,
+  id: number,
+  patch: TaskUpdate,
+  actor: string,
+  today: string,
+): TaskDetailJson {
   return db.transaction((tx) => {
     const current = requireTask(tx, id);
     const now = new Date();
@@ -240,6 +330,15 @@ export function updateTask(db: Db, id: number, patch: TaskUpdate, actor: string)
     let completedAt = current.completedAt;
     if (status !== current.status) completedAt = status === "done" ? now : null;
 
+    let recurrence: Recurrence | null =
+      patch.recurrence !== undefined ? patch.recurrence : current.recurrence;
+    if (recurrence && place.parentId !== null) throw badRequest(SUBTASKS_DONT_REPEAT);
+    // A new due date sets a new day of the month to repeat on.
+    if (recurrence?.monthDay && patch.dueDate !== undefined && patch.dueDate !== current.dueDate) {
+      const { monthDay: _dropped, ...rest } = recurrence;
+      recurrence = rest;
+    }
+
     const next: TaskRow = {
       ...current,
       ...place,
@@ -250,15 +349,26 @@ export function updateTask(db: Db, id: number, patch: TaskUpdate, actor: string)
       dueDate: patch.dueDate !== undefined ? patch.dueDate : current.dueDate,
       sortOrder: patch.sortOrder ?? current.sortOrder,
       completedAt,
+      recurrence,
     };
     const changes = changedFields(tracked(current), tracked(next));
     if (patch.tags) {
       const tagChange = setTags(tx, { type: "task", id }, patch.tags);
       Object.assign(changes, changedFields({ tags: tagChange.before }, { tags: tagChange.after }));
     }
-    if (Object.keys(changes).length === 0 && next.sortOrder === current.sortOrder) {
+    const recurrenceChanged = JSON.stringify(recurrence) !== JSON.stringify(current.recurrence);
+    if (
+      Object.keys(changes).length === 0 &&
+      next.sortOrder === current.sortOrder &&
+      !recurrenceChanged
+    ) {
       return getTask(tx, id);
     }
+
+    // Completing a repeating task hands the rule on to the next one, so reopening and
+    // completing this one again never creates a duplicate.
+    const completesSeries = recurrence !== null && current.status !== "done" && status === "done";
+    if (completesSeries && recurrence) createNextInSeries(tx, next, recurrence, today, actor);
 
     tx.update(tasks)
       .set({
@@ -271,6 +381,7 @@ export function updateTask(db: Db, id: number, patch: TaskUpdate, actor: string)
         dueDate: next.dueDate,
         sortOrder: next.sortOrder,
         completedAt: next.completedAt,
+        recurrence: completesSeries ? null : recurrence,
         updatedAt: now,
       })
       .where(eq(tasks.id, id))

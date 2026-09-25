@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
+import { addDays, addMonths } from "../../shared/recurrence";
 import type { ProjectCreate, TaskCreate } from "../../shared/tasks";
 
 let t: TestApp;
@@ -253,5 +254,107 @@ describe("task tags", () => {
 
     const tooLong = await t.api.tasks.$post({ json: { title: "x", tags: ["a".repeat(41)] } });
     expect(tooLong.status).toBe(400);
+  });
+});
+
+describe("repeating tasks", () => {
+  // The test app runs in UTC, which is what the server uses for "today".
+  const today = new Date().toISOString().slice(0, 10);
+  const complete = (id: number) => patchTask(id, { status: "done" });
+
+  it("creates the next task when one is completed, and only once", async () => {
+    const project = await newProject({ name: "Chores" });
+    const task = await newTask({
+      title: "Water plants",
+      notes: "Both windowsills",
+      priority: 2,
+      projectId: project.id,
+      dueDate: today,
+      tags: ["Home"],
+      recurrence: { frequency: "weekly", interval: 1 },
+    });
+    expect(task.recurrence).toEqual({ frequency: "weekly", interval: 1 });
+    const done = await newTask({ title: "Fill can", parentId: task.id, status: "done" });
+    await newTask({ title: "Check soil", parentId: task.id });
+
+    const completed = await body(await complete(task.id));
+    expect(completed).toMatchObject({ status: "done", recurrence: null });
+
+    const [next, ...rest] = (await listTasks({ status: "todo" })).filter(
+      (item) => item.title === "Water plants",
+    );
+    expect(rest).toEqual([]);
+    expect(next).toMatchObject({
+      notes: "Both windowsills",
+      priority: 2,
+      projectId: project.id,
+      dueDate: addDays(today, 7),
+      recurrence: { frequency: "weekly", interval: 1 },
+      tags: [expect.objectContaining({ name: "Home" })],
+      subtaskCount: 2,
+      subtasksDone: 0,
+    });
+    // The finished subtask is still done on the completed task.
+    expect((await body(await getTask(done.id))).status).toBe("done");
+
+    // Reopening and completing again doesn't start a second series.
+    await patchTask(task.id, { status: "todo" });
+    await complete(task.id);
+    const copies = (await listTasks()).filter((item) => item.title === "Water plants");
+    expect(copies).toHaveLength(2);
+  });
+
+  it("skips ahead when finished late and uses today without a due date", async () => {
+    const late = await newTask({
+      title: "Stretch",
+      dueDate: addDays(today, -10),
+      recurrence: { frequency: "daily", interval: 1 },
+    });
+    await complete(late.id);
+    const monthly = await newTask({
+      title: "Replace filter",
+      recurrence: { frequency: "monthly", interval: 2 },
+    });
+    await complete(monthly.id);
+
+    const open = await listTasks({ status: "todo" });
+    expect(open.find((item) => item.title === "Stretch")?.dueDate).toBe(addDays(today, 1));
+    expect(open.find((item) => item.title === "Replace filter")).toMatchObject({
+      dueDate: addMonths(today, 2),
+      recurrence: { frequency: "monthly", interval: 2 },
+    });
+  });
+
+  it("can be stopped, and never applies to subtasks", async () => {
+    // The interval defaults to 1.
+    const task = await body(
+      await t.api.tasks.$post({
+        json: { title: "Backup photos", recurrence: { frequency: "daily" } },
+      }),
+    );
+    expect(task.recurrence).toEqual({ frequency: "daily", interval: 1 });
+
+    const subtask = await failure(
+      await t.api.tasks.$post({
+        json: { title: "Copy files", parentId: task.id, recurrence: { frequency: "daily" } },
+      }),
+    );
+    expect(subtask).toMatchObject({
+      status: 400,
+      error: expect.stringContaining("Subtasks can't repeat"),
+    });
+    const other = await newTask({ title: "Sort albums" });
+    const demote = await failure(await patchTask(task.id, { parentId: other.id }));
+    expect(demote.error).toContain("Subtasks can't repeat");
+
+    const stopped = await body(await patchTask(task.id, { recurrence: null }));
+    expect(stopped.recurrence).toBeNull();
+    await complete(task.id);
+    expect((await listTasks()).filter((item) => item.title === "Backup photos")).toHaveLength(1);
+
+    const history = (
+      await body(await t.api.activity.$get({ query: { type: "task", id: String(task.id) } }))
+    ).entries;
+    expect(history[1]?.details).toEqual({ changes: { repeat: { from: "Daily", to: null } } });
   });
 });

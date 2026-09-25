@@ -122,17 +122,25 @@ export function TasksPage() {
   const openCount = taskList.filter((task) => task.status !== "done").length;
   const doingCount = taskList.filter((task) => task.status === "doing").length;
 
+  // Completing a repeating task adds the next one; say so for screen readers too.
+  const announceRepeat = (task: TaskItem, status: TaskItem["status"]) => {
+    if (task.recurrence && task.status !== "done" && status === "done") {
+      setAnnouncement(`Done. The next “${task.title}” is in To do.`);
+    }
+  };
+
   const move = ({ task, status, sortOrder }: TaskMove) => {
-    updateTask.mutate({
-      id: task.id,
-      patch: { sortOrder, ...(status !== task.status && { status }) },
-    });
+    updateTask.mutate(
+      { id: task.id, patch: { sortOrder, ...(status !== task.status && { status }) } },
+      { onSuccess: () => announceRepeat(task, status) },
+    );
   };
 
   // Failures show in the alert below, from the mutation's error state.
   const toggleDone = (task: TaskItem, done: boolean) =>
     updateTask
       .mutateAsync({ id: task.id, patch: { status: done ? "done" : "todo" } })
+      .then(() => announceRepeat(task, done ? "done" : "todo"))
       .catch(() => undefined);
 
   const onAdd = (event: FormEvent) => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { tagNamesSchema } from "./entities";
+import { recurrenceSchema } from "./recurrence";
 
 export const PROJECT_KINDS = ["general", "course", "homelab", "business", "resale"] as const;
 export type ProjectKind = (typeof PROJECT_KINDS)[number];
@@ -77,6 +78,8 @@ export const taskCreateSchema = z
     projectId: id.nullable().optional(),
     parentId: id.nullable().optional(),
     tags: tagNamesSchema.optional(),
+    /** Top-level tasks only. */
+    recurrence: recurrenceSchema.nullable().optional(),
   })
   .strict();
 export type TaskCreate = z.infer<typeof taskCreateSchema>;
@@ -92,6 +95,8 @@ export const taskUpdateSchema = z
     parentId: id.nullable(),
     /** Replaces the task's tags. */
     tags: tagNamesSchema,
+    /** null stops the repeat. */
+    recurrence: recurrenceSchema.nullable(),
     sortOrder,
   })
   .partial()

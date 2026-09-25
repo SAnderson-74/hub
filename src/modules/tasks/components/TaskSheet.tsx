@@ -12,12 +12,20 @@ import {
   textareaClass,
 } from "../../../client/components/ui";
 import {
+  describeRecurrence,
+  nextDueDate,
+  RECURRENCE_FREQUENCIES,
+  type RecurrenceFrequency,
+  recurrenceUnit,
+} from "../../../shared/recurrence";
+import {
   TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   TASK_STATUSES,
   type TaskPriority,
 } from "../../../shared/tasks";
-import { type Draft, draftChanges, toDraft } from "../draft";
+import { formatShortDate, localDate } from "../dates";
+import { type Draft, draftChanges, parseInterval, toDraft } from "../draft";
 import {
   type ProjectItem,
   type TaskDetail,
@@ -114,6 +122,9 @@ function TaskEditor({
   const patch = draftChanges(task, draft);
   const dirty = Object.keys(patch).length > 0;
   const titleMissing = draft.title.trim() === "";
+  const interval = parseInterval(draft.interval);
+  const intervalInvalid = draft.repeat !== "" && interval === null;
+  const blocked = titleMissing || intervalInvalid;
   const isSubtask = task.parentId !== null;
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -124,13 +135,14 @@ function TaskEditor({
   };
 
   const save = (after?: () => void) => {
-    if (titleMissing || !dirty) return;
+    if (blocked || !dirty) return;
     update.mutate(
       { id: task.id, patch },
       {
         onSuccess: (saved) => {
           setDraft(toDraft(saved));
-          setMessage("Task saved");
+          const repeated = task.recurrence && task.status !== "done" && saved.status === "done";
+          setMessage(repeated ? "Task saved. The next one is in To do." : "Task saved");
           after?.();
         },
       },
@@ -242,6 +254,15 @@ function TaskEditor({
           </div>
         </div>
 
+        {isSubtask ? null : (
+          <RepeatFields
+            draft={draft}
+            interval={interval}
+            invalid={intervalInvalid}
+            onChange={set}
+          />
+        )}
+
         <div>
           <label htmlFor={`${ids}-project`} className={labelClass}>
             Project
@@ -306,7 +327,7 @@ function TaskEditor({
               <button
                 type="button"
                 className={primaryButton}
-                disabled={titleMissing || update.isPending}
+                disabled={blocked || update.isPending}
                 onClick={() => save(() => onResolveLeave(true))}
               >
                 Save task
@@ -328,7 +349,7 @@ function TaskEditor({
             <button
               type="submit"
               className={primaryButton}
-              disabled={!dirty || titleMissing || update.isPending}
+              disabled={!dirty || blocked || update.isPending}
             >
               {update.isPending ? "Saving…" : "Save task"}
             </button>
@@ -476,6 +497,82 @@ function DeleteTask({ task, onDeleted }: { task: TaskDetail; onDeleted: () => vo
           {remove.error.message}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function RepeatFields({
+  draft,
+  interval,
+  invalid,
+  onChange,
+}: {
+  draft: Draft;
+  interval: number | null;
+  invalid: boolean;
+  onChange: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+}) {
+  const ids = useId();
+  const today = localDate();
+  const rule = draft.repeat && interval !== null ? { frequency: draft.repeat, interval } : null;
+  const next = rule ? nextDueDate(rule, draft.dueDate || today, today) : null;
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`${ids}-repeat`} className={labelClass}>
+            Repeat
+          </label>
+          <select
+            id={`${ids}-repeat`}
+            value={draft.repeat}
+            onChange={(event) => onChange("repeat", event.target.value as RecurrenceFrequency | "")}
+            aria-describedby={`${ids}-repeat-note`}
+            className={inputClass}
+          >
+            <option value="">Doesn't repeat</option>
+            {RECURRENCE_FREQUENCIES.map((frequency) => (
+              <option key={frequency} value={frequency}>
+                {describeRecurrence({ frequency, interval: 1 })}
+              </option>
+            ))}
+          </select>
+        </div>
+        {draft.repeat ? (
+          <div>
+            <label htmlFor={`${ids}-interval`} className={labelClass}>
+              Every
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id={`${ids}-interval`}
+                type="text"
+                inputMode="numeric"
+                value={draft.interval}
+                onChange={(event) => onChange("interval", event.target.value)}
+                maxLength={2}
+                aria-invalid={invalid}
+                aria-describedby={`${ids}-repeat-note`}
+                className={`${inputClass} min-w-0 text-center tabular-nums`}
+              />
+              <span className="shrink-0 text-muted">
+                {recurrenceUnit(draft.repeat, interval ?? 2)}
+              </span>
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <p
+        id={`${ids}-repeat-note`}
+        className={`mt-1.5 text-sm ${invalid ? "text-danger" : "text-muted"}`}
+      >
+        {invalid
+          ? "Use a whole number from 1 to 99."
+          : next
+            ? `Completing it adds the next one, due ${formatShortDate(next, today)}.`
+            : "Repeating tasks come back when you complete them."}
+      </p>
     </div>
   );
 }
