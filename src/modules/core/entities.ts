@@ -2,6 +2,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import type { Queryable } from "../../server/db/client";
 import { badRequest, notFound } from "../../server/errors";
 import { ENTITY_TYPE_NAMES, type EntityRef, type EntityType } from "../../shared/entities";
+import { goals } from "../goals/schema";
 import { projects, tasks } from "../tasks/schema";
 import { recordActivity } from "./activity.service";
 import { links, taggings } from "./schema";
@@ -18,12 +19,17 @@ const lookups: Record<EntityType, LabelLookup> = {
       .all(),
   task: (db, ids) =>
     db.select({ id: tasks.id, label: tasks.title }).from(tasks).where(inArray(tasks.id, ids)).all(),
+  goal: (db, ids) =>
+    db.select({ id: goals.id, label: goals.title }).from(goals).where(inArray(goals.id, ids)).all(),
 };
 
 /** Current names of the given entities. Ids that don't exist are left out. */
 export function entityLabels(db: Queryable, type: EntityType, ids: number[]): Map<number, string> {
-  if (ids.length === 0) return new Map();
-  return new Map(lookups[type](db, [...new Set(ids)]).map((row) => [row.id, row.label]));
+  // A type this build doesn't know (a newer build wrote it, then was rolled back)
+  // reads as deleted rather than failing the request.
+  const lookup = lookups[type] as LabelLookup | undefined;
+  if (ids.length === 0 || !lookup) return new Map();
+  return new Map(lookup(db, [...new Set(ids)]).map((row) => [row.id, row.label]));
 }
 
 /**
