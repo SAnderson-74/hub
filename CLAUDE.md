@@ -59,7 +59,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 - Design for iPhone first, then desktop. Touch targets at least 44px. Respect safe areas.
 - Tailwind v4 with the tokens in `src/client/styles.css` only (the default palette is removed): `bg-base`, `bg-mantle`, `bg-surface-0..2`, `text-fg`, `text-muted`, `text-faint`, `ok`, `warn`, `danger`, `accent`, `text-accent-text` (text in the accent color), `text-on-accent` (text on accent backgrounds).
 - Radius by level: `rounded-panel` for `Panel`, `rounded-tile` for tiles inside panels, `rounded-control` for inputs and nav items, `rounded-full` for buttons and chips. No drop shadows.
-- Reuse `Panel`, `PageHeader`, `StatusDot`, `LoadingRows`, `ErrorNote`. Status colors always come with text.
+- Reuse `Panel`, `PageHeader`, `StatusDot`, `LoadingRows`, `ErrorNote`, and `Sheet` (a `<dialog>` that is a bottom sheet on phones) plus the control classes in `src/client/components/ui.ts`. Status colors always come with text.
 - Copy: sentence case, plain verbs. Buttons say what happens ("Save accent") and confirmations reuse the verb ("Accent saved"). Errors say what happened and how to fix it. No all-caps labels.
 - Charts: `recharts`, colors from CSS variables, always with a one-line text summary.
 - The Content-Security-Policy only allows scripts, styles, and fonts from the app itself: no inline scripts, CDNs, injected `<style>` tags, or `data:` fonts.
