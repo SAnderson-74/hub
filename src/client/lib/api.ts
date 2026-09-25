@@ -24,6 +24,9 @@ export async function toApiError(response: {
     const body = await response.json();
     if (body && typeof body === "object" && "error" in body && typeof body.error === "string") {
       message = body.error;
+      // Validation errors list what to fix; the first one is the most useful.
+      const issue = "issues" in body && Array.isArray(body.issues) ? body.issues[0] : undefined;
+      if (issue && typeof issue.message === "string") message += ` ${issue.message}`;
     }
   } catch {
     // Not JSON; keep the generic message.
