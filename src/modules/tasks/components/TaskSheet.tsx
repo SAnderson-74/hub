@@ -24,6 +24,7 @@ import {
   TASK_STATUSES,
   type TaskPriority,
 } from "../../../shared/tasks";
+import { TaskTime } from "../../time/components/TaskTime";
 import { formatShortDate, localDate } from "../dates";
 import { type Draft, draftChanges, parseInterval, toDraft } from "../draft";
 import {
@@ -370,6 +371,7 @@ function TaskEditor({
         ) : null}
       </form>
 
+      <TaskTime taskId={task.id} />
       {isSubtask ? null : <Subtasks task={task} onOpenTask={onOpenTask} />}
       <DeleteTask task={task} onDeleted={onDeleted} />
     </div>

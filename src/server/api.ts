@@ -6,6 +6,7 @@ import { systemRoutes } from "../modules/core/system.routes";
 import { tagRoutes } from "../modules/core/tags.routes";
 import { projectRoutes } from "../modules/tasks/projects.routes";
 import { taskRoutes } from "../modules/tasks/tasks.routes";
+import { timeRoutes } from "../modules/time/time.routes";
 import type { Deps } from "./deps";
 import type { AppEnv } from "./env";
 
@@ -23,7 +24,8 @@ export function createApi(deps: Deps) {
     .route("/tasks", taskRoutes(deps))
     .route("/tags", tagRoutes(deps))
     .route("/links", linkRoutes(deps))
-    .route("/activity", activityRoutes(deps));
+    .route("/activity", activityRoutes(deps))
+    .route("/time", timeRoutes(deps));
 }
 
 export type Api = ReturnType<typeof createApi>;

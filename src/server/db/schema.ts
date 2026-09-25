@@ -2,3 +2,4 @@
 // When you add src/modules/<name>/schema.ts, add one export line here.
 export * from "../../modules/core/schema";
 export * from "../../modules/tasks/schema";
+export * from "../../modules/time/schema";

@@ -22,4 +22,4 @@ export const dangerButton =
   "inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full px-4 font-semibold text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40";
 
 export const iconButton =
-  "grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-0 hover:text-fg";
+  "grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-0 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40";
