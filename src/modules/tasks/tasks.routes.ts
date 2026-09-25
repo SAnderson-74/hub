@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { localDateParts } from "../../server/db/backup";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
@@ -8,7 +9,9 @@ import { createTask, deleteTask, getTask, listTasks, updateTask } from "./tasks.
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric task id."));
 
-export function taskRoutes({ db }: Deps) {
+export function taskRoutes({ db, config }: Deps) {
+  // "Today" for repeating tasks, in the owner's time zone.
+  const today = () => localDateParts(new Date(), config.timeZone).date;
   return new Hono<AppEnv>()
     .get(
       "/",
@@ -24,7 +27,15 @@ export function taskRoutes({ db }: Deps) {
       idParam,
       zValidator("json", taskUpdateSchema, invalid("Those task changes aren't valid.")),
       (c) =>
-        c.json(updateTask(db, c.req.valid("param").id, c.req.valid("json"), c.get("user").login)),
+        c.json(
+          updateTask(
+            db,
+            c.req.valid("param").id,
+            c.req.valid("json"),
+            c.get("user").login,
+            today(),
+          ),
+        ),
     )
     .delete("/:id", idParam, (c) => {
       deleteTask(db, c.req.valid("param").id, c.get("user").login);

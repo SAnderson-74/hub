@@ -15,6 +15,13 @@
       "when": 1790343446165,
       "tag": "0001_tasks_and_links",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790374271226,
+      "tag": "0002_task_recurrence",
+      "breakpoints": true
     }
   ]
 }

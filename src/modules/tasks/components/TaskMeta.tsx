@@ -1,4 +1,5 @@
-import { CalendarDays, Flag, ListChecks, Tag } from "lucide-react";
+import { CalendarDays, Flag, ListChecks, Repeat, Tag } from "lucide-react";
+import { describeRecurrence } from "../../../shared/recurrence";
 import { TASK_PRIORITY_LABELS } from "../../../shared/tasks";
 import { type DueTone, describeDue } from "../dates";
 import type { TaskItem } from "../queries";
@@ -31,6 +32,12 @@ export function TaskMeta({
       >
         <CalendarDays aria-hidden="true" className="size-3.5" />
         {due.label}
+      </span>
+    ) : null,
+    task.recurrence ? (
+      <span key="repeat" className="inline-flex items-center gap-1 text-muted">
+        <Repeat aria-hidden="true" className="size-3.5" />
+        {describeRecurrence(task.recurrence)}
       </span>
     ) : null,
     task.priority > 0 ? (

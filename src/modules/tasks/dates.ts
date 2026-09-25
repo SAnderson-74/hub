@@ -38,3 +38,14 @@ export function describeDue(dueDate: string, today: string): { label: string; to
   if (days < 7) return { label: `Due ${format(dueDate, { weekday: "long" })}`, tone: "muted" };
   return { label: `Due ${short}`, tone: "muted" };
 }
+
+/** A compact date, like "Fri, Oct 3" (with the year when it isn't this year's). */
+export function formatShortDate(isoDate: string, today: string): string {
+  const sameYear = isoDate.slice(0, 4) === today.slice(0, 4);
+  return format(isoDate, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  });
+}

@@ -106,3 +106,42 @@ test("tasks can be added, edited with subtasks, and moved on the board", async (
   expect(errors).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("tasks-board.png"), fullPage: true });
 });
+
+test("a repeating task comes back when it's completed", async ({ page }, testInfo) => {
+  const res = await page.request.post("/api/projects", {
+    data: { name: `Plants ${testInfo.project.name} ${Date.now()}` },
+  });
+  const project = await res.json();
+  const errors = trackErrors(page);
+
+  await page.goto(`/tasks?project=${project.id}`);
+  await page.getByRole("radio", { name: "List" }).check();
+  const newTask = page.getByLabel("New task");
+  await newTask.fill("Water plants");
+  await newTask.press("Enter");
+  const todo = page.getByRole("region", { name: "To do" });
+  await todo.getByRole("button", { name: /^Water plants/ }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Task" });
+  await sheet.getByLabel("Repeat").selectOption({ label: "Weekly" });
+  await sheet.getByLabel("Every").fill("2");
+  await expect(sheet.getByText(/Completing it adds the next one, due/)).toBeVisible();
+  await sheet.getByRole("button", { name: "Save task" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Task saved");
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toBeHidden();
+
+  const row = todo.getByRole("button", { name: /^Water plants/ });
+  await expect(row).toContainText("Every 2 weeks");
+  await page.getByRole("checkbox", { name: "Water plants" }).click();
+
+  // The completed one moves to Done and the next one waits in To do, due in two weeks.
+  await expect(page.getByRole("status").filter({ hasText: "The next “Water plants”" })).toHaveCount(
+    1,
+  );
+  await expect(row).toContainText("Every 2 weeks");
+  await expect(row).toContainText("Due");
+  await page.locator("summary", { hasText: "Done" }).click();
+  await expect(page.getByRole("checkbox", { name: "Water plants" })).toHaveCount(2);
+  expect(errors).toEqual([]);
+});

@@ -67,7 +67,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 - [x] 1.1 Core tables (projects, tasks with subtasks, tags, links, activity log), API, tests
 - [x] 1.2 Tasks UI: list and Kanban board (drag on desktop, move menu on phone), task sheet with subtasks
-- [ ] 1.3 Recurring tasks (daily, weekly, monthly; the next one is created on completion)
+- [x] 1.3 Recurring tasks (daily, weekly, monthly; the next one is created on completion)
 - [ ] 1.4 Time tracking: start/stop timer, manual entries, weekly chart
 - [ ] 1.5 Goals and milestones with target dates, progress, and a timeline view
 - [ ] 1.6 Courses: terms, courses, credits, assessments, planned windows; `hub-education/v1` import; pacing timeline with a today marker

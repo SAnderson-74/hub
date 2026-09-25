@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftChanges, parseTags, toDraft } from "./draft";
+import { draftChanges, parseInterval, parseTags, toDraft } from "./draft";
 import type { TaskDetail } from "./queries";
 
 const task: TaskDetail = {
@@ -13,6 +13,7 @@ const task: TaskDetail = {
   dueDate: null,
   sortOrder: 1,
   completedAt: null,
+  recurrence: null,
   createdAt: "2030-01-01T00:00:00.000Z",
   updatedAt: "2030-01-01T00:00:00.000Z",
   tags: [{ id: 1, name: "outdoors" }],
@@ -52,5 +53,26 @@ describe("task form", () => {
     });
     const cleared = draftChanges({ ...task, dueDate: "2030-02-01" }, toDraft(task));
     expect(cleared).toEqual({ dueDate: null });
+  });
+
+  it("turns the repeat fields into a rule, or null to stop repeating", () => {
+    const start = toDraft(task);
+    expect(start).toMatchObject({ repeat: "", interval: "1" });
+    expect(draftChanges(task, { ...start, repeat: "weekly", interval: "2" })).toEqual({
+      recurrence: { frequency: "weekly", interval: 2 },
+    });
+    const repeating = { ...task, recurrence: { frequency: "weekly" as const, interval: 2 } };
+    expect(draftChanges(repeating, toDraft(repeating))).toEqual({});
+    expect(draftChanges(repeating, { ...toDraft(repeating), repeat: "" })).toEqual({
+      recurrence: null,
+    });
+    // An interval that isn't valid yet isn't sent.
+    expect(draftChanges(repeating, { ...toDraft(repeating), interval: "" })).toEqual({});
+    expect([
+      parseInterval("3"),
+      parseInterval("0"),
+      parseInterval("100"),
+      parseInterval("2.5"),
+    ]).toEqual([3, null, null, null]);
   });
 });

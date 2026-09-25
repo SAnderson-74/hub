@@ -6,6 +6,7 @@ import {
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
+import type { Recurrence } from "../../shared/recurrence";
 import { PROJECT_KINDS, TASK_STATUSES, type TaskPriority } from "../../shared/tasks";
 
 // Ids use AUTOINCREMENT so a deleted row's id is never reused: links and the
@@ -51,6 +52,8 @@ export const tasks = sqliteTable(
     dueDate: text("due_date"),
     sortOrder: real("sort_order").notNull().default(0),
     completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    /** Repeat rule. Completing the task creates the next one, which takes the rule over. */
+    recurrence: text("recurrence", { mode: "json" }).$type<Recurrence>(),
     ...timestamps(),
   },
   (t) => [
