@@ -1,6 +1,11 @@
 import { Hono } from "hono";
+import { activityRoutes } from "../modules/core/activity.routes";
+import { linkRoutes } from "../modules/core/links.routes";
 import { settingsRoutes } from "../modules/core/settings.routes";
 import { systemRoutes } from "../modules/core/system.routes";
+import { tagRoutes } from "../modules/core/tags.routes";
+import { projectRoutes } from "../modules/tasks/projects.routes";
+import { taskRoutes } from "../modules/tasks/tasks.routes";
 import type { Deps } from "./deps";
 import type { AppEnv } from "./env";
 
@@ -13,7 +18,12 @@ export function createApi(deps: Deps) {
   return new Hono<AppEnv>()
     .get("/me", (c) => c.json(c.get("user")))
     .route("/system", systemRoutes(deps))
-    .route("/settings", settingsRoutes(deps));
+    .route("/settings", settingsRoutes(deps))
+    .route("/projects", projectRoutes(deps))
+    .route("/tasks", taskRoutes(deps))
+    .route("/tags", tagRoutes(deps))
+    .route("/links", linkRoutes(deps))
+    .route("/activity", activityRoutes(deps));
 }
 
 export type Api = ReturnType<typeof createApi>;

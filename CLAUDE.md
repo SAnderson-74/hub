@@ -33,10 +33,11 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 
 1. Tables in `src/modules/<name>/schema.ts`; export them from `src/server/db/schema.ts`.
 2. `npm run db:generate -- --name <what_changed>` and commit the new files in `drizzle/`.
-3. Logic in `<name>.service.ts`, routes in `<name>.routes.ts` using `zValidator`. Put zod schemas the browser also needs in `src/shared/<name>.ts`.
+3. Logic in `<name>.service.ts`, routes in `<name>.routes.ts` using `zValidator(target, schema, invalid("..."))` (`src/server/validate.ts`). Services throw `notFound`, `badRequest`, or `conflict` from `src/server/errors.ts`. Put zod schemas the browser also needs in `src/shared/<name>.ts`.
 4. Mount the routes in `src/server/api.ts` with one `.route()` line. Keep the chain intact; it types the browser client.
 5. Pages in `src/modules/<name>/pages/`, registered in `src/client/pages.tsx`. Data hooks in `src/modules/<name>/queries.ts` using `api` from `src/client/lib/api.ts`.
-6. Tests next to the code (`*.test.ts`, in-memory database like `src/server/app.test.ts`), plus one e2e check for the main flow.
+6. Tests next to the code (`*.test.ts`), using `createTestApp()` from `src/server/testing.ts` (in-memory database, typed client), plus one e2e check for the main flow.
+7. If its records should be taggable, linkable, or on timelines: add the type to `ENTITY_TYPES` in `src/shared/entities.ts` and a lookup in `src/modules/core/entities.ts`, call `recordActivity` on changes, and call `detachEntities` before deleting rows.
 
 ## Database rules
 

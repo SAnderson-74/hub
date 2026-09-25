@@ -1,5 +1,6 @@
-import Database from "better-sqlite3";
+import Database, { type RunResult } from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import * as schema from "./schema";
 
 export type Sqlite = Database.Database;
@@ -16,3 +17,6 @@ export function openDatabase(file: string) {
 }
 
 export type Db = ReturnType<typeof openDatabase>["db"];
+
+/** The database or an open transaction. Helpers that take part in a caller's transaction accept this. */
+export type Queryable = BaseSQLiteDatabase<"sync", RunResult, typeof schema>;

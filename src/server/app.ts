@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import { createApi } from "./api";
 import { identify, sameOriginWrites } from "./auth";
@@ -52,6 +53,10 @@ export function createApp(deps: Deps) {
   if (config.staticDir) mountBrowserApp(app, config.staticDir);
 
   app.onError((error, c) => {
+    // Expected failures, like a missing task or malformed JSON.
+    if (error instanceof HTTPException) {
+      return c.json({ error: error.message || "That request couldn't be handled." }, error.status);
+    }
     log.error("Unhandled error", { method: c.req.method, path: c.req.path, ...errorFields(error) });
     return c.json({ error: "Something went wrong on the server. Check the app logs." }, 500);
   });
