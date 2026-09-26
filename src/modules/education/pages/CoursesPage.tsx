@@ -16,6 +16,7 @@ import { formatShortDate, localDate } from "../../tasks/dates";
 import { CourseSheet, type CourseTarget } from "../components/CourseSheet";
 import { ImportSheet } from "../components/ImportSheet";
 import { PacingTimeline, TermSummary } from "../components/Pacing";
+import { StreakSettingsLink, StudyStreakSummary } from "../components/StudyStreak";
 import { TermSheet, type TermTarget } from "../components/TermSheet";
 import { defaultTerm, formatCredits } from "../pacing";
 import { type Course, type Term, useTerms } from "../queries";
@@ -111,10 +112,19 @@ export function CoursesPage() {
             </button>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-            <Panel title="Credits" className="lg:col-span-5">
-              <TermSummary term={term} today={today} />
-            </Panel>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+            <div className="grid grid-cols-1 gap-4 lg:col-span-5 lg:gap-6">
+              <Panel title="Credits">
+                <TermSummary term={term} today={today} />
+              </Panel>
+              <Panel
+                title="Study streak"
+                description="Days with enough time logged on courses."
+                action={<StreakSettingsLink />}
+              >
+                <StudyStreakSummary />
+              </Panel>
+            </div>
             <Panel
               title="Pacing"
               description="Each course's planned window across the term."

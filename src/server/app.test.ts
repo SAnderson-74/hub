@@ -87,7 +87,7 @@ describe("settings API", () => {
   it("returns defaults, saves changes, and rejects invalid values", async () => {
     const app = await setup();
     const initial = await app.request("/api/settings", { headers: owner });
-    expect(await initial.json()).toEqual({ accentColor: "#22d3ee" });
+    expect(await initial.json()).toEqual({ accentColor: "#22d3ee", studyMinimumMinutes: 30 });
 
     const saved = await app.request("/api/settings", {
       method: "PUT",
@@ -95,10 +95,10 @@ describe("settings API", () => {
       body: JSON.stringify({ accentColor: "#FF5FB7" }),
     });
     expect(saved.status).toBe(200);
-    expect(await saved.json()).toEqual({ accentColor: "#ff5fb7" });
+    expect(await saved.json()).toEqual({ accentColor: "#ff5fb7", studyMinimumMinutes: 30 });
 
     const reread = await app.request("/api/settings", { headers: owner });
-    expect(await reread.json()).toEqual({ accentColor: "#ff5fb7" });
+    expect(await reread.json()).toEqual({ accentColor: "#ff5fb7", studyMinimumMinutes: 30 });
 
     const invalid = await app.request("/api/settings", {
       method: "PUT",

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
 import type { EntityRef } from "../../shared/entities";
 import type { TimeEntryCreate, TimeEntryUpdate, TimerStart } from "../../shared/time";
+import { streakKey } from "../education/queries";
 
 async function fetchTimer() {
   const res = await api.time.timer.$get();
@@ -45,7 +46,10 @@ function useTimeMutation<Input, Output>(mutationFn: (input: Input) => Promise<Ou
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.all }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.all });
+      void queryClient.invalidateQueries({ queryKey: streakKey });
+    },
   });
 }
 
