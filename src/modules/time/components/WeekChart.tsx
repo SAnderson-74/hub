@@ -41,8 +41,8 @@ export function WeekChart({ days, summary }: { days: number[]; summary: string }
     minutes,
   }));
   const bar = themeColor("--accent-text", "#22d3ee");
-  const ink = themeColor("--color-muted", "#a6adc8");
-  const grid = themeColor("--color-surface-0", "#313244");
+  const ink = themeColor("--color-muted", "#a0afc8");
+  const grid = themeColor("--color-surface-0", "#2a3444");
 
   return (
     <figure>

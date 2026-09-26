@@ -4,8 +4,8 @@
 export const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Background the accent is drawn on (matches --color-base in styles.css). */
-export const BASE_BACKGROUND = "#1e1e2e";
-const DARK_TEXT = "#11111b";
+export const BASE_BACKGROUND = "#17202e";
+const DARK_TEXT = "#0d121b";
 const LIGHT_TEXT = "#ffffff";
 
 type Rgb = { r: number; g: number; b: number };
