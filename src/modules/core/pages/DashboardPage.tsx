@@ -52,7 +52,7 @@ export function DashboardPage() {
         title={firstName ? `${greeting}, ${firstName}` : greeting}
         subtitle={formatLongDate(now)}
       />
-      <div className="grid gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
           title="System"
           className="lg:col-span-8"
