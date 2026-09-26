@@ -29,6 +29,13 @@
       "when": 1790375123007,
       "tag": "0003_time_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790376942401,
+      "tag": "0004_goals_and_milestones",
+      "breakpoints": true
     }
   ]
 }
