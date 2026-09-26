@@ -6,6 +6,7 @@ import { systemRoutes } from "../modules/core/system.routes";
 import { tagRoutes } from "../modules/core/tags.routes";
 import { educationRoutes } from "../modules/education/education.routes";
 import { goalRoutes } from "../modules/goals/goals.routes";
+import { resaleRoutes } from "../modules/resale/resale.routes";
 import { projectRoutes } from "../modules/tasks/projects.routes";
 import { taskRoutes } from "../modules/tasks/tasks.routes";
 import { timeRoutes } from "../modules/time/time.routes";
@@ -29,7 +30,8 @@ export function createApi(deps: Deps) {
     .route("/activity", activityRoutes(deps))
     .route("/time", timeRoutes(deps))
     .route("/goals", goalRoutes(deps))
-    .route("/education", educationRoutes(deps));
+    .route("/education", educationRoutes(deps))
+    .route("/resale", resaleRoutes(deps));
 }
 
 export type Api = ReturnType<typeof createApi>;

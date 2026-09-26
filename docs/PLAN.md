@@ -76,7 +76,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 ### Phase 2: Resale
 
-- [ ] 2.1 Items with status (sourcing, acquired, repairing, listed, sold, kept), purchase details, platforms kept in the database
+- [x] 2.1 Items with status (sourcing, acquired, repairing, listed, sold, kept), purchase details, platforms kept in the database
 - [ ] 2.2 Costs per item (parts, fees, shipping, supplies) and time spent (from time entries)
 - [ ] 2.3 Listings with price history, sale details, buyer notes, days held
 - [ ] 2.4 Profit, margin, and profit per hour; charts by month and platform
