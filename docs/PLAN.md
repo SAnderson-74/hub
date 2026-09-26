@@ -72,7 +72,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 1.5 Goals and milestones with target dates, progress, and a timeline view
 - [x] 1.6 Courses: terms, courses, credits, assessments, planned windows; `hub-education/v1` import; pacing timeline with a today marker
 - [x] 1.7 Study streak: days meeting a minimum of study minutes (setting), from time entries on courses
-- [ ] 1.8 Home widgets: today's tasks, study streak, next milestones, term progress
+- [x] 1.8 Home widgets: today's tasks, study streak, next milestones, term progress
 
 ### Phase 2: Resale
 
