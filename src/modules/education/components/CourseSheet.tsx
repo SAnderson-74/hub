@@ -351,9 +351,11 @@ function Assessments({ course }: { course: Course }) {
     event.preventDefault();
     const trimmed = label.trim();
     if (!trimmed) return;
+    // Clear now so the next assessment can be typed while this one saves.
+    setLabel("");
     add.mutate(
       { courseId: course.id, json: { kind, label: trimmed } },
-      { onSuccess: () => setLabel("") },
+      { onError: () => setLabel((current) => current || trimmed) },
     );
   };
 

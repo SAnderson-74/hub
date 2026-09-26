@@ -407,12 +407,16 @@ function Milestones({ goal }: { goal: GoalDetail }) {
     event.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
+    // Clear now so the next milestone can be typed while this one saves.
+    const targetDate = date;
+    setTitle("");
+    setDate("");
     add.mutate(
-      { goalId: goal.id, json: { title: trimmed, targetDate: date || null } },
+      { goalId: goal.id, json: { title: trimmed, targetDate: targetDate || null } },
       {
-        onSuccess: () => {
-          setTitle("");
-          setDate("");
+        onError: () => {
+          setTitle((current) => current || trimmed);
+          setDate((current) => current || targetDate);
         },
       },
     );

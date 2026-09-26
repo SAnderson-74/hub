@@ -147,13 +147,13 @@ export function TasksPage() {
     event.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
+    // Clear now so the next task can be typed while this one saves.
+    setTitle("");
     createTask.mutate(
       { title: trimmed, projectId: typeof project === "number" ? project : null },
       {
-        onSuccess: (task) => {
-          setTitle("");
-          setAnnouncement(`Task added: ${task.title}`);
-        },
+        onSuccess: (task) => setAnnouncement(`Task added: ${task.title}`),
+        onError: () => setTitle((current) => current || trimmed),
       },
     );
   };

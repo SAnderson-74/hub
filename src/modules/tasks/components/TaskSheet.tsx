@@ -389,7 +389,12 @@ function Subtasks({ task, onOpenTask }: { task: TaskDetail; onOpenTask: (id: num
     event.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
-    create.mutate({ title: trimmed, parentId: task.id }, { onSuccess: () => setTitle("") });
+    // Clear now so the next subtask can be typed while this one saves.
+    setTitle("");
+    create.mutate(
+      { title: trimmed, parentId: task.id },
+      { onError: () => setTitle((current) => current || trimmed) },
+    );
   };
 
   return (
