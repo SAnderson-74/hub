@@ -31,8 +31,8 @@ export function StreakSettingsLink() {
   );
 }
 
-/** Streak, today's minutes against the minimum, and the last four weeks. */
-export function StudyStreakSummary() {
+/** Streak, today's minutes against the minimum, and (unless left out) the last four weeks. */
+export function StudyStreakSummary({ calendar = true }: { calendar?: boolean }) {
   const streak = useStudyStreak();
   if (streak.isPending) return <LoadingRows rows={3} />;
   if (streak.isError) {
@@ -74,7 +74,7 @@ export function StudyStreakSummary() {
         </p>
       </div>
 
-      <StudyCalendar streak={data} />
+      {calendar ? <StudyCalendar streak={data} /> : null}
     </div>
   );
 }
