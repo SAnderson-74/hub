@@ -24,7 +24,7 @@ describe("color helpers", () => {
   });
 
   it("picks readable text for filled accent buttons", () => {
-    expect(readableTextOn("#22d3ee")).toBe("#11111b");
+    expect(readableTextOn("#22d3ee")).toBe("#0d121b");
     expect(readableTextOn("#1d3a8a")).toBe("#ffffff");
   });
 

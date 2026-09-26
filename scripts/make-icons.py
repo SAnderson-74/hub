@@ -3,9 +3,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 OUT = Path(__file__).resolve().parent.parent / "src" / "client" / "public"
-BASE = (30, 30, 46)       # #1e1e2e
-SURFACE = (49, 50, 68)    # #313244
-FG = (205, 214, 244)      # #cdd6f4
+BASE = (23, 32, 46)       # #17202e
+SURFACE = (42, 52, 68)    # #2a3444
+FG = (199, 216, 244)      # #c7d8f4
 ACCENT = (34, 211, 238)   # #22d3ee
 
 def draw_icon(size: int, maskable: bool) -> Image.Image:

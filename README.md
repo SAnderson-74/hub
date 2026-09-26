@@ -43,4 +43,4 @@ TypeScript, React, React Router, TanStack Query, Tailwind CSS, Hono, Drizzle ORM
 
 ## Credits and license
 
-MIT licensed. Base colors from [Catppuccin](https://catppuccin.com) (MIT). Typeface: Manrope (SIL Open Font License).
+MIT licensed. Colors adapted from [Catppuccin](https://catppuccin.com) (MIT), with the neutrals shifted to dark blue. Typeface: Manrope (SIL Open Font License).
