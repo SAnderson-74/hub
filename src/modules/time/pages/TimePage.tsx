@@ -28,7 +28,7 @@ export function TimePage() {
   return (
     <>
       <PageHeader title="Time" subtitle="Track what you spend time on and see how the week went." />
-      <div className="grid gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <TimerPanel className="lg:col-span-5" />
 
         <Panel
