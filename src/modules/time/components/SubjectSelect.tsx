@@ -1,5 +1,7 @@
 import { inputClass } from "../../../client/components/ui";
+import { EARNED_STATUSES } from "../../../shared/education";
 import { ENTITY_TYPE_NAMES, ENTITY_TYPES, type EntityRef } from "../../../shared/entities";
+import { useTerms } from "../../education/queries";
 import { useProjects, useTasks } from "../../tasks/queries";
 
 /** "task:12" and back. "" is no subject. */
@@ -19,7 +21,8 @@ export function parseSubject(value: string): EntityRef | null {
 type Current = { type: EntityRef["type"]; id: number; label: string | null } | null;
 
 /**
- * What time is for: nothing in particular, an active project, or an open task. The
+ * What time is for: nothing in particular, a course not yet passed, an open task, or
+ * an active project. The
  * current subject stays listed even when it's done, archived, or deleted.
  */
 export function SubjectSelect({
@@ -37,11 +40,16 @@ export function SubjectSelect({
 }) {
   const projects = useProjects();
   const tasks = useTasks("all");
+  const terms = useTerms();
   const activeProjects = (projects.data ?? []).filter((project) => !project.archived);
   const openTasks = (tasks.data ?? []).filter((task) => task.status !== "done");
+  const openCourses = (terms.data ?? [])
+    .flatMap((term) => term.courses)
+    .filter((course) => !EARNED_STATUSES.includes(course.status));
   const listed = new Set([
     ...activeProjects.map((project) => `project:${project.id}`),
     ...openTasks.map((task) => `task:${task.id}`),
+    ...openCourses.map((course) => `course:${course.id}`),
   ]);
   const extra = current && !listed.has(subjectValue(current)) ? current : null;
 
@@ -58,6 +66,15 @@ export function SubjectSelect({
         <option value={subjectValue(extra)}>
           {extra.label ?? `Deleted ${ENTITY_TYPE_NAMES[extra.type]}`}
         </option>
+      ) : null}
+      {openCourses.length > 0 ? (
+        <optgroup label="Courses">
+          {openCourses.map((course) => (
+            <option key={course.id} value={`course:${course.id}`}>
+              {course.code ? `${course.code} ${course.title}` : course.title}
+            </option>
+          ))}
+        </optgroup>
       ) : null}
       {openTasks.length > 0 ? (
         <optgroup label="Tasks">
