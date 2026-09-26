@@ -1,14 +1,17 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
+import { inputClass, primaryButton } from "../../../client/components/ui";
 import { formatHour } from "../../../client/lib/format";
 import { useSaveSettings, useSettings, useSystem } from "../../../client/lib/queries";
 import { applyAccent, previewAccent } from "../../../client/theme";
 import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../../../shared/color";
-import { ACCENT_PRESETS } from "../../../shared/settings";
+import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
+import { streakKey } from "../../education/queries";
 
 function normalizeHex(value: string): string {
   const trimmed = value.trim().toLowerCase();
@@ -178,6 +181,81 @@ function AccentPicker({ saved }: { saved: string }) {
   );
 }
 
+function StudyMinimum({ saved }: { saved: number }) {
+  const [draft, setDraft] = useState(String(saved));
+  const [message, setMessage] = useState("");
+  const save = useSaveSettings();
+  const queryClient = useQueryClient();
+  const inputId = useId();
+  const errorId = useId();
+  const parsed = settingsSchema.shape.studyMinimumMinutes.safeParse(Number(draft.trim()));
+  const problem =
+    draft.trim() === ""
+      ? "Enter the minutes as a number."
+      : parsed.success
+        ? null
+        : (parsed.error.issues[0]?.message ?? "Enter the minutes as a number.");
+  const dirty = parsed.success && parsed.data !== saved;
+
+  const onSave = (event: FormEvent) => {
+    event.preventDefault();
+    if (!parsed.success) return;
+    save.mutate(
+      { studyMinimumMinutes: parsed.data },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: streakKey });
+          setMessage("Minimum saved");
+        },
+      },
+    );
+  };
+
+  return (
+    <form onSubmit={onSave} className="space-y-4">
+      <div>
+        <label htmlFor={inputId} className="mb-1.5 block text-sm font-semibold text-muted">
+          Minutes of study a day
+        </label>
+        <input
+          id={inputId}
+          type="number"
+          inputMode="numeric"
+          min={5}
+          max={720}
+          step={1}
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setMessage("");
+          }}
+          aria-invalid={problem !== null}
+          aria-describedby={problem ? errorId : undefined}
+          className={`${inputClass.replace("w-full", "w-32")} tabular-nums`}
+        />
+        {problem ? (
+          <p id={errorId} className="mt-2 text-sm text-danger">
+            {problem}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" disabled={!dirty || save.isPending} className={primaryButton}>
+          {save.isPending ? "Saving…" : "Save minimum"}
+        </button>
+        <p role="status" className="text-sm font-semibold text-ok">
+          {message}
+        </p>
+      </div>
+      {save.isError ? (
+        <p role="alert" className="text-sm text-danger">
+          {save.error.message}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 export function SettingsPage() {
   const settings = useSettings();
   const system = useSystem();
@@ -197,8 +275,11 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Appearance and details about this installation." />
-      <div className="grid gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <PageHeader
+        title="Settings"
+        subtitle="Appearance, study streak, and details about this installation."
+      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
           title="Accent color"
           description="Used for highlights, active items, and buttons."
@@ -213,7 +294,21 @@ export function SettingsPage() {
           )}
         </Panel>
 
-        <Panel title="About" className="lg:col-span-5">
+        <Panel
+          title="Study streak"
+          description="Days with at least this much time logged on courses keep the streak going."
+          className="lg:col-span-7 lg:row-start-2"
+        >
+          {settings.data ? (
+            <StudyMinimum saved={settings.data.studyMinimumMinutes} />
+          ) : settings.isError ? (
+            <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
+          ) : (
+            <LoadingRows rows={2} />
+          )}
+        </Panel>
+
+        <Panel title="About" className="lg:col-span-5 lg:col-start-8 lg:row-start-1">
           {info ? (
             <dl className="divide-y divide-surface-0/70">
               {details.map(([label, value]) => (

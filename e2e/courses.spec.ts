@@ -109,3 +109,79 @@ test("a study plan imports and shows pacing", async ({ page }, testInfo) => {
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("time on a course keeps the study streak going", async ({ page }, testInfo) => {
+  const errors = trackErrors(page);
+  const termRes = await page.request.post("/api/education/terms", {
+    data: {
+      name: `Streak ${testInfo.project.name} ${Date.now()}`,
+      startDate: day(-30),
+      endDate: day(60),
+    },
+  });
+  const [term] = (await termRes.json()) as Array<{ id: number; name: string }>;
+  if (!term) throw new Error("Expected a term");
+  const courseRes = await page.request.post("/api/education/courses", {
+    data: { termId: term.id, title: "Study skills" },
+  });
+  const course = ((await courseRes.json()) as Array<{ id: number; courses: Array<{ id: number }> }>)
+    .find((item) => item.id === term.id)
+    ?.courses.at(0);
+  if (!course) throw new Error("Expected a course");
+  // Half an hour of study yesterday, at this time of day, so it never straddles midnight.
+  const started = Date.now() - 24 * 60 * 60_000;
+  const logged = await page.request.post("/api/time/entries", {
+    data: {
+      startedAt: new Date(started).toISOString(),
+      endedAt: new Date(started + 30 * 60_000).toISOString(),
+      subject: { type: "course", id: course.id },
+    },
+  });
+  expect(logged.status()).toBe(201);
+  // Both device runs share one database, so change the minimum to something new.
+  const settings = (await (await page.request.get("/api/settings")).json()) as {
+    studyMinimumMinutes: number;
+  };
+  const minimum = settings.studyMinimumMinutes === 25 ? 20 : 25;
+
+  const open = async (name: string) => {
+    const nav = page.getByRole("navigation", { name: "Main" });
+    if (testInfo.project.name === "iphone") {
+      await nav.getByRole("link", { name: "More" }).click();
+      await page
+        .getByRole("navigation", { name: "More pages" })
+        .getByRole("link", { name })
+        .click();
+    } else {
+      await nav.getByRole("link", { name }).click();
+    }
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  };
+
+  await page.goto("/");
+  await open("Settings");
+  const setting = page.getByRole("region", { name: "Study streak" });
+  await setting.getByLabel("Minutes of study a day").fill("2");
+  await expect(setting.getByText("Use at least 5 minutes a day.")).toBeVisible();
+  await expect(setting.getByRole("button", { name: "Save minimum" })).toBeDisabled();
+  await setting.getByLabel("Minutes of study a day").fill(String(minimum));
+  await setting.getByRole("button", { name: "Save minimum" }).click();
+  await expect(setting.getByRole("status")).toHaveText("Minimum saved");
+
+  await open("Courses");
+  await page.getByLabel("Term", { exact: true }).selectOption({ label: term.name });
+  const streak = page.getByRole("region", { name: "Study streak" });
+  // Yesterday met the minimum; today still needs study.
+  await expect(streak).toContainText(/\d+ days? in a row/);
+  await expect(streak).toContainText(`Study ${minimum} min more today to keep the streak going.`);
+  await expect(streak.getByRole("table")).toContainText("minimum met");
+  await expect(streak.getByRole("table")).toContainText("(today): 0 min");
+
+  await streak.getByRole("link", { name: "Change minimum" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

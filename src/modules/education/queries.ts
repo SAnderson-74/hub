@@ -104,6 +104,22 @@ export function useDeleteAssessment() {
   );
 }
 
+/** Time and settings changes refresh the streak through this key. */
+export const streakKey = ["education", "streak"] as const;
+
+/** The study streak. It refetches each minute so a running course timer and midnight show up. */
+export function useStudyStreak() {
+  return useQuery({
+    queryKey: streakKey,
+    queryFn: async () => {
+      const res = await api.education.streak.$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 /** Previews (dryRun) or runs a hub-education/v1 import. */
 export function useImportEducation() {
   const queryClient = useQueryClient();

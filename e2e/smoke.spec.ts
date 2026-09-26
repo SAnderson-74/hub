@@ -61,7 +61,9 @@ test("accent color can be changed and is remembered", async ({ page }, testInfo)
 
   await page.getByRole("radio", { name: choice.name }).check();
   await page.getByRole("button", { name: "Save accent" }).click();
-  await expect(page.getByRole("status")).toHaveText("Accent saved");
+  await expect(page.getByRole("region", { name: "Accent color" }).getByRole("status")).toHaveText(
+    "Accent saved",
+  );
 
   await page.reload();
   await expect(page.getByRole("radio", { name: choice.name })).toBeChecked();

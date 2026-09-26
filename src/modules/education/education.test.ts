@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
 import type { EducationImport } from "../../shared/education";
+import { timeEntries } from "../time/schema";
+import { studyStreak } from "./streak.service";
 
 let t: TestApp;
 beforeEach(() => {
@@ -264,5 +266,102 @@ describe("hub-education/v1 import", () => {
       json: { format: "hub-education/v1", terms: [] },
     });
     expect(empty.status).toBe(400);
+  });
+});
+
+describe("study streak", () => {
+  /** Midday UTC some days back, so entries land on that day in the test time zone. */
+  const daysAgo = (days: number, minutes: number) => {
+    const start = new Date(`${today}T12:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - days);
+    return {
+      startedAt: start.toISOString(),
+      endedAt: new Date(start.getTime() + minutes * 60_000).toISOString(),
+    };
+  };
+
+  it("counts days meeting the minimum from time logged on courses", async () => {
+    const [term] = await newTerm();
+    if (!term) throw new Error("Expected a term");
+    const [withCourse] = await body(
+      await t.api.education.courses.$post({ json: { termId: term.id, title: "Networks" } }),
+    );
+    const course = withCourse?.courses[0];
+    if (!course) throw new Error("Expected a course");
+    const subject = { type: "course" as const, id: course.id };
+    const project = await body(await t.api.projects.$post({ json: { name: "Garden" } }));
+
+    for (const json of [
+      { ...daysAgo(3, 45), subject },
+      { ...daysAgo(2, 30), subject },
+      { ...daysAgo(1, 20), subject },
+      { ...daysAgo(1, 20), subject },
+      // Time on anything else doesn't count.
+      { ...daysAgo(1, 90), subject: { type: "project" as const, id: project.id } },
+      { ...daysAgo(2, 90) },
+    ]) {
+      expect((await t.api.time.entries.$post({ json })).status).toBe(201);
+    }
+
+    const streak = await body(await t.api.education.streak.$get());
+    expect(streak).toMatchObject({
+      minimum: 30,
+      today,
+      todayMinutes: 0,
+      current: 3,
+      longest: 3,
+    });
+    expect(streak.days.at(-1)).toEqual({ date: today, minutes: 0 });
+    expect(streak.days.at(-2)?.minutes).toBe(40);
+    expect(streak.days.length).toBeGreaterThanOrEqual(22);
+    expect(streak.days.length).toBeLessThanOrEqual(28);
+    expect(new Date(`${streak.days[0]?.date}T00:00:00Z`).getUTCDay()).toBe(1);
+
+    // A higher minimum is applied to every day, and a running course timer counts today.
+    await t.api.settings.$put({ json: { studyMinimumMinutes: 45 } });
+    await t.api.time.timer.$post({ json: { subject } });
+    expect(await body(await t.api.education.streak.$get())).toMatchObject({
+      minimum: 45,
+      todayMinutes: 0,
+      current: 0,
+      longest: 1,
+    });
+
+    const invalid = await failure(await t.api.settings.$put({ json: { studyMinimumMinutes: 2 } }));
+    expect(invalid).toMatchObject({
+      status: 400,
+      issues: [{ path: "studyMinimumMinutes", message: "Use at least 5 minutes a day." }],
+    });
+  });
+});
+
+describe("studyStreak", () => {
+  it("dates entries in the owner's time zone and counts a running timer", () => {
+    const at = (iso: string) => new Date(iso);
+    t.db
+      .insert(timeEntries)
+      .values([
+        // 10:30 PM on Jan 9 in New York, although it's already Jan 10 in UTC.
+        {
+          startedAt: at("2030-01-10T03:30:00Z"),
+          endedAt: at("2030-01-10T04:10:00Z"),
+          minutes: 40,
+          subjectType: "course",
+          subjectId: 99,
+        },
+        // Running since 10 AM on Jan 10 in New York.
+        { startedAt: at("2030-01-10T15:00:00Z"), subjectType: "course", subjectId: 99 },
+      ])
+      .run();
+    const streak = studyStreak(t.db, {
+      now: at("2030-01-10T15:35:00Z"),
+      timeZone: "America/New_York",
+      minimum: 30,
+    });
+    expect(streak).toMatchObject({ today: "2030-01-10", todayMinutes: 35, current: 2, longest: 2 });
+    expect(streak.days.slice(-2)).toEqual([
+      { date: "2030-01-09", minutes: 40 },
+      { date: "2030-01-10", minutes: 35 },
+    ]);
   });
 });

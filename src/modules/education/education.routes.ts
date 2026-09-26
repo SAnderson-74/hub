@@ -14,6 +14,7 @@ import {
   termCreateSchema,
   termUpdateSchema,
 } from "../../shared/education";
+import { readSettings } from "../core/settings.service";
 import {
   createAssessment,
   createCourse,
@@ -27,11 +28,12 @@ import {
   updateCourse,
   updateTerm,
 } from "./education.service";
+import { studyStreak } from "./streak.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 
 /**
- * Terms, courses, and assessments. Writes answer with every term, so the page
+ * Terms, courses, assessments, and the study streak. Writes answer with every term, so the page
  * refreshes from one response.
  */
 export function educationRoutes({ db, config }: Deps) {
@@ -39,6 +41,15 @@ export function educationRoutes({ db, config }: Deps) {
   const today = () => localDateParts(new Date(), config.timeZone).date;
   return new Hono<AppEnv>()
     .get("/terms", (c) => c.json(listTerms(db)))
+    .get("/streak", (c) =>
+      c.json(
+        studyStreak(db, {
+          now: new Date(),
+          timeZone: config.timeZone,
+          minimum: readSettings(db).studyMinimumMinutes,
+        }),
+      ),
+    )
     .post("/terms", zValidator("json", termCreateSchema, invalid("That term isn't valid.")), (c) =>
       c.json(createTerm(db, c.req.valid("json")), 201),
     )
