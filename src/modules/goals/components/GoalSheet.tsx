@@ -1,5 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { ProgressBar } from "../../../client/components/ProgressBar";
 import { Sheet } from "../../../client/components/Sheet";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
@@ -35,7 +36,6 @@ import {
   useUpdateGoal,
   useUpdateMilestone,
 } from "../queries";
-import { ProgressBar } from "./GoalCard";
 
 const MODE_HINTS: Record<ProgressMode, string> = {
   milestones: "Progress is the share of milestones below that are done.",
@@ -142,7 +142,7 @@ function GoalEditor({
           <ProgressBar
             percent={goal.progress.percent}
             label="Progress"
-            achieved={goal.status === "achieved"}
+            complete={goal.status === "achieved"}
           />
           <span className="w-10 shrink-0 text-right text-sm font-semibold tabular-nums">
             {goal.progress.percent}%

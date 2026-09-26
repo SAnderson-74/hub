@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { Route, Routes } from "react-router";
+import { MorePage } from "../modules/core/pages/MorePage";
 import { NotFoundPage } from "../modules/core/pages/NotFoundPage";
 import { AppShell } from "./components/AppShell";
+import { phoneNav } from "./lib/nav";
 import { useSettings } from "./lib/queries";
 import { appPages } from "./pages";
 import { applyAccent } from "./theme";
@@ -24,6 +26,7 @@ export function App() {
             <Route key={page.id} path={page.path.slice(1)} element={page.element} />
           ),
         )}
+        <Route path="more" element={<MorePage pages={phoneNav(appPages).more} />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

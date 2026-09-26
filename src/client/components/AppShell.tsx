@@ -1,4 +1,6 @@
-import { NavLink, Outlet } from "react-router";
+import { Ellipsis, type LucideIcon } from "lucide-react";
+import { NavLink, Outlet, useLocation } from "react-router";
+import { phoneNav } from "../lib/nav";
 import { useSystem } from "../lib/queries";
 import type { AppPage } from "../pages";
 import { BrandMark } from "./BrandMark";
@@ -9,6 +11,8 @@ import { BrandMark } from "./BrandMark";
  */
 export function AppShell({ pages }: { pages: AppPage[] }) {
   const system = useSystem();
+  const { pathname } = useLocation();
+  const { tabs, more } = phoneNav(pages);
   const appName = system.data?.appName ?? "Hub";
   const version = system.data?.version;
 
@@ -76,34 +80,63 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
         className="fixed inset-x-0 bottom-0 z-20 bg-mantle/90 pb-[env(safe-area-inset-bottom)] ring-1 ring-surface-0/60 backdrop-blur-md md:hidden"
       >
         <ul className="mx-auto grid max-w-md auto-cols-fr grid-flow-col px-3 pt-2 pb-1.5">
-          {pages.slice(0, 5).map((page) => (
+          {tabs.map((page) => (
             <li key={page.id}>
-              <NavLink
-                to={page.path}
-                end={page.path === "/"}
-                className={({ isActive }) =>
-                  `flex flex-col items-center gap-1 rounded-control py-1 text-xs font-semibold transition-colors ${
-                    isActive ? "text-fg" : "text-muted"
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span
-                      className={`grid h-8 w-14 place-items-center rounded-full transition-colors ${
-                        isActive ? "bg-accent/20 text-accent-text" : ""
-                      }`}
-                    >
-                      <page.icon aria-hidden="true" className="size-5" />
-                    </span>
-                    {page.label}
-                  </>
-                )}
-              </NavLink>
+              <TabLink to={page.path} label={page.label} icon={page.icon} end={page.path === "/"} />
             </li>
           ))}
+          {more.length > 0 ? (
+            <li>
+              <TabLink
+                to="/more"
+                label="More"
+                icon={Ellipsis}
+                active={more.some((page) => pathname.startsWith(page.path))}
+              />
+            </li>
+          ) : null}
         </ul>
       </nav>
     </div>
+  );
+}
+
+/** A phone tab. `active` marks it current for pages it stands for, like More. */
+function TabLink({
+  to,
+  label,
+  icon: Icon,
+  end = false,
+  active = false,
+}: {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+  active?: boolean;
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex flex-col items-center gap-1 rounded-control py-1 text-xs font-semibold transition-colors ${
+          isActive || active ? "text-fg" : "text-muted"
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <span
+            className={`grid h-8 w-14 place-items-center rounded-full transition-colors ${
+              isActive || active ? "bg-accent/20 text-accent-text" : ""
+            }`}
+          >
+            <Icon aria-hidden="true" className="size-5" />
+          </span>
+          {label}
+        </>
+      )}
+    </NavLink>
   );
 }

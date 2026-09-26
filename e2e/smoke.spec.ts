@@ -46,10 +46,17 @@ test("accent color can be changed and is remembered", async ({ page }, testInfo)
       : { name: "Lime", hex: "#9be22d" };
 
   await page.goto("/");
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Settings" })
-    .click();
+  // On phones, Settings is under More once there are more pages than tabs.
+  const nav = page.getByRole("navigation", { name: "Main" });
+  if (testInfo.project.name === "iphone") {
+    await nav.getByRole("link", { name: "More" }).click();
+    await page
+      .getByRole("navigation", { name: "More pages" })
+      .getByRole("link", { name: "Settings" })
+      .click();
+  } else {
+    await nav.getByRole("link", { name: "Settings" }).click();
+  }
   await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 
   await page.getByRole("radio", { name: choice.name }).check();

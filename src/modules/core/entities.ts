@@ -2,6 +2,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import type { Queryable } from "../../server/db/client";
 import { badRequest, notFound } from "../../server/errors";
 import { ENTITY_TYPE_NAMES, type EntityRef, type EntityType } from "../../shared/entities";
+import { courses } from "../education/schema";
 import { goals } from "../goals/schema";
 import { projects, tasks } from "../tasks/schema";
 import { recordActivity } from "./activity.service";
@@ -21,6 +22,14 @@ const lookups: Record<EntityType, LabelLookup> = {
     db.select({ id: tasks.id, label: tasks.title }).from(tasks).where(inArray(tasks.id, ids)).all(),
   goal: (db, ids) =>
     db.select({ id: goals.id, label: goals.title }).from(goals).where(inArray(goals.id, ids)).all(),
+  // "ABC101 Introduction to Networks", or just the title without a code.
+  course: (db, ids) =>
+    db
+      .select({ id: courses.id, code: courses.code, title: courses.title })
+      .from(courses)
+      .where(inArray(courses.id, ids))
+      .all()
+      .map((row) => ({ id: row.id, label: row.code ? `${row.code} ${row.title}` : row.title })),
 };
 
 /** Current names of the given entities. Ids that don't exist are left out. */

@@ -1,4 +1,5 @@
 import { Flag } from "lucide-react";
+import { ProgressBar } from "../../../client/components/ProgressBar";
 import { GOAL_STATUS_LABELS } from "../../../shared/goals";
 import { type DueTone, describeDue, formatShortDate } from "../../tasks/dates";
 import type { GoalItem } from "../queries";
@@ -8,33 +9,6 @@ const toneClass: Record<DueTone, string> = {
   warn: "text-warn",
   muted: "text-muted",
 };
-
-/** A thin bar with its value as text next to it; color never carries meaning alone. */
-export function ProgressBar({
-  percent,
-  label,
-  achieved = false,
-}: {
-  percent: number;
-  label: string;
-  achieved?: boolean;
-}) {
-  return (
-    <span
-      role="progressbar"
-      aria-label={label}
-      aria-valuenow={percent}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      className="block h-2 w-full overflow-hidden rounded-full bg-surface-0"
-    >
-      <span
-        className={`block h-full rounded-full ${achieved ? "bg-ok" : "bg-accent"}`}
-        style={{ width: `${percent}%` }}
-      />
-    </span>
-  );
-}
 
 /** When the goal is due, or how it ended. */
 export function goalWhen(goal: GoalItem, today: string): { text: string; tone: DueTone } | null {
@@ -78,7 +52,7 @@ export function GoalCard({
           <ProgressBar
             percent={goal.progress.percent}
             label={`${goal.title} progress`}
-            achieved={achieved}
+            complete={achieved}
           />
           <span className="w-10 shrink-0 text-right text-sm font-semibold text-fg tabular-nums">
             {goal.progress.percent}%
