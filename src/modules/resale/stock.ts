@@ -35,14 +35,36 @@ export function stockSummary(items: readonly Stocked[]): string {
     .join(" ");
 }
 
-/** "Held 12 days" for items still in stock with a purchase date, otherwise null. */
+const dayCount = (days: number) => `${days} ${days === 1 ? "day" : "days"}`;
+
+/**
+ * Days held: from purchase to sale for sold items ("Sold after 18 days"), or to
+ * today for items in stock ("Held 12 days"). null without the dates to count.
+ */
 export function heldFor(
-  item: { status: ItemStatus; purchasedOn: string | null },
+  item: { status: ItemStatus; purchasedOn: string | null; soldOn?: string | null },
   today: string,
 ): string | null {
-  if (!item.purchasedOn || !IN_STOCK_STATUSES.includes(item.status)) return null;
+  if (!item.purchasedOn) return null;
+  if (item.status === "sold") {
+    if (!item.soldOn) return null;
+    const days = Math.max(0, daysBetween(item.purchasedOn, item.soldOn));
+    return days === 0 ? "Sold the day it was bought" : `Sold after ${dayCount(days)}`;
+  }
+  if (!IN_STOCK_STATUSES.includes(item.status)) return null;
   const days = Math.max(0, daysBetween(item.purchasedOn, today));
-  return days === 0 ? "Bought today" : `Held ${days} ${days === 1 ? "day" : "days"}`;
+  return days === 0 ? "Bought today" : `Held ${dayCount(days)}`;
+}
+
+/** "Up 7 days" for an open listing, "Was up 7 days" for one that ended. */
+export function listingAge(
+  listing: { listedOn: string; endedOn: string | null },
+  today: string,
+): string {
+  const end = listing.endedOn ?? today;
+  const days = Math.max(0, daysBetween(listing.listedOn, end));
+  if (listing.endedOn) return `Was up ${dayCount(days)}`;
+  return days === 0 ? "Listed today" : `Up ${dayCount(days)}`;
 }
 
 /** "$22 in costs. $47 in with the price paid." */

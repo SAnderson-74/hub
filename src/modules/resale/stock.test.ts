@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costSummary, heldFor, stockSummary } from "./stock";
+import { costSummary, heldFor, listingAge, stockSummary } from "./stock";
 
 describe("stockSummary", () => {
   it("adds up what's in stock and says what's missing", () => {
@@ -34,6 +34,13 @@ describe("heldFor", () => {
       "Bought today",
     );
     expect(heldFor({ status: "sold", purchasedOn: "2030-01-01" }, "2030-01-13")).toBeNull();
+    expect(
+      heldFor({ status: "sold", purchasedOn: "2030-01-01", soldOn: "2030-01-19" }, "2030-02-01"),
+    ).toBe("Sold after 18 days");
+    expect(
+      heldFor({ status: "sold", purchasedOn: "2030-01-01", soldOn: "2030-01-01" }, "2030-02-01"),
+    ).toBe("Sold the day it was bought");
+    expect(heldFor({ status: "kept", purchasedOn: "2030-01-01" }, "2030-01-13")).toBeNull();
     expect(heldFor({ status: "listed", purchasedOn: null }, "2030-01-13")).toBeNull();
   });
 });
@@ -47,6 +54,18 @@ describe("costSummary", () => {
     );
     expect(costSummary({ costs: [cost], costsCents: 850, purchaseCents: null })).toBe(
       "$8.50 in costs.",
+    );
+  });
+});
+
+describe("listingAge", () => {
+  it("counts days up, to today or to when it ended", () => {
+    expect(listingAge({ listedOn: "2030-01-05", endedOn: null }, "2030-01-12")).toBe("Up 7 days");
+    expect(listingAge({ listedOn: "2030-01-12", endedOn: null }, "2030-01-12")).toBe(
+      "Listed today",
+    );
+    expect(listingAge({ listedOn: "2030-01-05", endedOn: "2030-01-06" }, "2030-02-01")).toBe(
+      "Was up 1 day",
     );
   });
 });

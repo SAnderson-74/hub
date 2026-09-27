@@ -4,8 +4,11 @@ import type {
   CostCreate,
   ItemCreate,
   ItemUpdate,
+  ListingCreate,
+  ListingUpdate,
   PlatformCreate,
   PlatformUpdate,
+  PriceChange,
 } from "../../shared/resale";
 
 async function fetchItems() {
@@ -22,6 +25,7 @@ async function fetchPlatforms() {
 
 export type Item = Awaited<ReturnType<typeof fetchItems>>[number];
 export type Platform = Awaited<ReturnType<typeof fetchPlatforms>>[number];
+export type Listing = Item["listings"][number];
 
 /** Time changes refresh items (their time spent) through this key. */
 export const resaleItemsKey = ["resale", "items"] as const;
@@ -87,6 +91,41 @@ export function useAddCost() {
 export function useDeleteCost() {
   return useResaleMutation(async (id: number) => {
     const res = await api.resale.costs[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useAddListing() {
+  return useResaleMutation(async ({ itemId, json }: { itemId: number; json: ListingCreate }) => {
+    const res = await api.resale.items[":id"].listings.$post({
+      param: { id: String(itemId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUpdateListing() {
+  return useResaleMutation(async ({ id, patch }: { id: number; patch: ListingUpdate }) => {
+    const res = await api.resale.listings[":id"].$patch({ param: { id: String(id) }, json: patch });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useChangePrice() {
+  return useResaleMutation(async ({ id, json }: { id: number; json: PriceChange }) => {
+    const res = await api.resale.listings[":id"].prices.$post({ param: { id: String(id) }, json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteListing() {
+  return useResaleMutation(async (id: number) => {
+    const res = await api.resale.listings[":id"].$delete({ param: { id: String(id) } });
     if (!res.ok) throw await toApiError(res);
     return res.json();
   });

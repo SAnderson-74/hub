@@ -78,7 +78,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 - [x] 2.1 Items with status (sourcing, acquired, repairing, listed, sold, kept), purchase details, platforms kept in the database
 - [x] 2.2 Costs per item (parts, fees, shipping, supplies) and time spent (from time entries)
-- [ ] 2.3 Listings with price history, sale details, buyer notes, days held
+- [x] 2.3 Listings with price history, sale details, buyer notes, days held
 - [ ] 2.4 Profit, margin, and profit per hour; charts by month and platform
 - [ ] 2.5 CSV import with column mapping; incomplete rows flagged "needs review"
 - [ ] 2.6 "Paste listing" import (`hub-listing/v1`) and a JSON endpoint for an iOS Shortcut

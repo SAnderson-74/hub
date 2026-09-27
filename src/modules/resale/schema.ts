@@ -39,6 +39,12 @@ export const resaleItems = sqliteTable(
     }),
     purchaseFrom: text("purchase_from").notNull().default(""),
     notes: text("notes").notNull().default(""),
+    soldOn: text("sold_on"),
+    saleCents: integer("sale_cents"),
+    salePlatformId: integer("sale_platform_id").references(() => resalePlatforms.id, {
+      onDelete: "set null",
+    }),
+    buyerNotes: text("buyer_notes").notNull().default(""),
     ...timestamps(),
   },
   (t) => [
@@ -62,4 +68,43 @@ export const resaleCosts = sqliteTable(
     ...timestamps(),
   },
   (t) => [index("resale_costs_item_idx").on(t.itemId)],
+);
+
+/** Where and when an item was put up for sale. Open until `ended_on` is set. */
+export const resaleListings = sqliteTable(
+  "resale_listings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    itemId: integer("item_id")
+      .notNull()
+      .references(() => resaleItems.id, { onDelete: "cascade" }),
+    platformId: integer("platform_id").references(() => resalePlatforms.id, {
+      onDelete: "set null",
+    }),
+    url: text("url").notNull().default(""),
+    listedOn: text("listed_on").notNull(),
+    endedOn: text("ended_on"),
+    ...timestamps(),
+  },
+  (t) => [
+    index("resale_listings_item_idx").on(t.itemId),
+    index("resale_listings_platform_idx").on(t.platformId),
+  ],
+);
+
+/** Every asking price a listing has had. The newest is the current price. */
+export const resaleListingPrices = sqliteTable(
+  "resale_listing_prices",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    listingId: integer("listing_id")
+      .notNull()
+      .references(() => resaleListings.id, { onDelete: "cascade" }),
+    priceCents: integer("price_cents").notNull(),
+    changedOn: text("changed_on").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index("resale_listing_prices_listing_idx").on(t.listingId)],
 );

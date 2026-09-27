@@ -254,3 +254,164 @@ describe("costs and time", () => {
     expect(fetched.timeMinutes).toBeLessThanOrEqual(56);
   });
 });
+
+describe("listings and sales", () => {
+  // The test app runs in UTC, which is what the server uses for "today".
+  const today = new Date().toISOString().slice(0, 10);
+
+  it("lists an item, tracks price changes, and ends listings when it sells", async () => {
+    const market = await addPlatform("Local classifieds");
+    const item = await body(
+      await t.api.resale.items.$post({
+        json: { title: "Mechanical keyboard", purchasedOn: "2030-01-02", purchaseCents: 4_000 },
+      }),
+    );
+    const listed = await body(
+      await t.api.resale.items[":id"].listings.$post({
+        ...itemParam(item.id),
+        json: {
+          platformId: market.id,
+          priceCents: 9_000,
+          listedOn: "2030-01-05",
+          url: "https://example.com/listing/1",
+        },
+      }),
+    );
+    expect(listed).toMatchObject({
+      status: "listed",
+      listings: [
+        {
+          platform: { id: market.id, name: "Local classifieds" },
+          listedOn: "2030-01-05",
+          endedOn: null,
+          priceCents: 9_000,
+        },
+      ],
+    });
+    const listing = listed.listings[0];
+    if (!listing) throw new Error("Expected a listing");
+
+    const dropped = await body(
+      await t.api.resale.listings[":id"].prices.$post({
+        param: { id: String(listing.id) },
+        json: { priceCents: 7_500, changedOn: "2030-01-12" },
+      }),
+    );
+    expect(dropped.listings[0]).toMatchObject({
+      priceCents: 7_500,
+      prices: [
+        { priceCents: 9_000, changedOn: "2030-01-05" },
+        { priceCents: 7_500, changedOn: "2030-01-12" },
+      ],
+    });
+    const early = await failure(
+      await t.api.resale.listings[":id"].prices.$post({
+        param: { id: String(listing.id) },
+        json: { priceCents: 7_000, changedOn: "2030-01-01" },
+      }),
+    );
+    expect(early).toMatchObject({ status: 400 });
+
+    // Selling dates the sale today and takes the listing down the same day.
+    const sold = await body(
+      await t.api.resale.items[":id"].$patch({
+        ...itemParam(item.id),
+        json: {
+          status: "sold",
+          saleCents: 7_000,
+          salePlatformId: market.id,
+          buyerNotes: "Picked up, paid cash",
+        },
+      }),
+    );
+    expect(sold).toMatchObject({
+      status: "sold",
+      soldOn: today,
+      saleCents: 7_000,
+      salePlatform: { id: market.id, name: "Local classifieds" },
+      buyerNotes: "Picked up, paid cash",
+      listings: [{ endedOn: today }],
+    });
+
+    const changes = (await history(item.id)).map((entry) => entry.details);
+    expect(changes[0]).toEqual({
+      changes: {
+        status: { from: "listed", to: "sold" },
+        soldOn: { from: null, to: today },
+        soldFor: { from: null, to: "$70" },
+        soldVia: { from: null, to: "Local classifieds" },
+        buyerNotes: { from: "", to: "Picked up, paid cash" },
+      },
+    });
+    expect(changes[1]).toEqual({ changes: { askingPrice: { from: "$90", to: "$75" } } });
+    expect(changes[2]).toEqual({
+      changes: {
+        listed: { from: null, to: "$90 on Local classifieds" },
+        status: { from: "acquired", to: "listed" },
+      },
+    });
+
+    // The platform is in use for listings and sales, so it can only be archived.
+    const inUse = await failure(
+      await t.api.resale.platforms[":id"].$delete({ param: { id: String(market.id) } }),
+    );
+    expect(inUse).toMatchObject({ status: 409 });
+  });
+
+  it("ends, reopens, and deletes listings, and checks their dates and links", async () => {
+    const item = await body(await t.api.resale.items.$post({ json: { title: "Desk lamp" } }));
+    const withListing = await body(
+      await t.api.resale.items[":id"].listings.$post({
+        ...itemParam(item.id),
+        json: { priceCents: 2_500 },
+      }),
+    );
+    const listing = withListing.listings[0];
+    if (!listing) throw new Error("Expected a listing");
+    expect(listing).toMatchObject({ listedOn: today, platform: null, url: "" });
+
+    const backwards = await failure(
+      await t.api.resale.listings[":id"].$patch({
+        param: { id: String(listing.id) },
+        json: { endedOn: "2000-01-01" },
+      }),
+    );
+    expect(backwards).toMatchObject({
+      status: 400,
+      error: "A listing can't end before it was listed. Check the dates.",
+    });
+    const ended = await body(
+      await t.api.resale.listings[":id"].$patch({
+        param: { id: String(listing.id) },
+        json: { endedOn: today },
+      }),
+    );
+    expect(ended.listings[0]?.endedOn).toBe(today);
+    const reopened = await body(
+      await t.api.resale.listings[":id"].$patch({
+        param: { id: String(listing.id) },
+        json: { endedOn: null },
+      }),
+    );
+    expect(reopened.listings[0]?.endedOn).toBeNull();
+
+    const badLink = await failure(
+      await t.api.resale.items[":id"].listings.$post({
+        ...itemParam(item.id),
+        json: { priceCents: 100, url: "javascript:alert(1)" },
+      }),
+    );
+    expect(badLink).toMatchObject({
+      status: 400,
+      issues: [{ path: "url", message: "Use a web address that starts with https://." }],
+    });
+
+    const deleted = await body(
+      await t.api.resale.listings[":id"].$delete({ param: { id: String(listing.id) } }),
+    );
+    expect(deleted.listings).toEqual([]);
+    expect((await history(item.id))[0]?.details).toEqual({
+      changes: { listed: { from: "$25", to: null } },
+    });
+  });
+});

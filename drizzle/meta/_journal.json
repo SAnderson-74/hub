@@ -57,6 +57,13 @@
       "when": 1790475913659,
       "tag": "0007_resale_costs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790476925296,
+      "tag": "0008_resale_listings_and_sales",
+      "breakpoints": true
     }
   ]
 }
