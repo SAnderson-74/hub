@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import type { BankImport } from "../../shared/bankImport";
 import type {
   AccountCreate,
   AccountUpdate,
@@ -64,6 +65,8 @@ const keys = {
   categories: (bookId: number) => ["money", "categories", bookId] as const,
   transactions: (bookId: number, filters: TransactionFilters) =>
     ["money", "transactions", bookId, filters] as const,
+  imports: (bookId: number) => ["money", "imports", bookId] as const,
+  layouts: ["money", "import-layouts"] as const,
 };
 
 export function useBooks() {
@@ -203,5 +206,56 @@ export function useDeleteTransaction() {
   return useMoneyMutation(async (id: number) => {
     const res = await api.money.transactions[":id"].$delete({ param: { id: String(id) } });
     if (!res.ok) throw await toApiError(res);
+  });
+}
+
+async function fetchImports(bookId: number) {
+  const res = await api.money.imports.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export type ImportRecord = Awaited<ReturnType<typeof fetchImports>>[number];
+
+/** A book's recent file imports, which can be undone. */
+export function useImports(bookId: number) {
+  return useQuery({ queryKey: keys.imports(bookId), queryFn: () => fetchImports(bookId) });
+}
+
+/** Saved CSV layouts, matched to a file by its headers. */
+export function useImportLayouts() {
+  return useQuery({
+    queryKey: keys.layouts,
+    queryFn: async () => {
+      const res = await api.money["import-layouts"].$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+/** Previews (dryRun) or runs an import. A preview changes nothing, so it refreshes nothing. */
+export function useImportFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ json, dryRun }: { json: BankImport; dryRun: boolean }) => {
+      const res = await api.money.imports.$post({
+        query: dryRun ? { dryRun: "true" } : {},
+        json,
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (_result, { dryRun }) => {
+      if (!dryRun) void queryClient.invalidateQueries({ queryKey: keys.all });
+    },
+  });
+}
+
+export function useUndoImport() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.imports[":id"].undo.$post({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }

@@ -1,4 +1,4 @@
-import { BookOpen, Plus, Tags, WalletCards } from "lucide-react";
+import { BookOpen, FileUp, Plus, Tags, WalletCards } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
@@ -17,6 +17,7 @@ import { formatShortDate, localDate } from "../../tasks/dates";
 import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
 import { BooksSheet } from "../components/BooksSheet";
 import { CategoriesSheet } from "../components/CategoriesSheet";
+import { ImportSheet } from "../components/ImportSheet";
 import { TransactionSheet, type TransactionTarget } from "../components/TransactionSheet";
 import {
   type Account,
@@ -120,10 +121,14 @@ function BookView({
   const [accountTarget, setAccountTarget] = useState<AccountTarget>(null);
   const [transactionTarget, setTransactionTarget] = useState<TransactionTarget>(null);
   const [managingCategories, setManagingCategories] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [accountFilter, setAccountFilter] = useState<number | undefined>(undefined);
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
+  // New transactions and imports go to the filtered account, or the first open one.
+  const defaultAccountId =
+    openAccounts.find((account) => account.id === accountFilter)?.id ?? openAccounts[0]?.id ?? null;
   // Keep sheets in step with saved changes (a new balance, a rename).
   const shownAccount =
     accountTarget === null || accountTarget === "new"
@@ -161,6 +166,15 @@ function BookView({
         >
           <Plus aria-hidden="true" className="size-5" />
           Add transaction
+        </button>
+        <button
+          type="button"
+          className={secondaryButton}
+          disabled={openAccounts.length === 0}
+          onClick={() => setImporting(true)}
+        >
+          <FileUp aria-hidden="true" className="size-4" />
+          Import
         </button>
         <button type="button" className={secondaryButton} onClick={() => setAccountTarget("new")}>
           <WalletCards aria-hidden="true" className="size-4" />
@@ -215,13 +229,17 @@ function BookView({
         target={transactionTarget}
         accounts={allAccounts}
         categories={categories.data ?? []}
-        defaultAccountId={
-          openAccounts.find((account) => account.id === accountFilter)?.id ??
-          openAccounts[0]?.id ??
-          null
-        }
+        defaultAccountId={defaultAccountId}
         today={today}
         onClose={() => setTransactionTarget(null)}
+      />
+      <ImportSheet
+        book={book}
+        accounts={allAccounts}
+        defaultAccountId={defaultAccountId}
+        today={today}
+        open={importing}
+        onClose={() => setImporting(false)}
       />
       <CategoriesSheet
         book={book}
