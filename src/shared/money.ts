@@ -28,3 +28,17 @@ export function parseDollars(input: string): number | null {
 export function centsToInput(cents: number): string {
   return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 }
+
+/** Like parseDollars, but a leading minus sign makes it negative: "-250" is -25000. */
+export function parseSignedDollars(input: string): number | null {
+  const trimmed = input.trim();
+  const negative = /^[-−]/.test(trimmed);
+  const cents = parseDollars(negative ? trimmed.slice(1) : trimmed);
+  if (cents === null) return null;
+  return negative ? -cents : cents;
+}
+
+/** Signed cents as an editable string, like "-250" or "1250.50". */
+export function signedCentsToInput(cents: number): string {
+  return cents < 0 ? `-${centsToInput(-cents)}` : centsToInput(cents);
+}

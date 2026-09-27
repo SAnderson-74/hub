@@ -78,6 +78,13 @@
       "when": 1790479348442,
       "tag": "0010_resale_listing_text",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1790487556713,
+      "tag": "0011_money_books_accounts_transactions",
+      "breakpoints": true
     }
   ]
 }

@@ -86,7 +86,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 ### Phase 3: Money and tax guide
 
-- [ ] 3.1 Books (personal and business), accounts, categories, transactions
+- [x] 3.1 Books (personal and business), accounts, categories, transactions
 - [ ] 3.2 File imports: CSV with saved column mappings, OFX/QFX; duplicate detection; undo an import
 - [ ] 3.3 Categorization rules and transfers
 - [ ] 3.4 Monthly budgets per category with remaining amounts and charts

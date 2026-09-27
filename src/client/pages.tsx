@@ -7,12 +7,14 @@ import {
   Settings,
   Target,
   Timer,
+  Wallet,
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { DashboardPage } from "../modules/core/pages/DashboardPage";
 import { SettingsPage } from "../modules/core/pages/SettingsPage";
 import { CoursesPage } from "../modules/education/pages/CoursesPage";
 import { GoalsPage } from "../modules/goals/pages/GoalsPage";
+import { MoneyPage } from "../modules/money/pages/MoneyPage";
 import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
 import { TimePage } from "../modules/time/pages/TimePage";
@@ -45,6 +47,7 @@ export const appPages: AppPage[] = [
     element: <CoursesPage />,
   },
   { id: "resale", label: "Resale", path: "/resale", icon: Package, element: <ResalePage /> },
+  { id: "money", label: "Money", path: "/money", icon: Wallet, element: <MoneyPage /> },
   {
     id: "settings",
     label: "Settings",
