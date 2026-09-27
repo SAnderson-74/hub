@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RULE_DIRECTIONS } from "./moneyRules";
 
 // Books in the accounting sense: a set of accounts, categories, and transactions
 // kept apart from the others, like personal money and a small business.
@@ -177,12 +178,15 @@ export type TransactionUpdate = z.infer<typeof transactionUpdateSchema>;
 
 /**
  * A book's transactions, newest first, a page at a time. `categoryId=none` finds
- * uncategorized ones; `q` searches payees and memos.
+ * uncategorized ones (not transfers), `categoryId=transfer` finds transfers, and `q`
+ * searches payees and memos.
  */
 export const transactionQuerySchema = z.object({
   bookId: z.coerce.number().int().positive(),
   accountId: z.coerce.number().int().positive().optional(),
-  categoryId: z.union([z.literal("none"), z.coerce.number().int().positive()]).optional(),
+  categoryId: z
+    .union([z.literal("none"), z.literal("transfer"), z.coerce.number().int().positive()])
+    .optional(),
   from: date.optional(),
   to: date.optional(),
   q: z.string().trim().max(100, "Search for under 100 characters.").optional(),
@@ -190,3 +194,57 @@ export const transactionQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 export type TransactionQuery = z.infer<typeof transactionQuerySchema>;
+
+// Rules
+
+const ruleFields = {
+  /** Text to find in the payee, ignoring case. */
+  contains: z
+    .string()
+    .trim()
+    .min(1, "Enter the text to look for in the payee.")
+    .max(100, "Keep the text under 100 characters."),
+  direction: z.enum(RULE_DIRECTIONS),
+  categoryId: id,
+  /** A cleaner payee name, or "" to keep payees as they are. */
+  renameTo: z.string().trim().max(200, "Keep payees under 200 characters."),
+};
+
+export const ruleCreateSchema = z
+  .object({ bookId: id, ...ruleFields })
+  .partial({ direction: true, renameTo: true })
+  .strict();
+export type RuleCreate = z.infer<typeof ruleCreateSchema>;
+
+export const ruleUpdateSchema = z.object(ruleFields).partial().strict();
+export type RuleUpdate = z.infer<typeof ruleUpdateSchema>;
+
+/** Rules apply in order; this moves one earlier or later. */
+export const ruleMoveSchema = z.object({ to: z.enum(["earlier", "later"]) }).strict();
+
+export const ruleApplySchema = z.object({ bookId: id }).strict();
+
+// Transfers
+
+export const transferCreateSchema = z
+  .object({
+    fromAccountId: id,
+    toAccountId: id,
+    date,
+    amountCents: z
+      .number()
+      .int("Use whole cents.")
+      .min(1, "Enter an amount more than $0.")
+      .max(10_000_000_000, "Use an amount under $100,000,000."),
+    memo: z.string().max(2_000, "Keep memos under 2,000 characters.").optional(),
+  })
+  .strict()
+  .refine((value) => value.fromAccountId !== value.toAccountId, {
+    message: "Pick two different accounts.",
+    path: ["toAccountId"],
+  });
+export type TransferCreate = z.infer<typeof transferCreateSchema>;
+
+/** Two existing transactions to join as the sides of one transfer. */
+export const transferLinkSchema = z.object({ transactionIds: z.tuple([id, id]) }).strict();
+export type TransferLink = z.infer<typeof transferLinkSchema>;

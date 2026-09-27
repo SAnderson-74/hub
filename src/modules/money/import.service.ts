@@ -2,7 +2,9 @@ import { and, count, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm"
 import type { Db, Queryable } from "../../server/db/client";
 import { conflict, notFound } from "../../server/errors";
 import type { BankImportResult, BankLayout, BankTransaction } from "../../shared/bankImport";
+import { matchRule } from "../../shared/moneyRules";
 import { requireAccount } from "./money.service";
+import { rulesForBook } from "./rules.service";
 import {
   moneyAccounts,
   moneyCategories,
@@ -105,34 +107,46 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         .map((row) => [row.name.trim().toLowerCase(), row.id]),
     );
     const unknownCategories = new Map<string, string>();
+    const rules = rulesForBook(tx, account.bookId);
+    let categorizedByRules = 0;
 
     const rows: BankImportResult["rows"] = [];
     const toCreate: Array<typeof moneyTransactions.$inferInsert> = [];
     input.transactions.forEach((row, index) => {
-      const key = matchKey(row);
+      const rule = matchRule(rules, row);
+      // An earlier import may have stored the rule's cleaner payee, so match either.
+      const keys = [matchKey(row)];
+      if (rule?.renameTo) keys.push(matchKey({ ...row, payee: rule.renameTo }));
       const duplicate = row.externalId
-        ? knownIds.has(row.externalId) || take(matchWithoutId, key)
-        : take(anyMatch, key);
+        ? knownIds.has(row.externalId) || keys.some((key) => take(matchWithoutId, key))
+        : keys.some((key) => take(anyMatch, key));
       if (row.externalId) knownIds.add(row.externalId);
+      const categoryName = row.category?.trim() ?? "";
+      const fileCategory = categoryName
+        ? (categories.get(categoryName.toLowerCase()) ?? null)
+        : null;
+      // The file's own category wins; rules fill in the rest.
+      const byRule = fileCategory === null && rule !== null && !duplicate;
+      const payee = (byRule && rule?.renameTo ? rule.renameTo : row.payee).trim();
       rows.push({
         row: index + 1,
         date: row.date,
         amountCents: row.amountCents,
-        payee: row.payee,
+        payee,
         outcome: duplicate ? "duplicate" : "create",
       });
       if (duplicate) return;
 
-      const categoryName = row.category?.trim() ?? "";
-      const categoryId = categoryName ? (categories.get(categoryName.toLowerCase()) ?? null) : null;
-      if (categoryName && categoryId === null) {
+      if (categoryName && fileCategory === null) {
         unknownCategories.set(categoryName.toLowerCase(), categoryName);
       }
+      if (byRule) categorizedByRules += 1;
+      const categoryId = fileCategory ?? (byRule ? (rule?.categoryId ?? null) : null);
       toCreate.push({
         accountId: account.id,
         date: row.date,
         amountCents: row.amountCents,
-        payee: row.payee.trim(),
+        payee,
         memo: row.memo,
         categoryId,
         externalId: row.externalId ?? null,
@@ -144,6 +158,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       created: toCreate.length,
       duplicates: rows.length - toCreate.length,
       unknownCategories: [...unknownCategories.values()].sort(),
+      categorizedByRules,
       rows,
     };
     if (dryRun) return result;
@@ -237,6 +252,19 @@ export function undoImport(db: Db, id: number): ImportJson {
     const row = tx.select().from(moneyImports).where(eq(moneyImports.id, id)).get();
     if (!row) throw notFound("That import doesn't exist.");
     if (row.undoneAt) throw conflict("That import was already undone.");
+    // A transfer linked to one of these keeps its other side, as an ordinary transaction.
+    const removing = tx
+      .select({ id: moneyTransactions.id })
+      .from(moneyTransactions)
+      .where(eq(moneyTransactions.importId, id))
+      .all()
+      .map((entry) => entry.id);
+    if (removing.length > 0) {
+      tx.update(moneyTransactions)
+        .set({ transferPeerId: null })
+        .where(inArray(moneyTransactions.transferPeerId, removing))
+        .run();
+    }
     tx.delete(moneyTransactions).where(eq(moneyTransactions.importId, id)).run();
     const undone = tx
       .update(moneyImports)

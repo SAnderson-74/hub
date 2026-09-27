@@ -13,9 +13,15 @@ import {
   bookUpdateSchema,
   categoryCreateSchema,
   categoryUpdateSchema,
+  ruleApplySchema,
+  ruleCreateSchema,
+  ruleMoveSchema,
+  ruleUpdateSchema,
   transactionCreateSchema,
   transactionQuerySchema,
   transactionUpdateSchema,
+  transferCreateSchema,
+  transferLinkSchema,
 } from "../../shared/books";
 import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
 import {
@@ -36,11 +42,26 @@ import {
   updateCategory,
   updateTransaction,
 } from "./money.service";
+import {
+  applyRules,
+  createRule,
+  deleteRule,
+  listRules,
+  moveRule,
+  updateRule,
+} from "./rules.service";
+import {
+  createTransfer,
+  linkTransfer,
+  transferMatches,
+  transferSuggestions,
+  unlinkTransfer,
+} from "./transfers.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
-/** Books, their accounts and categories, transactions, and file imports. */
+/** Books, their accounts and categories, transactions, transfers, rules, and file imports. */
 export function moneyRoutes({ db }: Deps) {
   return new Hono<AppEnv>()
     .get("/books", (c) => c.json(listBooks(db)))
@@ -128,5 +149,46 @@ export function moneyRoutes({ db }: Deps) {
       },
     )
     .post("/imports/:id/undo", idParam, (c) => c.json(undoImport(db, c.req.valid("param").id)))
-    .get("/import-layouts", (c) => c.json(listLayouts(db)));
+    .get("/import-layouts", (c) => c.json(listLayouts(db)))
+    .get("/rules", bookQuery, (c) => c.json(listRules(db, c.req.valid("query").bookId)))
+    .post("/rules", zValidator("json", ruleCreateSchema, invalid("That rule isn't valid.")), (c) =>
+      c.json(createRule(db, c.req.valid("json")), 201),
+    )
+    .post(
+      "/rules/apply",
+      zValidator("json", ruleApplySchema, invalid("Pass the book as bookId.")),
+      (c) => c.json(applyRules(db, c.req.valid("json").bookId)),
+    )
+    .patch(
+      "/rules/:id",
+      idParam,
+      zValidator("json", ruleUpdateSchema, invalid("Those rule changes aren't valid.")),
+      (c) => c.json(updateRule(db, c.req.valid("param").id, c.req.valid("json"))),
+    )
+    .post(
+      "/rules/:id/move",
+      idParam,
+      zValidator("json", ruleMoveSchema, invalid("Move a rule earlier or later.")),
+      (c) => c.json(moveRule(db, c.req.valid("param").id, c.req.valid("json").to)),
+    )
+    .delete("/rules/:id", idParam, (c) => c.json(deleteRule(db, c.req.valid("param").id)))
+    .post(
+      "/transfers",
+      zValidator("json", transferCreateSchema, invalid("That transfer isn't valid.")),
+      (c) => c.json(createTransfer(db, c.req.valid("json")), 201),
+    )
+    .post(
+      "/transfers/link",
+      zValidator("json", transferLinkSchema, invalid("Pass the two transactions to link.")),
+      (c) => c.json(linkTransfer(db, c.req.valid("json").transactionIds)),
+    )
+    .get("/transfers/suggestions", bookQuery, (c) =>
+      c.json(transferSuggestions(db, c.req.valid("query").bookId)),
+    )
+    .get("/transactions/:id/transfer-matches", idParam, (c) =>
+      c.json(transferMatches(db, c.req.valid("param").id)),
+    )
+    .post("/transactions/:id/unlink", idParam, (c) =>
+      c.json(unlinkTransfer(db, c.req.valid("param").id)),
+    );
 }
