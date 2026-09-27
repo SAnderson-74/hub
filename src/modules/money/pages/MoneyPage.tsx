@@ -6,6 +6,7 @@ import {
   PiggyBank,
   Plus,
   Tags,
+  TrendingUp,
   WalletCards,
   Wand2,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
 import { ImportSheet } from "../components/ImportSheet";
+import { NetWorthView } from "../components/NetWorthView";
 import { RulesSheet } from "../components/RulesSheet";
 import { TransactionSheet, type TransactionTarget } from "../components/TransactionSheet";
 import { TransfersSheet } from "../components/TransfersSheet";
@@ -49,11 +51,13 @@ import { accountsSummary, netBalance } from "../summary";
 
 const BOOK_KEY = "hub.money.book";
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget";
+type View = "transactions" | "budget" | "net-worth";
+const VIEWS: readonly View[] = ["transactions", "budget", "net-worth"];
 
 function storedView(): View {
   try {
-    return localStorage.getItem(VIEW_KEY) === "budget" ? "budget" : "transactions";
+    const value = localStorage.getItem(VIEW_KEY);
+    return VIEWS.find((view) => view === value) ?? "transactions";
   } catch {
     return "transactions";
   }
@@ -182,6 +186,7 @@ function BookView({
             [
               ["transactions", "Transactions", List],
               ["budget", "Budget", PiggyBank],
+              ["net-worth", "Net worth", TrendingUp],
             ] as const
           ).map(([value, label, Icon]) => (
             <label key={value} className="relative">
@@ -193,8 +198,9 @@ function BookView({
                 onChange={() => chooseView(value)}
                 className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
               />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-                <Icon aria-hidden="true" className="size-4" />
+              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                {/* Three views fit on a phone without icons. */}
+                <Icon aria-hidden="true" className="hidden size-4 sm:block" />
                 {label}
               </span>
             </label>
@@ -262,6 +268,13 @@ function BookView({
 
       {view === "budget" ? (
         <BudgetView book={book} today={today} />
+      ) : view === "net-worth" ? (
+        <NetWorthView
+          book={book}
+          books={books}
+          today={today}
+          onAddAccount={() => setAccountTarget("new")}
+        />
       ) : accounts.isPending ? (
         <LoadingRows rows={3} />
       ) : accounts.isError ? (

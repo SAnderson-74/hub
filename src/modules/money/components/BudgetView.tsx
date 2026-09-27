@@ -21,6 +21,7 @@ import {
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
 import { type Book, type BudgetMonth, useBudget, useSetBudget } from "../queries";
+import { Stat } from "./Stat";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
 const BudgetHistoryChart = lazy(() =>
@@ -35,16 +36,6 @@ function longMonth(month: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
-}
-
-function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
-      <p className="text-sm font-semibold text-muted">{label}</p>
-      <p className="mt-2 truncate text-2xl font-bold tracking-[-0.02em] text-fg">{value}</p>
-      {note ? <p className="mt-1 text-sm text-muted">{note}</p> : null}
-    </div>
-  );
 }
 
 /** A book's monthly budget: what each spending category may spend, and what it has. */

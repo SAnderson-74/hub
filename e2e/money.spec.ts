@@ -533,3 +533,71 @@ test("balances from statements, and savings goals that follow an account", async
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("net worth adds up every account over time", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const book = `Worth ${id}`;
+  const errors = trackErrors(page);
+  const today = new Date().toISOString().slice(0, 10);
+  const earlier = new Date();
+  earlier.setDate(15);
+  earlier.setMonth(earlier.getMonth() - 2);
+
+  const newBook = async (name: string) =>
+    (
+      await (
+        await page.request.post("/api/money/books", { data: { name, kind: "personal" } })
+      ).json()
+    ).id as number;
+  const account = async (bookId: number, name: string, kind: string, openingBalanceCents: number) =>
+    (
+      await (
+        await page.request.post("/api/money/accounts", {
+          data: { bookId, name: `${name} ${id}`, kind, openingBalanceCents },
+        })
+      ).json()
+    ).id as number;
+  const bookId = await newBook(book);
+  const checking = await account(bookId, "Checking", "checking", 100_000);
+  await account(bookId, "Car loan", "loan", -25_000);
+  await account(await newBook(`Other ${id}`), "Side savings", "savings", 5_000);
+  const add = (date: string, amountCents: number) =>
+    page.request.post("/api/money/transactions", {
+      data: { accountId: checking, date, amountCents, payee: "Pay" },
+    });
+  await add(earlier.toISOString().slice(0, 10), 50_000);
+  await add(today, -10_000);
+
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.setItem("hub.money.view", "net-worth");
+    localStorage.setItem("hub.money.netWorth.scope", "book");
+  }, String(bookId));
+  await page.goto("/money");
+  await expect(page.getByRole("radio", { name: "Net worth" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: `${book} only` })).toBeChecked();
+
+  await expect(page.locator("figcaption")).toHaveText(
+    /^Net worth is \$1,150, down \$100 since the end of \w{3} \d{4}\.$/,
+  );
+  const where = page.getByRole("region", { name: "Assets" });
+  await expect(where).toContainText(`Checking ${id}`);
+  await expect(where).toContainText("$1,400");
+  await expect(page.getByRole("region", { name: "Debts" })).toContainText("$250");
+  await expect(where).not.toContainText(`Side savings ${id}`);
+
+  await page.getByText("Show the numbers").click();
+  await expect(page.getByRole("row", { name: /^Today/ })).toContainText("$1,150");
+
+  // Every book, over a longer range.
+  await page.getByRole("radio", { name: "3 years" }).check();
+  await page.getByRole("radio", { name: "All books" }).check();
+  await expect(where).toContainText(`Side savings ${id}`);
+  await expect(where).toContainText(`Other ${id}`);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});
