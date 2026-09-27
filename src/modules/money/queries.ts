@@ -402,6 +402,29 @@ export function useSetBudget() {
   });
 }
 
+// Net worth
+
+/** Net worth at the end of each month through today, for one book or every open book. */
+export function useNetWorth(to: string, months: number, bookId: number | null) {
+  return useQuery({
+    queryKey: ["money", "net-worth", to, months, bookId],
+    queryFn: async () => {
+      const res = await api.money["net-worth"].$get({
+        query: {
+          to,
+          months: String(months),
+          ...(bookId === null ? {} : { bookId: String(bookId) }),
+        },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type NetWorth = NonNullable<ReturnType<typeof useNetWorth>["data"]>;
+
 // Balance snapshots
 
 /** An account's balance entries, newest first, with its current balance. */
