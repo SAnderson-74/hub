@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { centsToInput, formatCents, parseDollars } from "./money";
+import {
+  centsToInput,
+  formatCents,
+  parseDollars,
+  parseSignedDollars,
+  signedCentsToInput,
+} from "./money";
 
 describe("money", () => {
   it("formats cents as dollars", () => {
@@ -23,5 +29,22 @@ describe("money", () => {
     expect(centsToInput(125_000)).toBe("1250");
     expect(centsToInput(125_050)).toBe("1250.50");
     expect(parseDollars(centsToInput(1999))).toBe(1999);
+  });
+});
+
+describe("parseSignedDollars", () => {
+  it("reads a leading minus sign, and nothing else new", () => {
+    expect(parseSignedDollars("-250")).toBe(-25_000);
+    expect(parseSignedDollars(" −$1,250.50 ")).toBe(-125_050);
+    expect(parseSignedDollars("12.5")).toBe(1_250);
+    expect(parseSignedDollars("--5")).toBeNull();
+    expect(parseSignedDollars("5-")).toBeNull();
+    expect(parseSignedDollars("-")).toBeNull();
+  });
+
+  it("round-trips through signedCentsToInput", () => {
+    for (const cents of [-125_050, -25_000, 0, 99, 125_050]) {
+      expect(parseSignedDollars(signedCentsToInput(cents))).toBe(cents);
+    }
   });
 });
