@@ -115,10 +115,14 @@ function useMoneyMutation<Input, Output>(mutationFn: (input: Input) => Promise<O
   });
 }
 
-/** Money and the savings goals that count account balances. */
+/**
+ * Money, the savings goals that count account balances, and resale items, which
+ * show the transactions linked to them.
+ */
 function refreshMoney(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: keys.all });
   void queryClient.invalidateQueries({ queryKey: ["goals"] });
+  void queryClient.invalidateQueries({ queryKey: ["resale"] });
 }
 
 export function useCreateBook() {

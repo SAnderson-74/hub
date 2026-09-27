@@ -1,14 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
 import type {
   CostCreate,
   ItemCreate,
   ItemUpdate,
+  LinkRole,
   ListingCreate,
   ListingUpdate,
   PlatformCreate,
   PlatformUpdate,
   PriceChange,
+  TransactionLink,
+  TransactionRecord,
 } from "../../shared/resale";
 import type { ImportRow } from "../../shared/resaleImport";
 import type { ListingImport } from "../../shared/resaleListing";
@@ -201,5 +204,77 @@ export function useImportListing() {
     onSuccess: (_result, { dryRun }) => {
       if (!dryRun) void queryClient.invalidateQueries({ queryKey: keys.all });
     },
+  });
+}
+
+// Money transactions linked to items
+
+export type ItemTransaction = Item["transactions"][number];
+
+/** Links change both sides, so they refresh money (and goals that count balances) too. */
+function useLinkMutation<Input, Output>(mutationFn: (input: Input) => Promise<Output>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.all });
+      void queryClient.invalidateQueries({ queryKey: ["money"] });
+      void queryClient.invalidateQueries({ queryKey: ["goals"] });
+    },
+  });
+}
+
+/** Transactions that could be the item's purchase or sale, best first. */
+export function useTransactionMatches(itemId: number, role: LinkRole, q: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["resale", "matches", itemId, role, q],
+    queryFn: async () => {
+      const res = await api.resale.items[":id"]["transaction-matches"].$get({
+        param: { id: String(itemId) },
+        query: q ? { role, q } : { role },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type TransactionMatch = NonNullable<
+  ReturnType<typeof useTransactionMatches>["data"]
+>[number];
+
+export function useLinkTransaction() {
+  return useLinkMutation(async ({ itemId, json }: { itemId: number; json: TransactionLink }) => {
+    const res = await api.resale.items[":id"].transactions.$post({
+      param: { id: String(itemId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUnlinkTransaction() {
+  return useLinkMutation(
+    async ({ itemId, transactionId }: { itemId: number; transactionId: number }) => {
+      const res = await api.resale.items[":id"].transactions[":transactionId"].$delete({
+        param: { id: String(itemId), transactionId: String(transactionId) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  );
+}
+
+export function useRecordTransaction() {
+  return useLinkMutation(async ({ itemId, json }: { itemId: number; json: TransactionRecord }) => {
+    const res = await api.resale.items[":id"]["record-transaction"].$post({
+      param: { id: String(itemId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }

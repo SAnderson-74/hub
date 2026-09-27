@@ -32,6 +32,7 @@ import {
   resaleListings,
   resalePlatforms,
 } from "./schema";
+import { type ItemTransactionJson, itemTransactions } from "./transactionLinks";
 
 type PlatformRow = typeof resalePlatforms.$inferSelect;
 type ItemRow = typeof resaleItems.$inferSelect;
@@ -94,6 +95,8 @@ export type ItemJson = {
   saleCents: number | null;
   salePlatform: { id: number; name: string } | null;
   buyerNotes: string;
+  /** Money transactions that paid for it or brought in its sale, oldest first. */
+  transactions: ItemTransactionJson[];
   /** Imported with missing or unreadable values; `reviewNote` says what. */
   needsReview: boolean;
   reviewNote: string;
@@ -297,6 +300,7 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
       minutesByItem.set(entry.itemId, (minutesByItem.get(entry.itemId) ?? 0) + minutes);
     }
   }
+  const transactionsByItem = itemTransactions(db, ids);
   return rows.map((row) => {
     const costs = (costsByItem.get(row.id) ?? []).map((cost) => ({
       id: cost.id,
@@ -324,6 +328,7 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
       saleCents: row.saleCents,
       salePlatform: platformRef(row.salePlatformId),
       buyerNotes: row.buyerNotes,
+      transactions: transactionsByItem.get(row.id) ?? [],
       needsReview: row.needsReview,
       reviewNote: row.reviewNote,
       createdAt: row.createdAt.toISOString(),
@@ -349,7 +354,7 @@ export function listItems(db: Queryable, query: { status?: ItemStatus[] }): Item
   return itemsJson(db, rows);
 }
 
-function requireItem(db: Queryable, id: number): ItemRow {
+export function requireItem(db: Queryable, id: number): ItemRow {
   const row = db.select().from(resaleItems).where(eq(resaleItems.id, id)).get();
   if (!row) throw notFound("That item doesn't exist. It may have been deleted.");
   return row;
@@ -380,7 +385,7 @@ function tracked(row: ItemRow, names: Map<number, string>) {
 }
 
 /** Records changes on the item's timeline. */
-function logItem(
+export function logItem(
   tx: Queryable,
   item: { id: number; title: string },
   changes: Record<string, { from: ActivityValue; to: ActivityValue }>,
