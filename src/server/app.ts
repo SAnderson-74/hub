@@ -35,6 +35,12 @@ export function createApp(deps: Deps) {
     }),
   );
 
+  // Answers hold personal data, so browsers and proxies must not keep copies on disk.
+  app.use("/api/*", async (c, next) => {
+    await next();
+    c.res.headers.set("Cache-Control", "no-store");
+  });
+
   // Unauthenticated liveness check for the container health check.
   app.get("/api/health", (c) => c.json({ ok: true, version: config.version }));
 

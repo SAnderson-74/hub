@@ -5,6 +5,7 @@ import { ConfigError, loadConfig } from "./config";
 import { startBackupScheduler } from "./db/backup";
 import { openDatabase } from "./db/client";
 import { migrateWithBackup } from "./db/migrate";
+import { makePrivate } from "./db/private";
 import { errorFields, log } from "./log";
 
 async function main() {
@@ -12,7 +13,10 @@ async function main() {
     process.loadEnvFile(".env");
   }
   const config = loadConfig();
+  // New files (the database, its WAL files, backups) are readable by this user only.
+  process.umask(0o077);
   mkdirSync(config.backupDir, { recursive: true });
+  makePrivate(config.dataDir);
 
   const { sqlite, db } = openDatabase(config.dbFile);
   const migration = await migrateWithBackup({

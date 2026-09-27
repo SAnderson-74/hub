@@ -12,4 +12,6 @@ Please use GitHub's private vulnerability reporting (Security tab > Report a vul
 - A strict Content-Security-Policy allows scripts, styles, and fonts only from the app.
 - The app container runs as a non-root user with a read-only filesystem, no Linux capabilities, and `no-new-privileges`.
 - Development sign-in (`HUB_AUTH_MODE=dev`) refuses to start when `NODE_ENV=production`.
-- The repository and container image contain no personal data or secrets. Data stays in the SQLite file on the host.
+- API answers are sent with `Cache-Control: no-store`, so browsers don't keep copies of your data on disk. Browser storage holds only view choices and form defaults.
+- The app sets a private umask and makes its data folder `700` and its files `600` at startup, so other accounts on the host can't read the database or backups.
+- The repository and container image contain no personal data or secrets. Data stays in the SQLite file on the host. The file itself isn't encrypted; put it on an encrypted dataset (see docs/SETUP.md), and keep offsite backups encrypted before upload.

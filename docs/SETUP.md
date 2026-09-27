@@ -33,17 +33,18 @@ From an empty GitHub account to the app on your phone's home screen. Placeholder
 
 ## 3. TrueNAS (25.10 or later)
 
-1. Create a dataset for the app, for example `<POOL>/apps/hub`, then from a shell:
+1. Create a dataset for the app, for example `<POOL>/apps/hub`, with **Encryption** on (Datasets > Add Dataset > Advanced Options) unless the pool is already encrypted. The database is a plain SQLite file, so this is what protects it if a drive is removed or the server is stolen. Encryption can't be turned on for an existing dataset; see [Encrypting an existing dataset](#encrypting-an-existing-dataset). Then from a shell:
    ```bash
    H=/mnt/<POOL>/apps/hub
    mkdir -p $H/data $H/tailscale/state $H/tailscale/config $H/bin
    chown -R 568:568 $H/data
+   chmod 700 $H/data
    R=https://raw.githubusercontent.com/<GITHUB_OWNER>/<REPO>/main/deploy/truenas
    curl -fsSL $R/serve.json -o $H/tailscale/config/serve.json
    curl -fsSL $R/update-hub.sh -o $H/bin/update-hub.sh
    chmod 700 $H/bin/update-hub.sh
    ```
-   `568` is TrueNAS's built-in `apps` user; the app container runs as it.
+   `568` is TrueNAS's built-in `apps` user; the app container runs as it. `chmod 700` keeps other accounts on the server out of the data folder; the app also keeps its files private itself.
 2. Apps > Discover Apps > **⋮** > **Install via YAML**. Name the app `hub` and paste [`deploy/truenas/compose.yaml`](../deploy/truenas/compose.yaml) with every placeholder filled in:
    - `<TAILSCALE_AUTH_KEY>`: the key from step 2.3
    - `<YOUR_TAILSCALE_LOGIN>`: the login shown for your account in the Tailscale admin console
@@ -74,6 +75,19 @@ The app writes `data/backups/nightly-YYYY-MM-DD.sqlite3` after the configured ho
    # Start the app again.
    ```
    If you restore a `pre-migrate-*` file, also run the **Roll back** workflow to the build that was running before that migration.
+
+### Encrypting an existing dataset
+
+If `apps/hub` was created without encryption (Datasets shows no lock icon on it or its pool):
+
+1. Stop the app, then create a new encrypted dataset, for example `<POOL>/apps/hub-encrypted`. Store its passphrase or key in your password manager.
+2. Copy everything across, keeping owners and permissions: `rsync -a /mnt/<POOL>/apps/hub/ /mnt/<POOL>/apps/hub-encrypted/`
+3. Swap the names, so every path in the app, cron job, snapshot task, and cloud sync task stays the same:
+   ```bash
+   zfs rename <POOL>/apps/hub <POOL>/apps/hub-old
+   zfs rename <POOL>/apps/hub-encrypted <POOL>/apps/hub
+   ```
+4. Start the app and check that your data is there. Then delete `hub-old` and its snapshots, which still hold unencrypted copies.
 
 ## 5. iPhone
 
