@@ -1,4 +1,12 @@
-import { ChartColumn, ClipboardPaste, FileUp, Package, Plus, Store } from "lucide-react";
+import {
+  Calculator,
+  ChartColumn,
+  ClipboardPaste,
+  FileUp,
+  Package,
+  Plus,
+  Store,
+} from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -12,6 +20,7 @@ import { formatSigned, itemProfit } from "../../../shared/profit";
 import { ITEM_STATUS_LABELS, ITEM_STATUSES, type ItemStatus } from "../../../shared/resale";
 import { formatMinutes } from "../../../shared/time";
 import { formatShortDate, localDate } from "../../tasks/dates";
+import { BuyCalculator } from "../components/BuyCalculator";
 import { ImportCsvSheet } from "../components/ImportCsvSheet";
 import { ItemSheet } from "../components/ItemSheet";
 import { PasteListingSheet } from "../components/PasteListingSheet";
@@ -22,13 +31,15 @@ import { heldFor, STATUS_TONES, stockSummary } from "../stock";
 
 /** A status, everything, or the imported items flagged to review. */
 type Filter = "all" | "review" | ItemStatus;
-type View = "items" | "profit";
+type View = "items" | "profit" | "calculator";
+const VIEWS: readonly View[] = ["items", "profit", "calculator"];
 
 const VIEW_KEY = "hub.resale.view";
 
 function storedView(): View {
   try {
-    return localStorage.getItem(VIEW_KEY) === "profit" ? "profit" : "items";
+    const stored = localStorage.getItem(VIEW_KEY);
+    return VIEWS.find((view) => view === stored) ?? "items";
   } catch {
     return "items";
   }
@@ -88,6 +99,7 @@ export function ResalePage() {
             [
               ["items", "Items", Package],
               ["profit", "Profit", ChartColumn],
+              ["calculator", "Calculator", Calculator],
             ] as const
           ).map(([value, label, Icon]) => (
             <label key={value} className="relative">
@@ -131,7 +143,10 @@ export function ResalePage() {
         </button>
       </div>
 
-      {items.isPending ? (
+      {view === "calculator" ? (
+        // Works before anything is tracked; the history part loads items itself.
+        <BuyCalculator />
+      ) : items.isPending ? (
         <LoadingRows rows={3} />
       ) : items.isError ? (
         <ErrorNote error={items.error} onRetry={() => void items.refetch()} />
