@@ -1,4 +1,4 @@
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Sheet } from "../../../client/components/Sheet";
 import {
   dangerButton,
@@ -26,6 +26,7 @@ import {
 } from "../queries";
 
 import { ItemCosts } from "./ItemCosts";
+import { ItemListings } from "./ItemListings";
 
 /** "new" adds an item; an item edits it; null is closed. */
 export type ItemTarget = "new" | Item | null;
@@ -40,6 +41,10 @@ type Draft = {
   platformId: string;
   purchaseFrom: string;
   notes: string;
+  soldOn: string;
+  salePrice: string;
+  salePlatformId: string;
+  buyerNotes: string;
 };
 
 function toDraft(item: Item | null): Draft {
@@ -53,6 +58,10 @@ function toDraft(item: Item | null): Draft {
     platformId: item?.purchasePlatform ? String(item.purchasePlatform.id) : "",
     purchaseFrom: item?.purchaseFrom ?? "",
     notes: item?.notes ?? "",
+    soldOn: item?.soldOn ?? "",
+    salePrice: item?.saleCents != null ? centsToInput(item.saleCents) : "",
+    salePlatformId: item?.salePlatform ? String(item.salePlatform.id) : "",
+    buyerNotes: item?.buyerNotes ?? "",
   };
 }
 
@@ -74,7 +83,9 @@ export function ItemSheet({
       open={target !== null}
       onClose={onClose}
       title={item ? "Item" : "Add item"}
-      description={item ? undefined : "You can add costs and time once the item is saved."}
+      description={
+        item ? undefined : "You can add listings, costs, and time once the item is saved."
+      }
     >
       {target === null ? null : (
         <ItemForm
@@ -101,6 +112,17 @@ function ItemForm({
   onManagePlatforms: () => void;
 }) {
   const [draft, setDraft] = useState(() => toDraft(item));
+  // Adding a listing can change the status on the server (to listed). Follow it,
+  // unless the status here was changed and not saved yet.
+  const serverStatus = useRef(item?.status);
+  useEffect(() => {
+    if (!item || item.status === serverStatus.current) return;
+    const previous = serverStatus.current;
+    serverStatus.current = item.status;
+    setDraft((current) =>
+      current.status === previous ? { ...current, status: item.status } : current,
+    );
+  }, [item]);
   const [message, setMessage] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [tried, setTried] = useState(false);
@@ -113,11 +135,16 @@ function ItemForm({
   const titleMissing = draft.title.trim() === "";
   const cents = draft.price.trim() === "" ? null : parseDollars(draft.price);
   const priceInvalid = draft.price.trim() !== "" && cents === null;
-  const blocked = titleMissing || priceInvalid;
+  const saleCents = draft.salePrice.trim() === "" ? null : parseDollars(draft.salePrice);
+  const salePriceInvalid = draft.salePrice.trim() !== "" && saleCents === null;
+  const blocked = titleMissing || priceInvalid || salePriceInvalid;
   const error = create.error ?? update.error ?? remove.error;
   // Archived platforms stay selectable only for the item that already uses one.
   const choices = (platforms.data ?? []).filter(
     (platform: Platform) => !platform.archived || String(platform.id) === draft.platformId,
+  );
+  const saleChoices = (platforms.data ?? []).filter(
+    (platform: Platform) => !platform.archived || String(platform.id) === draft.salePlatformId,
   );
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
@@ -139,6 +166,11 @@ function ItemForm({
       purchasePlatformId: draft.platformId ? Number(draft.platformId) : null,
       purchaseFrom: draft.purchaseFrom.trim(),
       notes: draft.notes,
+      // An empty sale date on a newly sold item is dated today by the server.
+      soldOn: draft.soldOn || null,
+      saleCents,
+      salePlatformId: draft.salePlatformId ? Number(draft.salePlatformId) : null,
+      buyerNotes: draft.buyerNotes,
     };
     if (!item) {
       create.mutate(fields, { onSuccess: onDone });
@@ -310,6 +342,86 @@ function ItemForm({
           </div>
         </fieldset>
 
+        {draft.status === "sold" ? (
+          <fieldset
+            aria-labelledby={`${ids}-sale`}
+            className="min-w-0 space-y-4 border-t border-surface-0/70 pt-5"
+          >
+            <h3 id={`${ids}-sale`} className="font-semibold text-fg">
+              Sale
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
+                <label htmlFor={`${ids}-sold-for`} className={labelClass}>
+                  Sold for
+                </label>
+                <input
+                  id={`${ids}-sold-for`}
+                  value={draft.salePrice}
+                  onChange={(event) => set("salePrice", event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  aria-invalid={salePriceInvalid}
+                  aria-describedby={salePriceInvalid ? `${ids}-sold-for-error` : undefined}
+                  className={`${inputClass} tabular-nums`}
+                />
+              </div>
+              <div className="min-w-0">
+                <label htmlFor={`${ids}-sold-on`} className={labelClass}>
+                  Sold on
+                </label>
+                <input
+                  id={`${ids}-sold-on`}
+                  type="date"
+                  value={draft.soldOn}
+                  onChange={(event) => set("soldOn", event.target.value)}
+                  className={`${inputClass} [color-scheme:dark]`}
+                />
+              </div>
+            </div>
+            <p
+              id={salePriceInvalid ? `${ids}-sold-for-error` : undefined}
+              className={`-mt-2 text-sm ${salePriceInvalid ? "text-danger" : "text-muted"}`}
+            >
+              {salePriceInvalid
+                ? "Use an amount like 12.50."
+                : "Leave the date empty to use today. Open listings end on the sale date."}
+            </p>
+            <div>
+              <label htmlFor={`${ids}-sold-via`} className={labelClass}>
+                Sold on platform
+              </label>
+              <select
+                id={`${ids}-sold-via`}
+                value={draft.salePlatformId}
+                onChange={(event) => set("salePlatformId", event.target.value)}
+                className={inputClass}
+              >
+                <option value="">None</option>
+                {saleChoices.map((platform) => (
+                  <option key={platform.id} value={String(platform.id)}>
+                    {platform.archived ? `${platform.name} (archived)` : platform.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor={`${ids}-buyer`} className={labelClass}>
+                Buyer notes
+              </label>
+              <textarea
+                id={`${ids}-buyer`}
+                value={draft.buyerNotes}
+                onChange={(event) => set("buyerNotes", event.target.value)}
+                rows={2}
+                maxLength={2_000}
+                placeholder="How it was paid, picked up, or shipped"
+                className={textareaClass}
+              />
+            </div>
+          </fieldset>
+        ) : null}
+
         <div>
           <label htmlFor={`${ids}-notes`} className={labelClass}>
             Notes
@@ -340,6 +452,7 @@ function ItemForm({
           </p>
         ) : null}
       </form>
+      {item ? <ItemListings item={item} /> : null}
       {item ? <ItemCosts item={item} /> : null}
       {item ? <SubjectTime subject={{ type: "resale_item", id: item.id }} /> : null}
       {item ? (

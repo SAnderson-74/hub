@@ -1,6 +1,7 @@
-import { and, asc, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, conflict, notFound } from "../../server/errors";
+import type { ActivityValue } from "../../shared/entities";
 import { formatCents } from "../../shared/money";
 import type {
   CostCreate,
@@ -9,17 +10,41 @@ import type {
   ItemCreate,
   ItemStatus,
   ItemUpdate,
+  ListingCreate,
+  ListingUpdate,
   PlatformCreate,
   PlatformUpdate,
+  PriceChange,
 } from "../../shared/resale";
 import { changedFields, recordActivity } from "../core/activity.service";
 import { detachEntities } from "../core/entities";
 import { timeEntries } from "../time/schema";
-import { resaleCosts, resaleItems, resalePlatforms } from "./schema";
+import {
+  resaleCosts,
+  resaleItems,
+  resaleListingPrices,
+  resaleListings,
+  resalePlatforms,
+} from "./schema";
 
 type PlatformRow = typeof resalePlatforms.$inferSelect;
 type ItemRow = typeof resaleItems.$inferSelect;
 type CostRow = typeof resaleCosts.$inferSelect;
+type ListingRow = typeof resaleListings.$inferSelect;
+type PriceRow = typeof resaleListingPrices.$inferSelect;
+
+export type ListingJson = {
+  id: number;
+  platform: { id: number; name: string } | null;
+  url: string;
+  listedOn: string;
+  /** null while the listing is up. */
+  endedOn: string | null;
+  /** The newest asking price. */
+  priceCents: number;
+  /** Every asking price, oldest first. */
+  prices: Array<{ id: number; priceCents: number; changedOn: string }>;
+};
 
 export type CostJson = {
   id: number;
@@ -34,7 +59,7 @@ export type PlatformJson = {
   name: string;
   notes: string;
   archived: boolean;
-  /** Items bought there. A platform in use can be archived but not deleted. */
+  /** Items bought, listed, or sold there. A platform in use can be archived, not deleted. */
   itemCount: number;
 };
 
@@ -54,6 +79,12 @@ export type ItemJson = {
   costsCents: number;
   /** Time logged on the item, with a running timer counted up to now. */
   timeMinutes: number;
+  /** Newest first. */
+  listings: ListingJson[];
+  soldOn: string | null;
+  saleCents: number | null;
+  salePlatform: { id: number; name: string } | null;
+  buyerNotes: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,14 +93,7 @@ export type ItemJson = {
 
 /** Active platforms first, then archived ones, each in the order they were added. */
 export function listPlatforms(db: Queryable): PlatformJson[] {
-  const counts = new Map(
-    db
-      .select({ id: resaleItems.purchasePlatformId, total: count() })
-      .from(resaleItems)
-      .groupBy(resaleItems.purchasePlatformId)
-      .all()
-      .map((row) => [row.id, row.total]),
-  );
+  const counts = new Map([...platformUse(db)].map(([id, items]) => [id, items.size]));
   return db
     .select()
     .from(resalePlatforms)
@@ -82,6 +106,30 @@ export function listPlatforms(db: Queryable): PlatformJson[] {
       archived: row.archived,
       itemCount: counts.get(row.id) ?? 0,
     }));
+}
+
+/** Which items use each platform, whether they were bought, listed, or sold there. */
+function platformUse(db: Queryable): Map<number, Set<number>> {
+  const pairs = [
+    ...db
+      .select({ platformId: resaleItems.purchasePlatformId, itemId: resaleItems.id })
+      .from(resaleItems)
+      .all(),
+    ...db
+      .select({ platformId: resaleItems.salePlatformId, itemId: resaleItems.id })
+      .from(resaleItems)
+      .all(),
+    ...db
+      .select({ platformId: resaleListings.platformId, itemId: resaleListings.itemId })
+      .from(resaleListings)
+      .all(),
+  ];
+  const use = new Map<number, Set<number>>();
+  for (const { platformId, itemId } of pairs) {
+    if (platformId === null) continue;
+    use.set(platformId, (use.get(platformId) ?? new Set()).add(itemId));
+  }
+  return use;
 }
 
 function requirePlatform(db: Queryable, id: number, from: "path" | "body" = "path"): PlatformRow {
@@ -134,14 +182,9 @@ export function updatePlatform(db: Db, id: number, patch: PlatformUpdate): Platf
 export function deletePlatform(db: Db, id: number): PlatformJson[] {
   db.transaction((tx) => {
     requirePlatform(tx, id);
-    const used = tx
-      .select({ total: count() })
-      .from(resaleItems)
-      .where(eq(resaleItems.purchasePlatformId, id))
-      .get();
-    if ((used?.total ?? 0) > 0) {
+    if ((platformUse(tx).get(id)?.size ?? 0) > 0) {
       throw conflict(
-        "Items were bought on this platform. Archive it instead to keep their history.",
+        "Items were bought, listed, or sold on this platform. Archive it instead to keep their history.",
       );
     }
     tx.delete(resalePlatforms).where(eq(resalePlatforms.id, id)).run();
@@ -167,7 +210,53 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
   const names = platformNames(db);
   const costsByItem = new Map<number, CostRow[]>();
   const minutesByItem = new Map<number, number>();
+  const listingsByItem = new Map<number, ListingJson[]>();
+  const platformRef = (id: number | null) => {
+    const name = id === null ? undefined : names.get(id);
+    return id !== null && name !== undefined ? { id, name } : null;
+  };
   if (ids.length > 0) {
+    const listingRows: ListingRow[] = db
+      .select()
+      .from(resaleListings)
+      .where(inArray(resaleListings.itemId, ids))
+      .orderBy(desc(resaleListings.listedOn), desc(resaleListings.id))
+      .all();
+    const priceRows: PriceRow[] =
+      listingRows.length === 0
+        ? []
+        : db
+            .select()
+            .from(resaleListingPrices)
+            .where(
+              inArray(
+                resaleListingPrices.listingId,
+                listingRows.map((listing) => listing.id),
+              ),
+            )
+            .orderBy(asc(resaleListingPrices.changedOn), asc(resaleListingPrices.id))
+            .all();
+    for (const listing of listingRows) {
+      const prices = priceRows
+        .filter((price) => price.listingId === listing.id)
+        .map((price) => ({
+          id: price.id,
+          priceCents: price.priceCents,
+          changedOn: price.changedOn,
+        }));
+      listingsByItem.set(listing.itemId, [
+        ...(listingsByItem.get(listing.itemId) ?? []),
+        {
+          id: listing.id,
+          platform: platformRef(listing.platformId),
+          url: listing.url,
+          listedOn: listing.listedOn,
+          endedOn: listing.endedOn,
+          priceCents: prices.at(-1)?.priceCents ?? 0,
+          prices,
+        },
+      ]);
+    }
     const costRows = db
       .select()
       .from(resaleCosts)
@@ -195,8 +284,6 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
     }
   }
   return rows.map((row) => {
-    const platformName =
-      row.purchasePlatformId === null ? undefined : names.get(row.purchasePlatformId);
     const costs = (costsByItem.get(row.id) ?? []).map((cost) => ({
       id: cost.id,
       kind: cost.kind,
@@ -212,15 +299,17 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
       condition: row.condition,
       purchasedOn: row.purchasedOn,
       purchaseCents: row.purchaseCents,
-      purchasePlatform:
-        row.purchasePlatformId !== null && platformName !== undefined
-          ? { id: row.purchasePlatformId, name: platformName }
-          : null,
+      purchasePlatform: platformRef(row.purchasePlatformId),
       purchaseFrom: row.purchaseFrom,
       notes: row.notes,
       costs,
       costsCents: costs.reduce((sum, cost) => sum + cost.amountCents, 0),
       timeMinutes: minutesByItem.get(row.id) ?? 0,
+      listings: listingsByItem.get(row.id) ?? [],
+      soldOn: row.soldOn,
+      saleCents: row.saleCents,
+      salePlatform: platformRef(row.salePlatformId),
+      buyerNotes: row.buyerNotes,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -266,17 +355,48 @@ function tracked(row: ItemRow, names: Map<number, string>) {
     boughtOn: row.purchasePlatformId === null ? null : (names.get(row.purchasePlatformId) ?? null),
     boughtFrom: row.purchaseFrom,
     notes: row.notes,
+    soldOn: row.soldOn,
+    soldFor: row.saleCents === null ? null : formatCents(row.saleCents),
+    soldVia: row.salePlatformId === null ? null : (names.get(row.salePlatformId) ?? null),
+    buyerNotes: row.buyerNotes,
   };
 }
 
-export function createItem(db: Db, input: ItemCreate, actor: string): ItemJson {
+/** Records changes on the item's timeline. */
+function logItem(
+  tx: Queryable,
+  item: { id: number; title: string },
+  changes: Record<string, { from: ActivityValue; to: ActivityValue }>,
+  actor: string,
+) {
+  if (Object.keys(changes).length === 0) return;
+  recordActivity(tx, {
+    entity: { type: "resale_item", id: item.id },
+    action: "updated",
+    label: item.title,
+    details: { changes },
+    actor,
+  });
+}
+
+/** Takes down an item's open listings, as of the day it sold. */
+function endOpenListings(tx: Queryable, itemId: number, endedOn: string) {
+  tx.update(resaleListings)
+    .set({ endedOn, updatedAt: new Date() })
+    .where(and(eq(resaleListings.itemId, itemId), isNull(resaleListings.endedOn)))
+    .run();
+}
+
+export function createItem(db: Db, input: ItemCreate, actor: string, today: string): ItemJson {
   return db.transaction((tx) => {
     if (input.purchasePlatformId != null) requirePlatform(tx, input.purchasePlatformId, "body");
+    if (input.salePlatformId != null) requirePlatform(tx, input.salePlatformId, "body");
+    const status = input.status ?? "acquired";
     const row = tx
       .insert(resaleItems)
       .values({
         title: input.title,
-        status: input.status ?? "acquired",
+        status,
         category: input.category ?? "",
         condition: input.condition ?? "",
         purchasedOn: input.purchasedOn ?? null,
@@ -284,6 +404,10 @@ export function createItem(db: Db, input: ItemCreate, actor: string): ItemJson {
         purchasePlatformId: input.purchasePlatformId ?? null,
         purchaseFrom: input.purchaseFrom ?? "",
         notes: input.notes ?? "",
+        soldOn: input.soldOn ?? (status === "sold" ? today : null),
+        saleCents: input.saleCents ?? null,
+        salePlatformId: input.salePlatformId ?? null,
+        buyerNotes: input.buyerNotes ?? "",
       })
       .returning()
       .get();
@@ -297,14 +421,20 @@ export function createItem(db: Db, input: ItemCreate, actor: string): ItemJson {
   });
 }
 
-export function updateItem(db: Db, id: number, patch: ItemUpdate, actor: string): ItemJson {
+export function updateItem(
+  db: Db,
+  id: number,
+  patch: ItemUpdate,
+  actor: string,
+  today: string,
+): ItemJson {
   return db.transaction((tx) => {
     const current = requireItem(tx, id);
-    if (
-      patch.purchasePlatformId != null &&
-      patch.purchasePlatformId !== current.purchasePlatformId
-    ) {
-      requirePlatform(tx, patch.purchasePlatformId, "body");
+    for (const [next, was] of [
+      [patch.purchasePlatformId, current.purchasePlatformId],
+      [patch.salePlatformId, current.salePlatformId],
+    ] as const) {
+      if (next != null && next !== was) requirePlatform(tx, next, "body");
     }
     const names = platformNames(tx);
     // null clears a nullable field; a field left out stays as it is.
@@ -320,7 +450,16 @@ export function updateItem(db: Db, id: number, patch: ItemUpdate, actor: string)
       purchasePlatformId: keep(patch.purchasePlatformId, current.purchasePlatformId),
       purchaseFrom: keep(patch.purchaseFrom, current.purchaseFrom),
       notes: keep(patch.notes, current.notes),
+      soldOn: keep(patch.soldOn, current.soldOn),
+      saleCents: keep(patch.saleCents, current.saleCents),
+      salePlatformId: keep(patch.salePlatformId, current.salePlatformId),
+      buyerNotes: keep(patch.buyerNotes, current.buyerNotes),
     };
+    // Selling an item dates the sale today unless a date is given, and takes down
+    // its open listings. Sale details stay if it's moved back, in case that was a slip.
+    const selling = next.status === "sold" && current.status !== "sold";
+    if (selling && next.soldOn === null) next.soldOn = today;
+    if (selling) endOpenListings(tx, id, next.soldOn ?? today);
     const changes = changedFields(tracked(current, names), tracked(next, names));
     if (Object.keys(changes).length === 0) return oneItem(tx, current);
     const { id: _id, createdAt: _createdAt, ...values } = next;
@@ -330,13 +469,7 @@ export function updateItem(db: Db, id: number, patch: ItemUpdate, actor: string)
       .where(eq(resaleItems.id, id))
       .returning()
       .get();
-    recordActivity(tx, {
-      entity: { type: "resale_item", id },
-      action: "updated",
-      label: row.title,
-      details: { changes },
-      actor,
-    });
+    logItem(tx, row, changes, actor);
     return oneItem(tx, row);
   });
 }
@@ -423,5 +556,158 @@ export function deleteCost(db: Db, id: number, actor: string): ItemJson {
   const cost = requireCost(db, id);
   return changeCosts(db, cost.itemId, actor, (tx) => {
     tx.delete(resaleCosts).where(eq(resaleCosts.id, id)).run();
+  });
+}
+
+// Listings
+
+function requireListing(db: Queryable, id: number): ListingRow {
+  const row = db.select().from(resaleListings).where(eq(resaleListings.id, id)).get();
+  if (!row) throw notFound("That listing doesn't exist. It may have been deleted.");
+  return row;
+}
+
+function currentPrice(db: Queryable, listingId: number): number | null {
+  const row = db
+    .select({ priceCents: resaleListingPrices.priceCents })
+    .from(resaleListingPrices)
+    .where(eq(resaleListingPrices.listingId, listingId))
+    .orderBy(desc(resaleListingPrices.changedOn), desc(resaleListingPrices.id))
+    .get();
+  return row?.priceCents ?? null;
+}
+
+/** "$40 on Local classifieds", for the timeline. */
+function listingLabel(db: Queryable, priceCents: number, platformId: number | null): string {
+  const name = platformId === null ? undefined : platformNames(db).get(platformId);
+  return name ? `${formatCents(priceCents)} on ${name}` : formatCents(priceCents);
+}
+
+function checkListingDates(listedOn: string, endedOn: string | null) {
+  if (endedOn !== null && endedOn < listedOn) {
+    throw badRequest("A listing can't end before it was listed. Check the dates.");
+  }
+}
+
+/**
+ * Puts an item up for sale at a price. An item that wasn't listed, sold, or kept
+ * yet becomes listed.
+ */
+export function createListing(
+  db: Db,
+  itemId: number,
+  input: ListingCreate,
+  actor: string,
+  today: string,
+): ItemJson {
+  return db.transaction((tx) => {
+    const item = requireItem(tx, itemId);
+    if (input.platformId != null) requirePlatform(tx, input.platformId, "body");
+    const listedOn = input.listedOn ?? today;
+    const listing = tx
+      .insert(resaleListings)
+      .values({
+        itemId,
+        platformId: input.platformId ?? null,
+        url: input.url ?? "",
+        listedOn,
+      })
+      .returning()
+      .get();
+    tx.insert(resaleListingPrices)
+      .values({ listingId: listing.id, priceCents: input.priceCents, changedOn: listedOn })
+      .run();
+    const changes: Record<string, { from: ActivityValue; to: ActivityValue }> = {
+      listed: { from: null, to: listingLabel(tx, input.priceCents, listing.platformId) },
+    };
+    if (item.status === "sourcing" || item.status === "acquired" || item.status === "repairing") {
+      tx.update(resaleItems)
+        .set({ status: "listed", updatedAt: new Date() })
+        .where(eq(resaleItems.id, itemId))
+        .run();
+      changes.status = { from: item.status, to: "listed" };
+    }
+    logItem(tx, item, changes, actor);
+    return oneItem(tx, requireItem(tx, itemId));
+  });
+}
+
+export function updateListing(db: Db, id: number, patch: ListingUpdate, actor: string): ItemJson {
+  return db.transaction((tx) => {
+    const current = requireListing(tx, id);
+    if (patch.platformId != null && patch.platformId !== current.platformId) {
+      requirePlatform(tx, patch.platformId, "body");
+    }
+    const listedOn = patch.listedOn ?? current.listedOn;
+    const endedOn = patch.endedOn !== undefined ? patch.endedOn : current.endedOn;
+    checkListingDates(listedOn, endedOn);
+    tx.update(resaleListings)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(resaleListings.id, id))
+      .run();
+    const item = requireItem(tx, current.itemId);
+    if (endedOn !== current.endedOn) {
+      const label = listingLabel(
+        tx,
+        currentPrice(tx, id) ?? 0,
+        patch.platformId ?? current.platformId,
+      );
+      logItem(
+        tx,
+        item,
+        {
+          listing: endedOn
+            ? { from: label, to: `Ended ${endedOn}` }
+            : { from: `Ended ${current.endedOn}`, to: label },
+        },
+        actor,
+      );
+    }
+    return oneItem(tx, item);
+  });
+}
+
+/** A new asking price. The old one stays in the listing's price history. */
+export function changePrice(
+  db: Db,
+  listingId: number,
+  input: PriceChange,
+  actor: string,
+  today: string,
+): ItemJson {
+  return db.transaction((tx) => {
+    const listing = requireListing(tx, listingId);
+    const changedOn = input.changedOn ?? today;
+    if (changedOn < listing.listedOn) {
+      throw badRequest("A price can't change before the item was listed. Check the date.");
+    }
+    const before = currentPrice(tx, listingId);
+    tx.insert(resaleListingPrices)
+      .values({ listingId, priceCents: input.priceCents, changedOn })
+      .run();
+    const item = requireItem(tx, listing.itemId);
+    logItem(
+      tx,
+      item,
+      {
+        askingPrice: {
+          from: before === null ? null : formatCents(before),
+          to: formatCents(input.priceCents),
+        },
+      },
+      actor,
+    );
+    return oneItem(tx, item);
+  });
+}
+
+export function deleteListing(db: Db, id: number, actor: string): ItemJson {
+  return db.transaction((tx) => {
+    const listing = requireListing(tx, id);
+    const label = listingLabel(tx, currentPrice(tx, id) ?? 0, listing.platformId);
+    tx.delete(resaleListings).where(eq(resaleListings.id, id)).run();
+    const item = requireItem(tx, listing.itemId);
+    logItem(tx, item, { listed: { from: label, to: null } }, actor);
+    return oneItem(tx, item);
   });
 }

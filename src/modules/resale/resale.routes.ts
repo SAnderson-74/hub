@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { localDateParts } from "../../server/db/backup";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
@@ -9,28 +10,37 @@ import {
   itemCreateSchema,
   itemListQuerySchema,
   itemUpdateSchema,
+  listingCreateSchema,
+  listingUpdateSchema,
   platformCreateSchema,
   platformUpdateSchema,
+  priceChangeSchema,
 } from "../../shared/resale";
 import {
+  changePrice,
   createCost,
   createItem,
+  createListing,
   createPlatform,
   deleteCost,
   deleteItem,
+  deleteListing,
   deletePlatform,
   getItem,
   listItems,
   listPlatforms,
   updateCost,
   updateItem,
+  updateListing,
   updatePlatform,
 } from "./resale.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 
 /** Resale items, their costs, and the platforms they're bought and sold on. Platform writes answer with every platform. */
-export function resaleRoutes({ db }: Deps) {
+export function resaleRoutes({ db, config }: Deps) {
+  // "Today" for dating sales, listings, and price changes, in the owner's time zone.
+  const today = () => localDateParts(new Date(), config.timeZone).date;
   return new Hono<AppEnv>()
     .get("/platforms", (c) => c.json(listPlatforms(db)))
     .post(
@@ -51,7 +61,7 @@ export function resaleRoutes({ db }: Deps) {
       (c) => c.json(listItems(db, c.req.valid("query"))),
     )
     .post("/items", zValidator("json", itemCreateSchema, invalid("That item isn't valid.")), (c) =>
-      c.json(createItem(db, c.req.valid("json"), c.get("user").login), 201),
+      c.json(createItem(db, c.req.valid("json"), c.get("user").login, today()), 201),
     )
     .get("/items/:id", idParam, (c) => c.json(getItem(db, c.req.valid("param").id)))
     .patch(
@@ -59,7 +69,15 @@ export function resaleRoutes({ db }: Deps) {
       idParam,
       zValidator("json", itemUpdateSchema, invalid("Those item changes aren't valid.")),
       (c) =>
-        c.json(updateItem(db, c.req.valid("param").id, c.req.valid("json"), c.get("user").login)),
+        c.json(
+          updateItem(
+            db,
+            c.req.valid("param").id,
+            c.req.valid("json"),
+            c.get("user").login,
+            today(),
+          ),
+        ),
     )
     .delete("/items/:id", idParam, (c) => {
       deleteItem(db, c.req.valid("param").id, c.get("user").login);
@@ -84,5 +102,49 @@ export function resaleRoutes({ db }: Deps) {
     )
     .delete("/costs/:id", idParam, (c) =>
       c.json(deleteCost(db, c.req.valid("param").id, c.get("user").login)),
+    )
+    .post(
+      "/items/:id/listings",
+      idParam,
+      zValidator("json", listingCreateSchema, invalid("That listing isn't valid.")),
+      (c) =>
+        c.json(
+          createListing(
+            db,
+            c.req.valid("param").id,
+            c.req.valid("json"),
+            c.get("user").login,
+            today(),
+          ),
+          201,
+        ),
+    )
+    .patch(
+      "/listings/:id",
+      idParam,
+      zValidator("json", listingUpdateSchema, invalid("Those listing changes aren't valid.")),
+      (c) =>
+        c.json(
+          updateListing(db, c.req.valid("param").id, c.req.valid("json"), c.get("user").login),
+        ),
+    )
+    .post(
+      "/listings/:id/prices",
+      idParam,
+      zValidator("json", priceChangeSchema, invalid("That price isn't valid.")),
+      (c) =>
+        c.json(
+          changePrice(
+            db,
+            c.req.valid("param").id,
+            c.req.valid("json"),
+            c.get("user").login,
+            today(),
+          ),
+          201,
+        ),
+    )
+    .delete("/listings/:id", idParam, (c) =>
+      c.json(deleteListing(db, c.req.valid("param").id, c.get("user").login)),
     );
 }

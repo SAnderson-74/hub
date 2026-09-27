@@ -78,6 +78,11 @@ const itemFields = {
   /** The seller or place, like "Garage sale" or a store name. */
   purchaseFrom: shortText(200, "seller names"),
   notes,
+  /** Sale details. Marking an item sold dates it today unless soldOn is given. */
+  soldOn: date.nullable(),
+  saleCents: cents.nullable(),
+  salePlatformId: z.number().int().positive().nullable(),
+  buyerNotes: z.string().max(2_000, "Keep buyer notes under 2,000 characters."),
 };
 
 export const itemCreateSchema = z.object(itemFields).partial().required({ title: true }).strict();
@@ -113,3 +118,41 @@ export type CostCreate = z.infer<typeof costCreateSchema>;
 
 export const costUpdateSchema = z.object(costFields).partial().strict();
 export type CostUpdate = z.infer<typeof costUpdateSchema>;
+
+/** A web address for a listing, or "" for none. */
+const listingUrl = z
+  .string()
+  .trim()
+  .max(2_000, "Keep links under 2,000 characters.")
+  .refine((value) => value === "" || /^https?:\/\/\S+$/i.test(value), {
+    message: "Use a web address that starts with https://.",
+  });
+
+export const listingCreateSchema = z
+  .object({
+    platformId: z.number().int().positive().nullable().optional(),
+    priceCents: cents,
+    /** Defaults to today. */
+    listedOn: date.optional(),
+    url: listingUrl.optional(),
+  })
+  .strict();
+export type ListingCreate = z.infer<typeof listingCreateSchema>;
+
+export const listingUpdateSchema = z
+  .object({
+    platformId: z.number().int().positive().nullable(),
+    listedOn: date,
+    /** When the listing came down; null reopens it. */
+    endedOn: date.nullable(),
+    url: listingUrl,
+  })
+  .partial()
+  .strict();
+export type ListingUpdate = z.infer<typeof listingUpdateSchema>;
+
+/** A new asking price for a listing. Earlier prices stay as its history. */
+export const priceChangeSchema = z
+  .object({ priceCents: cents, changedOn: date.optional() })
+  .strict();
+export type PriceChange = z.infer<typeof priceChangeSchema>;

@@ -163,6 +163,21 @@ function StatusFilter({
 
 function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: () => void }) {
   const held = heldFor(item, today);
+  const open = item.listings.filter((listing) => listing.endedOn === null);
+  const asking =
+    item.status === "listed" && open.length > 0
+      ? `Asking ${open
+          .map((listing) =>
+            listing.platform
+              ? `${formatCents(listing.priceCents)} on ${listing.platform.name}`
+              : formatCents(listing.priceCents),
+          )
+          .join(", ")}`
+      : null;
+  const sale =
+    item.status === "sold" && item.saleCents !== null
+      ? `Sold for ${formatCents(item.saleCents)}${item.salePlatform ? ` on ${item.salePlatform.name}` : ""}`
+      : null;
   const bought = [
     item.purchasedOn ? `Bought ${formatShortDate(item.purchasedOn, today)}` : null,
     item.purchasePlatform?.name,
@@ -199,6 +214,10 @@ function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: 
           <span className="text-muted tabular-nums">{formatMinutes(item.timeMinutes)} spent</span>
         ) : null}
       </span>
+      {sale ? <span className="mt-1 block text-sm font-semibold text-ok">{sale}</span> : null}
+      {asking ? (
+        <span className="mt-1 block text-sm font-semibold break-words text-fg">{asking}</span>
+      ) : null}
       {bought.length > 0 ? (
         <span className="mt-1 block text-sm break-words text-muted">{bought.join(" · ")}</span>
       ) : null}
