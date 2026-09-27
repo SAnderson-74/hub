@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
-import { notFound } from "../../server/errors";
+import { badRequest, notFound } from "../../server/errors";
 import {
   computeProgress,
   type GoalCreate,
@@ -15,8 +15,9 @@ import type { TaskStatus } from "../../shared/tasks";
 import { changedFields, recordActivity } from "../core/activity.service";
 import { detachEntities } from "../core/entities";
 import { links } from "../core/schema";
+import { accountsById } from "../money/money.service";
 import { tasks } from "../tasks/schema";
-import { goals, milestones } from "./schema";
+import { goalAccounts, goals, milestones } from "./schema";
 
 type GoalRow = typeof goals.$inferSelect;
 type MilestoneRow = typeof milestones.$inferSelect;
@@ -41,7 +42,10 @@ export type GoalJson = {
   progressMode: ProgressMode;
   manualPercent: number;
   targetCents: number | null;
+  /** Saved so far: the linked accounts' combined balance, or the amount typed in. */
   currentCents: number;
+  /** Money accounts counted toward an amount goal, with their balances. */
+  accounts: Array<{ id: number; name: string; balanceCents: number }>;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -145,9 +149,31 @@ function withExtras(db: Queryable, rows: GoalRow[]): GoalJson[] {
     taskCounts.set(link.goalId, counts);
   }
 
+  const accountLinks =
+    ids.length === 0
+      ? []
+      : db
+          .select({ goalId: goalAccounts.goalId, accountId: goalAccounts.accountId })
+          .from(goalAccounts)
+          .where(inArray(goalAccounts.goalId, ids))
+          .orderBy(asc(goalAccounts.id))
+          .all();
+  const accounts = accountsById(db, [...new Set(accountLinks.map((link) => link.accountId))]);
+
   return rows.map((row) => {
     const goalMilestones = byGoal.get(row.id) ?? [];
     const taskCount = taskCounts.get(row.id) ?? { done: 0, total: 0 };
+    const linked = accountLinks.flatMap((link) => {
+      const account = link.goalId === row.id ? accounts.get(link.accountId) : undefined;
+      return account
+        ? [{ id: account.id, name: account.name, balanceCents: account.balanceCents }]
+        : [];
+    });
+    // Linked accounts replace the typed-in amount; the stored one stays for rollbacks.
+    const currentCents =
+      linked.length > 0
+        ? linked.reduce((sum, account) => sum + account.balanceCents, 0)
+        : row.currentCents;
     return {
       id: row.id,
       title: row.title,
@@ -158,7 +184,8 @@ function withExtras(db: Queryable, rows: GoalRow[]): GoalJson[] {
       progressMode: row.progressMode,
       manualPercent: row.manualPercent,
       targetCents: row.targetCents,
-      currentCents: row.currentCents,
+      currentCents,
+      accounts: linked,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -170,7 +197,7 @@ function withExtras(db: Queryable, rows: GoalRow[]): GoalJson[] {
         },
         tasks: taskCount,
         manualPercent: row.manualPercent,
-        currentCents: row.currentCents,
+        currentCents,
         targetCents: row.targetCents,
       }),
       milestones: goalMilestones,
@@ -232,6 +259,29 @@ function lastSortOrder(db: Queryable, table: typeof goals | typeof milestones): 
   return row?.last ?? 0;
 }
 
+/** Replaces the accounts a goal counts. Returns their names for the goal's timeline. */
+function setGoalAccounts(tx: Queryable, goalId: number, accountIds: number[]): string[] {
+  const found = accountsById(tx, accountIds);
+  if (found.size !== accountIds.length) {
+    throw badRequest("One of those accounts doesn't exist. It may have been deleted.");
+  }
+  tx.delete(goalAccounts).where(eq(goalAccounts.goalId, goalId)).run();
+  for (const accountId of accountIds) tx.insert(goalAccounts).values({ goalId, accountId }).run();
+  return accountIds.map((id) => found.get(id)?.name ?? "");
+}
+
+function goalAccountNames(tx: Queryable, goalId: number): string[] {
+  const ids = tx
+    .select({ accountId: goalAccounts.accountId })
+    .from(goalAccounts)
+    .where(eq(goalAccounts.goalId, goalId))
+    .orderBy(asc(goalAccounts.id))
+    .all()
+    .map((row) => row.accountId);
+  const found = accountsById(tx, ids);
+  return ids.map((id) => found.get(id)?.name ?? "");
+}
+
 export function createGoal(db: Db, input: GoalCreate, actor: string): GoalDetailJson {
   return db.transaction((tx) => {
     const row = tx
@@ -248,6 +298,9 @@ export function createGoal(db: Db, input: GoalCreate, actor: string): GoalDetail
       })
       .returning()
       .get();
+    if (input.accountIds && input.accountIds.length > 0) {
+      setGoalAccounts(tx, row.id, [...new Set(input.accountIds)]);
+    }
     recordActivity(tx, {
       entity: { type: "goal", id: row.id },
       action: "created",
@@ -258,7 +311,8 @@ export function createGoal(db: Db, input: GoalCreate, actor: string): GoalDetail
   });
 }
 
-const tracked = (row: GoalRow) => ({
+const tracked = (row: GoalRow, accounts: string[]) => ({
+  accounts,
   title: row.title,
   notes: row.notes,
   targetDate: row.targetDate,
@@ -289,7 +343,12 @@ export function updateGoal(db: Db, id: number, patch: GoalUpdate, actor: string)
       currentCents: patch.currentCents ?? current.currentCents,
       sortOrder: patch.sortOrder ?? current.sortOrder,
     };
-    const changes = changedFields(tracked(current), tracked(next));
+    const accountsBefore = goalAccountNames(tx, id);
+    const accountsAfter =
+      patch.accountIds === undefined
+        ? accountsBefore
+        : setGoalAccounts(tx, id, [...new Set(patch.accountIds)]);
+    const changes = changedFields(tracked(current, accountsBefore), tracked(next, accountsAfter));
     if (Object.keys(changes).length === 0 && next.sortOrder === current.sortOrder) {
       return getGoal(tx, id);
     }

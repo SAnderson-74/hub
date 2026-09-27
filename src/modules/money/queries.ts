@@ -9,6 +9,7 @@ import type {
   CategoryCreate,
   CategoryUpdate,
   RuleCreate,
+  SnapshotSave,
   TransactionCreate,
   TransactionUpdate,
   TransferCreate,
@@ -110,8 +111,14 @@ function useMoneyMutation<Input, Output>(mutationFn: (input: Input) => Promise<O
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.all }),
+    onSettled: () => refreshMoney(queryClient),
   });
+}
+
+/** Money and the savings goals that count account balances. */
+function refreshMoney(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: keys.all });
+  void queryClient.invalidateQueries({ queryKey: ["goals"] });
 }
 
 export function useCreateBook() {
@@ -250,7 +257,7 @@ export function useImportFile() {
       return res.json();
     },
     onSuccess: (_result, { dryRun }) => {
-      if (!dryRun) void queryClient.invalidateQueries({ queryKey: keys.all });
+      if (!dryRun) refreshMoney(queryClient);
     },
   });
 }
@@ -392,5 +399,55 @@ export function useSetBudget() {
     const res = await api.money.budgets.$put({ json });
     if (!res.ok) throw await toApiError(res);
     return res.json();
+  });
+}
+
+// Balance snapshots
+
+/** An account's balance entries, newest first, with its current balance. */
+export function useAccountHistory(accountId: number) {
+  return useQuery({
+    queryKey: ["money", "account-history", accountId],
+    queryFn: async () => {
+      const res = await api.money.accounts[":id"].history.$get({
+        param: { id: String(accountId) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+export function useSaveSnapshot() {
+  return useMoneyMutation(
+    async ({ accountId, json }: { accountId: number; json: SnapshotSave }) => {
+      const res = await api.money.accounts[":id"].snapshots.$put({
+        param: { id: String(accountId) },
+        json,
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  );
+}
+
+export function useDeleteSnapshot() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.snapshots[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+/** Every account in every book, for linking savings goals. */
+export function useAllAccounts(enabled = true) {
+  return useQuery({
+    queryKey: ["money", "all-accounts"],
+    queryFn: async () => {
+      const res = await api.money["all-accounts"].$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled,
   });
 }

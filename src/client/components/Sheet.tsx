@@ -12,10 +12,15 @@ type SheetProps = {
   children: ReactNode;
 };
 
+// Plain block layout on purpose: the dialog grows with its content, up to a maximum
+// height, and scrolls itself, with the title bar pinned. Sizing a flex column to its
+// content (height: fit-content) collapsed centered dialogs to their header in Safari.
 const variants = {
   drawer:
     "md:inset-y-0 md:right-0 md:left-auto md:h-dvh md:max-h-dvh md:w-[30rem] md:rounded-none md:rounded-l-panel",
-  dialog: "md:inset-0 md:m-auto md:h-fit md:max-h-[85dvh] md:w-[28rem] md:rounded-panel",
+  // Centered by position and transform, with an automatic height: no fit-content.
+  dialog:
+    "md:inset-x-0 md:top-1/2 md:bottom-auto md:mx-auto md:max-h-[85dvh] md:w-[28rem] md:-translate-y-1/2 md:rounded-panel",
 };
 
 /**
@@ -54,9 +59,9 @@ export function Sheet({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className={`fixed inset-x-0 top-auto bottom-0 m-0 max-h-[92dvh] w-full max-w-none flex-col overflow-hidden rounded-t-panel bg-mantle p-0 text-fg ring-1 ring-surface-0/60 backdrop:bg-crust/75 open:flex ${variants[variant]}`}
+      className={`fixed inset-x-0 top-auto bottom-0 m-0 h-auto max-h-[92dvh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-panel bg-mantle p-0 text-fg ring-1 ring-surface-0/60 backdrop:bg-crust/75 open:block ${variants[variant]}`}
     >
-      <div className="flex items-start gap-3 px-5 pt-5 pb-3 md:px-6 md:pt-6">
+      <div className="sticky top-0 z-10 flex items-start gap-3 bg-mantle px-5 pt-5 pb-3 md:px-6 md:pt-6">
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="text-lg font-semibold tracking-[-0.01em] break-words">
             {title}
@@ -72,12 +77,7 @@ export function Sheet({
           <X aria-hidden="true" className="size-5" />
         </button>
       </div>
-      {/* flex-initial (0 1 auto), not flex-1: the body starts at its content's height and
-          only shrinks to scroll. With a 0 basis, a dialog sized to its content (md:h-fit)
-          can collapse to its header in some browsers (Safari), hiding the form. */}
-      <div className="min-h-0 flex-initial overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:px-6">
-        {children}
-      </div>
+      <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:px-6">{children}</div>
     </dialog>
   );
 }

@@ -13,6 +13,7 @@ const goal: GoalDetail = {
   manualPercent: 0,
   targetCents: 500_000,
   currentCents: 125_050,
+  accounts: [],
   sortOrder: 1,
   createdAt: "2030-01-01T00:00:00.000Z",
   updatedAt: "2030-01-01T00:00:00.000Z",
@@ -46,6 +47,28 @@ describe("goal form", () => {
       currentCents: 200_000,
       targetCents: null,
       targetDate: null,
+    });
+  });
+
+  it("links accounts, whose balance then replaces the amount typed in", () => {
+    const linked = goalDraftChanges(goal, { ...toGoalDraft(goal), accountIds: [7, 3] });
+    expect(linked).toEqual({ accountIds: [7, 3] });
+
+    const saving: GoalDetail = {
+      ...goal,
+      currentCents: 310_000,
+      accounts: [
+        { id: 7, name: "Savings", balanceCents: 300_000 },
+        { id: 3, name: "Cash", balanceCents: 10_000 },
+      ],
+    };
+    const draft = toGoalDraft(saving);
+    expect(draft.accountIds).toEqual([7, 3]);
+    expect(goalDraftChanges(saving, draft)).toEqual({});
+    // Unlinking keeps the last balance as the amount saved.
+    expect(goalDraftChanges(saving, { ...draft, accountIds: [] })).toEqual({
+      accountIds: [],
+      currentCents: 310_000,
     });
   });
 

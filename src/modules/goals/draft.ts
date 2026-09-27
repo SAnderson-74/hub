@@ -13,6 +13,8 @@ export type GoalDraft = {
   /** "" for no target. */
   target: string;
   current: string;
+  /** Accounts whose balances count as saved; when any are chosen, `current` is unused. */
+  accountIds: number[];
 };
 
 export function toGoalDraft(goal: GoalDetail): GoalDraft {
@@ -25,6 +27,7 @@ export function toGoalDraft(goal: GoalDetail): GoalDraft {
     manualPercent: goal.manualPercent,
     target: goal.targetCents === null ? "" : centsToInput(goal.targetCents),
     current: centsToInput(goal.currentCents),
+    accountIds: goal.accounts.map((account) => account.id),
   };
 }
 
@@ -55,7 +58,14 @@ export function goalDraftChanges(goal: GoalDetail, draft: GoalDraft): GoalUpdate
   if (draft.manualPercent !== goal.manualPercent) patch.manualPercent = draft.manualPercent;
   const target = draft.target.trim() ? parseDollars(draft.target) : null;
   if (target !== goal.targetCents) patch.targetCents = target;
-  const current = draft.current.trim() ? (parseDollars(draft.current) ?? 0) : 0;
-  if (current !== goal.currentCents) patch.currentCents = current;
+  const sameAccounts =
+    draft.accountIds.length === goal.accounts.length &&
+    draft.accountIds.every((id, index) => goal.accounts[index]?.id === id);
+  if (!sameAccounts) patch.accountIds = draft.accountIds;
+  // With accounts linked, "saved so far" is their balance; nothing typed to save.
+  if (draft.accountIds.length === 0) {
+    const current = draft.current.trim() ? (parseDollars(draft.current) ?? 0) : 0;
+    if (current !== goal.currentCents || goal.accounts.length > 0) patch.currentCents = current;
+  }
   return patch;
 }

@@ -168,3 +168,23 @@ export const moneyBudgets = sqliteTable(
   },
   (t) => [uniqueIndex("money_budgets_category_month_unique").on(t.categoryId, t.month)],
 );
+
+/**
+ * An account's balance on a day, entered from a statement, for accounts that aren't
+ * imported (a retirement account, a loan). The balance is the latest snapshot plus
+ * any transactions dated after it.
+ */
+export const moneyBalanceSnapshots = sqliteTable(
+  "money_balance_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => moneyAccounts.id),
+    date: text("date").notNull(),
+    balanceCents: integer("balance_cents").notNull(),
+    note: text("note").notNull().default(""),
+    ...timestamps(),
+  },
+  (t) => [uniqueIndex("money_balance_snapshots_account_date_unique").on(t.accountId, t.date)],
+);

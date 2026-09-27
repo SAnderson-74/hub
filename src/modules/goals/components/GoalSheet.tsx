@@ -36,6 +36,7 @@ import {
   useUpdateGoal,
   useUpdateMilestone,
 } from "../queries";
+import { SavingsAccounts } from "./SavingsAccounts";
 
 const MODE_HINTS: Record<ProgressMode, string> = {
   milestones: "Progress is the share of milestones below that are done.",
@@ -233,22 +234,30 @@ function GoalEditor({
         </div>
 
         {draft.progressMode === "amount" ? (
-          <div className="grid grid-cols-2 gap-3">
-            <MoneyField
-              id={`${ids}-current`}
-              label="Saved so far"
-              value={draft.current}
-              error={errors.current}
-              onChange={(value) => set("current", value)}
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              {draft.accountIds.length === 0 ? (
+                <MoneyField
+                  id={`${ids}-current`}
+                  label="Saved so far"
+                  value={draft.current}
+                  error={errors.current}
+                  onChange={(value) => set("current", value)}
+                />
+              ) : null}
+              <MoneyField
+                id={`${ids}-target`}
+                label="Target"
+                value={draft.target}
+                error={errors.target}
+                onChange={(value) => set("target", value)}
+              />
+            </div>
+            <SavingsAccounts
+              chosen={draft.accountIds}
+              onChange={(accountIds) => set("accountIds", accountIds)}
             />
-            <MoneyField
-              id={`${ids}-target`}
-              label="Target"
-              value={draft.target}
-              error={errors.target}
-              onChange={(value) => set("target", value)}
-            />
-          </div>
+          </>
         ) : null}
 
         {draft.progressMode === "manual" ? (

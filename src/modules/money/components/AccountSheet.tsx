@@ -12,6 +12,7 @@ import {
 import { ACCOUNT_KIND_LABELS, ACCOUNT_KINDS, type AccountKind } from "../../../shared/books";
 import { parseSignedDollars, signedCentsToInput } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
+import { formatShortDate } from "../../tasks/dates";
 import {
   type Account,
   type Book,
@@ -19,6 +20,7 @@ import {
   useDeleteAccount,
   useUpdateAccount,
 } from "../queries";
+import { BalanceHistory } from "./BalanceHistory";
 
 /** "new" adds an account to the book; an account edits it; null is closed. */
 export type AccountTarget = "new" | Account | null;
@@ -44,10 +46,12 @@ function toDraft(account: Account | null): Draft {
 export function AccountSheet({
   book,
   target,
+  today,
   onClose,
 }: {
   book: Book;
   target: AccountTarget;
+  today: string;
   onClose: () => void;
 }) {
   const account = target !== null && target !== "new" ? target : null;
@@ -59,7 +63,13 @@ export function AccountSheet({
       description={account ? undefined : `A bank account, card, loan, or cash in ${book.name}.`}
     >
       {target === null ? null : (
-        <AccountForm key={account?.id ?? "new"} book={book} account={account} onDone={onClose} />
+        <AccountForm
+          key={account?.id ?? "new"}
+          book={book}
+          account={account}
+          today={today}
+          onDone={onClose}
+        />
       )}
     </Sheet>
   );
@@ -68,10 +78,12 @@ export function AccountSheet({
 function AccountForm({
   book,
   account,
+  today,
   onDone,
 }: {
   book: Book;
   account: Account | null;
+  today: string;
   onDone: () => void;
 }) {
   const [draft, setDraft] = useState(() => toDraft(account));
@@ -130,9 +142,9 @@ function AccountForm({
             {formatSigned(account.balanceCents)}
           </p>
           <p className="mt-1 text-sm text-muted">
-            {formatSigned(account.openingBalanceCents)} opening balance and{" "}
-            {account.transactionCount}{" "}
-            {account.transactionCount === 1 ? "transaction" : "transactions"}
+            {account.latestSnapshot
+              ? `From the ${formatSigned(account.latestSnapshot.balanceCents)} balance on ${formatShortDate(account.latestSnapshot.date, today)}, plus any transactions after it`
+              : `${formatSigned(account.openingBalanceCents)} opening balance and ${account.transactionCount} ${account.transactionCount === 1 ? "transaction" : "transactions"}`}
           </p>
         </div>
       ) : null}
@@ -246,6 +258,8 @@ function AccountForm({
         ) : null}
       </form>
 
+      {account ? <BalanceHistory account={account} today={today} /> : null}
+
       {account ? (
         <div className="space-y-3 border-t border-surface-0/70 pt-4">
           <button
@@ -267,9 +281,9 @@ function AccountForm({
           <p className="text-sm text-muted">
             {account.archived
               ? "Archived accounts stay in the totals but leave the account lists."
-              : "Archive an account you've closed. Its transactions stay."}
+              : "Archive an account you've closed. Its transactions and balances stay."}
           </p>
-          {account.transactionCount > 0 ? null : confirmDelete ? (
+          {account.transactionCount > 0 || account.snapshotCount > 0 ? null : confirmDelete ? (
             <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
               <p className="font-semibold text-fg">Delete {account.name}? This can't be undone.</p>
               <div className="flex flex-wrap gap-2">

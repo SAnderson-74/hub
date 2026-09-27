@@ -37,6 +37,11 @@ const cents = z
   .min(0, "Amounts can't be negative.")
   .max(1_000_000_000_00, "That amount is too large.");
 const percent = z.number().int().min(0, "Use 0 to 100.").max(100, "Use 0 to 100.");
+/** Money accounts whose combined balance is an amount goal's "saved so far". */
+const accountIds = z
+  .array(z.number().int().positive())
+  .max(20, "Link at most 20 accounts.")
+  .transform((ids) => [...new Set(ids)]);
 
 export const goalCreateSchema = z
   .object({
@@ -47,9 +52,10 @@ export const goalCreateSchema = z
     manualPercent: percent.optional(),
     targetCents: cents.nullable().optional(),
     currentCents: cents.optional(),
+    accountIds: accountIds.optional(),
   })
   .strict();
-export type GoalCreate = z.infer<typeof goalCreateSchema>;
+export type GoalCreate = z.input<typeof goalCreateSchema>;
 
 export const goalUpdateSchema = z
   .object({
@@ -61,11 +67,12 @@ export const goalUpdateSchema = z
     manualPercent: percent,
     targetCents: cents.nullable(),
     currentCents: cents,
+    accountIds,
     sortOrder: z.number(),
   })
   .partial()
   .strict();
-export type GoalUpdate = z.infer<typeof goalUpdateSchema>;
+export type GoalUpdate = z.input<typeof goalUpdateSchema>;
 
 export const milestoneCreateSchema = z
   .object({ title, targetDate: targetDate.optional() })

@@ -178,3 +178,75 @@ describe("goals API", () => {
     expect(wrongGoal.status).toBe(404);
   });
 });
+
+describe("savings goals", () => {
+  const moneySetup = async () => {
+    const book = await body(
+      await t.api.money.books.$post({ json: { name: "Personal", kind: "personal" } }),
+    );
+    const account = async (name: string, openingBalanceCents: number) =>
+      body(
+        await t.api.money.accounts.$post({
+          json: { bookId: book.id, name, kind: "savings", openingBalanceCents },
+        }),
+      );
+    return { savings: await account("Savings", 300_000), cash: await account("Cash", 20_000) };
+  };
+
+  it("count the linked accounts' balance as saved, and follow it", async () => {
+    const { savings, cash } = await moneySetup();
+    const goal = await newGoal({
+      title: "Emergency fund",
+      progressMode: "amount",
+      targetCents: 1_000_000,
+      currentCents: 5,
+      accountIds: [savings.id, cash.id, savings.id],
+    });
+    expect(goal).toMatchObject({
+      currentCents: 320_000,
+      accounts: [
+        { id: savings.id, name: "Savings", balanceCents: 300_000 },
+        { id: cash.id, name: "Cash", balanceCents: 20_000 },
+      ],
+      progress: { percent: 32, summary: "$3,200 of $10,000" },
+    });
+
+    // Money arriving in the account moves the goal.
+    await body(
+      await t.api.money.transactions.$post({
+        json: { accountId: savings.id, date: "2030-01-05", amountCents: 80_000 },
+      }),
+    );
+    expect(await body(await getGoal(goal.id))).toMatchObject({
+      currentCents: 400_000,
+      progress: { percent: 40 },
+    });
+
+    // Unlinking goes back to the amount typed in.
+    const unlinked = await body(await patchGoal(goal.id, { accountIds: [], currentCents: 7_500 }));
+    expect(unlinked).toMatchObject({ accounts: [], currentCents: 7_500 });
+    const history = await body(
+      await t.api.activity.$get({ query: { type: "goal", id: String(goal.id) } }),
+    );
+    expect(history.entries[0]?.details).toMatchObject({
+      changes: { accounts: { from: ["Savings", "Cash"], to: [] } },
+    });
+  });
+
+  it("need accounts that exist, and lose the link when an account is deleted", async () => {
+    const { cash } = await moneySetup();
+    const missing = await failure(
+      await t.api.goals.$post({
+        json: { title: "Trip", progressMode: "amount", accountIds: [999] },
+      }),
+    );
+    expect(missing).toMatchObject({ status: 400 });
+    expect(missing.error).toContain("doesn't exist");
+
+    const goal = await newGoal({ title: "Trip", progressMode: "amount", accountIds: [cash.id] });
+    expect(
+      (await t.api.money.accounts[":id"].$delete({ param: { id: String(cash.id) } })).status,
+    ).toBe(204);
+    expect(await body(await getGoal(goal.id))).toMatchObject({ accounts: [], currentCents: 0 });
+  });
+});

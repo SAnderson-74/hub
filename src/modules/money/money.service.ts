@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -31,8 +32,10 @@ import {
   type TransactionQuery,
   type TransactionUpdate,
 } from "../../shared/books";
+import { goalAccounts } from "../goals/schema";
 import {
   moneyAccounts,
+  moneyBalanceSnapshots,
   moneyBooks,
   moneyBudgets,
   moneyCategories,
@@ -62,10 +65,16 @@ export type AccountJson = {
   kind: AccountKind;
   institution: string;
   openingBalanceCents: number;
-  /** Opening balance plus every transaction. Negative means money owed. */
+  /**
+   * The latest balance snapshot plus transactions dated after it, or without
+   * snapshots, the opening balance plus every transaction. Negative means money owed.
+   */
   balanceCents: number;
-  /** An account with transactions can be archived, not deleted. */
+  /** The newest balance entered from a statement, if any. */
+  latestSnapshot: { date: string; balanceCents: number } | null;
+  /** An account with transactions or snapshots can be archived, not deleted. */
   transactionCount: number;
+  snapshotCount: number;
   notes: string;
   archived: boolean;
 };
@@ -266,8 +275,46 @@ function accountsJson(db: Queryable, rows: AccountRow[]): AccountJson[] {
       .all()
       .map((row) => [row.accountId, row]),
   );
+  const snapshots = new Map<number, { date: string; balanceCents: number; count: number }>();
+  for (const snapshot of db
+    .select({
+      accountId: moneyBalanceSnapshots.accountId,
+      date: moneyBalanceSnapshots.date,
+      balanceCents: moneyBalanceSnapshots.balanceCents,
+    })
+    .from(moneyBalanceSnapshots)
+    .where(
+      inArray(
+        moneyBalanceSnapshots.accountId,
+        rows.map((row) => row.id),
+      ),
+    )
+    .all()) {
+    const latest = snapshots.get(snapshot.accountId);
+    snapshots.set(snapshot.accountId, {
+      ...(latest && latest.date > snapshot.date ? latest : snapshot),
+      count: (latest?.count ?? 0) + 1,
+    });
+  }
+  // Transactions after each account's latest snapshot, which the snapshot doesn't include.
+  const since = new Map(
+    [...snapshots].map(([accountId, snapshot]) => [
+      accountId,
+      db
+        .select({ sum: sql<number | null>`sum(${moneyTransactions.amountCents})` })
+        .from(moneyTransactions)
+        .where(
+          and(
+            eq(moneyTransactions.accountId, accountId),
+            gt(moneyTransactions.date, snapshot.date),
+          ),
+        )
+        .get()?.sum ?? 0,
+    ]),
+  );
   return rows.map((row) => {
     const total = totals.get(row.id);
+    const snapshot = snapshots.get(row.id);
     return {
       id: row.id,
       bookId: row.bookId,
@@ -275,12 +322,39 @@ function accountsJson(db: Queryable, rows: AccountRow[]): AccountJson[] {
       kind: row.kind,
       institution: row.institution,
       openingBalanceCents: row.openingBalanceCents,
-      balanceCents: row.openingBalanceCents + (total?.sum ?? 0),
+      balanceCents: snapshot
+        ? snapshot.balanceCents + (since.get(row.id) ?? 0)
+        : row.openingBalanceCents + (total?.sum ?? 0),
+      latestSnapshot: snapshot
+        ? { date: snapshot.date, balanceCents: snapshot.balanceCents }
+        : null,
       transactionCount: total?.n ?? 0,
+      snapshotCount: snapshot?.count ?? 0,
       notes: row.notes,
       archived: row.archived,
     };
   });
+}
+
+/** Accounts by id, with their balances, for other modules (savings goals). */
+export function accountsById(db: Queryable, ids: number[]): Map<number, AccountJson> {
+  if (ids.length === 0) return new Map();
+  const rows = db.select().from(moneyAccounts).where(inArray(moneyAccounts.id, ids)).all();
+  return new Map(accountsJson(db, rows).map((account) => [account.id, account]));
+}
+
+/** Every account in every book, for pickers outside Money (goals). Active books first. */
+export function allAccounts(db: Queryable): Array<AccountJson & { bookName: string }> {
+  const books = new Map(listBooks(db).map((book) => [book.id, book]));
+  const rows = db
+    .select()
+    .from(moneyAccounts)
+    .orderBy(asc(moneyAccounts.archived), asc(moneyAccounts.sortOrder), asc(moneyAccounts.id))
+    .all();
+  const order = [...books.keys()];
+  return accountsJson(db, rows)
+    .map((account) => ({ ...account, bookName: books.get(account.bookId)?.name ?? "" }))
+    .sort((a, b) => order.indexOf(a.bookId) - order.indexOf(b.bookId));
 }
 
 function oneAccount(db: Queryable, row: AccountRow): AccountJson {
@@ -353,17 +427,15 @@ export function updateAccount(db: Db, id: number, patch: AccountUpdate): Account
 
 export function deleteAccount(db: Db, id: number): void {
   db.transaction((tx) => {
-    requireAccount(tx, id);
-    const used = tx
-      .select({ n: count() })
-      .from(moneyTransactions)
-      .where(eq(moneyTransactions.accountId, id))
-      .get();
-    if ((used?.n ?? 0) > 0) {
-      throw conflict("This account has transactions. Archive it instead to keep them.");
+    const account = oneAccount(tx, requireAccount(tx, id));
+    if (account.transactionCount > 0 || account.snapshotCount > 0) {
+      throw conflict(
+        "This account has transactions or balance history. Archive it instead to keep them.",
+      );
     }
-    // Imports whose transactions are all gone (undone) go with it.
+    // Imports whose transactions are all gone (undone) go with it, and so do goal links.
     tx.delete(moneyImports).where(eq(moneyImports.accountId, id)).run();
+    tx.delete(goalAccounts).where(eq(goalAccounts.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }
