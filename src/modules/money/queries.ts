@@ -13,6 +13,7 @@ import type {
   TransactionUpdate,
   TransferCreate,
 } from "../../shared/books";
+import type { BudgetSet } from "../../shared/budget";
 
 async function fetchBooks() {
   const res = await api.money.books.$get();
@@ -366,5 +367,30 @@ export function useTransferMatches(id: number | null) {
       return res.json();
     },
     enabled: id !== null,
+  });
+}
+
+// Budgets
+
+/** A book's budget for a month (YYYY-MM), with six months of history. */
+export function useBudget(bookId: number, month: string) {
+  return useQuery({
+    queryKey: ["money", "budget", bookId, month],
+    queryFn: async () => {
+      const res = await api.money.budget.$get({ query: { bookId: String(bookId), month } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type BudgetMonth = NonNullable<ReturnType<typeof useBudget>["data"]>;
+
+export function useSetBudget() {
+  return useMoneyMutation(async (json: BudgetSet) => {
+    const res = await api.money.budgets.$put({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }

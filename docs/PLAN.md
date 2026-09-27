@@ -89,7 +89,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 3.1 Books (personal and business), accounts, categories, transactions
 - [x] 3.2 File imports: CSV with saved column mappings, OFX/QFX; duplicate detection; undo an import
 - [x] 3.3 Categorization rules and transfers
-- [ ] 3.4 Monthly budgets per category with remaining amounts and charts
+- [x] 3.4 Monthly budgets per category with remaining amounts and charts
 - [ ] 3.5 Savings goals linked to accounts; balance snapshots for accounts without exports
 - [ ] 3.6 Net worth over time
 - [ ] 3.7 Link resale purchases and sales to transactions
@@ -164,6 +164,7 @@ Money > Import reads a file in the browser and sends clean transactions to `POST
 - **Duplicates:** a transaction with the bank's id (OFX `FITID`) is skipped when the account already has that id, or has a matching transaction entered without one. Otherwise a match is the same day, amount, and payee (ignoring case and spacing), counted, so two identical purchases on one day both import once.
 - **Undo:** each import is listed under Recent imports; undoing it removes the transactions it added, including any edited since.
 - **Rules:** "payee contains X → category Y", optionally only for money in or out, optionally renaming the payee. Imports apply them in order (first match wins) to rows the file didn't categorize, and duplicate matching accepts either the file's payee or the rule's cleaner one.
+- **Budgets:** a spending category's monthly budget applies from the month it's set and carries on until a later month changes it (0 ends it), so past months keep the budget they had. Spending is money out in the category, less refunds; transfers never count.
 - **Transfers:** two linked transactions (money leaving one account, arriving in another) with no category, left out of money in and out. Hub suggests pairs from imports: the same amount out of one account and into another within four days, both uncategorized.
 
 ## Integrations

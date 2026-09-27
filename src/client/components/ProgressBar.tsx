@@ -3,10 +3,13 @@ export function ProgressBar({
   percent,
   label,
   complete = false,
+  over = false,
 }: {
   percent: number;
   label: string;
   complete?: boolean;
+  /** Past a limit, like a budget; shown in the danger color. Say so in text too. */
+  over?: boolean;
 }) {
   return (
     <span
@@ -18,7 +21,7 @@ export function ProgressBar({
       className="block h-2 w-full overflow-hidden rounded-full bg-surface-0"
     >
       <span
-        className={`block h-full rounded-full ${complete ? "bg-ok" : "bg-accent"}`}
+        className={`block h-full rounded-full ${over ? "bg-danger" : complete ? "bg-ok" : "bg-accent"}`}
         style={{ width: `${percent}%` }}
       />
     </span>

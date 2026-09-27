@@ -34,6 +34,7 @@ import {
 import {
   moneyAccounts,
   moneyBooks,
+  moneyBudgets,
   moneyCategories,
   moneyImports,
   moneyRules,
@@ -217,6 +218,15 @@ export function deleteBook(db: Db, id: number): void {
     }
     // Without accounts there are no transactions, so its rules and categories are unused.
     tx.delete(moneyRules).where(eq(moneyRules.bookId, id)).run();
+    const categoryIds = tx
+      .select({ id: moneyCategories.id })
+      .from(moneyCategories)
+      .where(eq(moneyCategories.bookId, id))
+      .all()
+      .map((row) => row.id);
+    if (categoryIds.length > 0) {
+      tx.delete(moneyBudgets).where(inArray(moneyBudgets.categoryId, categoryIds)).run();
+    }
     tx.delete(moneyCategories).where(eq(moneyCategories.bookId, id)).run();
     tx.delete(moneyBooks).where(eq(moneyBooks.id, id)).run();
   });
@@ -475,6 +485,8 @@ export function deleteCategory(db: Db, id: number): void {
     if ((rules?.n ?? 0) > 0) {
       throw conflict("A rule uses this category. Delete the rule first, or archive the category.");
     }
+    // An unused category's budgets mean nothing without it.
+    tx.delete(moneyBudgets).where(eq(moneyBudgets.categoryId, id)).run();
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
   });
 }

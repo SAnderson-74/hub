@@ -99,6 +99,13 @@
       "when": 1790490795871,
       "tag": "0013_money_rules_and_transfers",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790492628478,
+      "tag": "0014_money_budgets",
+      "breakpoints": true
     }
   ]
 }

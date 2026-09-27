@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
 import { RULE_DIRECTIONS } from "../../shared/moneyRules";
@@ -149,4 +149,22 @@ export const moneyRules = sqliteTable(
     ...timestamps(),
   },
   (t) => [index("money_rules_book_idx").on(t.bookId)],
+);
+
+/**
+ * A spending category's monthly budget from `month` (YYYY-MM) on, until a later
+ * month sets another amount. 0 ends the budget from that month.
+ */
+export const moneyBudgets = sqliteTable(
+  "money_budgets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => moneyCategories.id),
+    month: text("month").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    ...timestamps(),
+  },
+  (t) => [uniqueIndex("money_budgets_category_month_unique").on(t.categoryId, t.month)],
 );
