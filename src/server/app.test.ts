@@ -149,4 +149,15 @@ describe("system API and headers", () => {
     expect(res.headers.get("content-security-policy")).toContain("default-src 'self'");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
   });
+
+  it("tells browsers not to keep API answers, including refusals", async () => {
+    const app = await setup();
+    for (const res of [
+      await app.request("/api/system", { headers: owner }),
+      await app.request("/api/system"),
+      await app.request("/api/nope", { headers: owner }),
+    ]) {
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    }
+  });
 });
