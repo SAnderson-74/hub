@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
-import type { ItemCreate, ItemUpdate, PlatformCreate, PlatformUpdate } from "../../shared/resale";
+import type {
+  CostCreate,
+  ItemCreate,
+  ItemUpdate,
+  PlatformCreate,
+  PlatformUpdate,
+} from "../../shared/resale";
 
 async function fetchItems() {
   const res = await api.resale.items.$get({ query: {} });
@@ -17,9 +23,12 @@ async function fetchPlatforms() {
 export type Item = Awaited<ReturnType<typeof fetchItems>>[number];
 export type Platform = Awaited<ReturnType<typeof fetchPlatforms>>[number];
 
+/** Time changes refresh items (their time spent) through this key. */
+export const resaleItemsKey = ["resale", "items"] as const;
+
 const keys = {
   all: ["resale"] as const,
-  items: ["resale", "items"] as const,
+  items: resaleItemsKey,
   platforms: ["resale", "platforms"] as const,
 };
 
@@ -61,6 +70,25 @@ export function useDeleteItem() {
   return useResaleMutation(async (id: number) => {
     const res = await api.resale.items[":id"].$delete({ param: { id: String(id) } });
     if (!res.ok) throw await toApiError(res);
+  });
+}
+
+export function useAddCost() {
+  return useResaleMutation(async ({ itemId, json }: { itemId: number; json: CostCreate }) => {
+    const res = await api.resale.items[":id"].costs.$post({
+      param: { id: String(itemId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteCost() {
+  return useResaleMutation(async (id: number) => {
+    const res = await api.resale.costs[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }
 

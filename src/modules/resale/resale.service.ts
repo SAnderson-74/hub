@@ -3,6 +3,9 @@ import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, conflict, notFound } from "../../server/errors";
 import { formatCents } from "../../shared/money";
 import type {
+  CostCreate,
+  CostKind,
+  CostUpdate,
   ItemCreate,
   ItemStatus,
   ItemUpdate,
@@ -11,10 +14,20 @@ import type {
 } from "../../shared/resale";
 import { changedFields, recordActivity } from "../core/activity.service";
 import { detachEntities } from "../core/entities";
-import { resaleItems, resalePlatforms } from "./schema";
+import { timeEntries } from "../time/schema";
+import { resaleCosts, resaleItems, resalePlatforms } from "./schema";
 
 type PlatformRow = typeof resalePlatforms.$inferSelect;
 type ItemRow = typeof resaleItems.$inferSelect;
+type CostRow = typeof resaleCosts.$inferSelect;
+
+export type CostJson = {
+  id: number;
+  kind: CostKind;
+  label: string;
+  amountCents: number;
+  spentOn: string | null;
+};
 
 export type PlatformJson = {
   id: number;
@@ -36,6 +49,11 @@ export type ItemJson = {
   purchasePlatform: { id: number; name: string } | null;
   purchaseFrom: string;
   notes: string;
+  /** Oldest first. */
+  costs: CostJson[];
+  costsCents: number;
+  /** Time logged on the item, with a running timer counted up to now. */
+  timeMinutes: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -133,28 +151,6 @@ export function deletePlatform(db: Db, id: number): PlatformJson[] {
 
 // Items
 
-function toItemJson(row: ItemRow, platformNames: Map<number, string>): ItemJson {
-  const platformName =
-    row.purchasePlatformId === null ? undefined : platformNames.get(row.purchasePlatformId);
-  return {
-    id: row.id,
-    title: row.title,
-    status: row.status,
-    category: row.category,
-    condition: row.condition,
-    purchasedOn: row.purchasedOn,
-    purchaseCents: row.purchaseCents,
-    purchasePlatform:
-      row.purchasePlatformId !== null && platformName !== undefined
-        ? { id: row.purchasePlatformId, name: platformName }
-        : null,
-    purchaseFrom: row.purchaseFrom,
-    notes: row.notes,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
-
 function platformNames(db: Queryable): Map<number, string> {
   return new Map(
     db
@@ -165,6 +161,78 @@ function platformNames(db: Queryable): Map<number, string> {
   );
 }
 
+/** Items as the API returns them, with their platform, costs, and logged time. */
+function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[] {
+  const ids = rows.map((row) => row.id);
+  const names = platformNames(db);
+  const costsByItem = new Map<number, CostRow[]>();
+  const minutesByItem = new Map<number, number>();
+  if (ids.length > 0) {
+    const costRows = db
+      .select()
+      .from(resaleCosts)
+      .where(inArray(resaleCosts.itemId, ids))
+      .orderBy(asc(resaleCosts.id))
+      .all();
+    for (const cost of costRows) {
+      costsByItem.set(cost.itemId, [...(costsByItem.get(cost.itemId) ?? []), cost]);
+    }
+    const entries = db
+      .select({
+        itemId: timeEntries.subjectId,
+        startedAt: timeEntries.startedAt,
+        minutes: timeEntries.minutes,
+      })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.subjectType, "resale_item"), inArray(timeEntries.subjectId, ids)))
+      .all();
+    for (const entry of entries) {
+      if (entry.itemId === null) continue;
+      const minutes =
+        entry.minutes ??
+        Math.max(0, Math.floor((now.getTime() - entry.startedAt.getTime()) / 60_000));
+      minutesByItem.set(entry.itemId, (minutesByItem.get(entry.itemId) ?? 0) + minutes);
+    }
+  }
+  return rows.map((row) => {
+    const platformName =
+      row.purchasePlatformId === null ? undefined : names.get(row.purchasePlatformId);
+    const costs = (costsByItem.get(row.id) ?? []).map((cost) => ({
+      id: cost.id,
+      kind: cost.kind,
+      label: cost.label,
+      amountCents: cost.amountCents,
+      spentOn: cost.spentOn,
+    }));
+    return {
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      category: row.category,
+      condition: row.condition,
+      purchasedOn: row.purchasedOn,
+      purchaseCents: row.purchaseCents,
+      purchasePlatform:
+        row.purchasePlatformId !== null && platformName !== undefined
+          ? { id: row.purchasePlatformId, name: platformName }
+          : null,
+      purchaseFrom: row.purchaseFrom,
+      notes: row.notes,
+      costs,
+      costsCents: costs.reduce((sum, cost) => sum + cost.amountCents, 0),
+      timeMinutes: minutesByItem.get(row.id) ?? 0,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
+}
+
+const oneItem = (db: Queryable, row: ItemRow): ItemJson => {
+  const [item] = itemsJson(db, [row]);
+  if (!item) throw new Error("Expected one item");
+  return item;
+};
+
 /** Items, most recently added first, optionally only some statuses. */
 export function listItems(db: Queryable, query: { status?: ItemStatus[] }): ItemJson[] {
   const rows = db
@@ -173,8 +241,7 @@ export function listItems(db: Queryable, query: { status?: ItemStatus[] }): Item
     .where(query.status ? inArray(resaleItems.status, query.status) : undefined)
     .orderBy(desc(resaleItems.createdAt), desc(resaleItems.id))
     .all();
-  const names = platformNames(db);
-  return rows.map((row) => toItemJson(row, names));
+  return itemsJson(db, rows);
 }
 
 function requireItem(db: Queryable, id: number): ItemRow {
@@ -184,7 +251,7 @@ function requireItem(db: Queryable, id: number): ItemRow {
 }
 
 export function getItem(db: Queryable, id: number): ItemJson {
-  return toItemJson(requireItem(db, id), platformNames(db));
+  return oneItem(db, requireItem(db, id));
 }
 
 /** What the activity log records about an item. Money shows as dollars. */
@@ -226,7 +293,7 @@ export function createItem(db: Db, input: ItemCreate, actor: string): ItemJson {
       label: row.title,
       actor,
     });
-    return toItemJson(row, platformNames(tx));
+    return oneItem(tx, row);
   });
 }
 
@@ -255,7 +322,7 @@ export function updateItem(db: Db, id: number, patch: ItemUpdate, actor: string)
       notes: keep(patch.notes, current.notes),
     };
     const changes = changedFields(tracked(current, names), tracked(next, names));
-    if (Object.keys(changes).length === 0) return toItemJson(current, names);
+    if (Object.keys(changes).length === 0) return oneItem(tx, current);
     const { id: _id, createdAt: _createdAt, ...values } = next;
     const row = tx
       .update(resaleItems)
@@ -270,7 +337,7 @@ export function updateItem(db: Db, id: number, patch: ItemUpdate, actor: string)
       details: { changes },
       actor,
     });
-    return toItemJson(row, names);
+    return oneItem(tx, row);
   });
 }
 
@@ -285,5 +352,76 @@ export function deleteItem(db: Db, id: number, actor: string): void {
       label: row.title,
       actor,
     });
+  });
+}
+
+// Costs
+
+function requireCost(db: Queryable, id: number): CostRow {
+  const row = db.select().from(resaleCosts).where(eq(resaleCosts.id, id)).get();
+  if (!row) throw notFound("That cost doesn't exist. It may have been deleted.");
+  return row;
+}
+
+function costTotal(db: Queryable, itemId: number): number {
+  const row = db
+    .select({ total: sql<number | null>`sum(${resaleCosts.amountCents})` })
+    .from(resaleCosts)
+    .where(eq(resaleCosts.itemId, itemId))
+    .get();
+  return row?.total ?? 0;
+}
+
+/**
+ * Runs a change to an item's costs and logs the new total on the item's timeline,
+ * like "costs: $10 → $22". Answers with the item.
+ */
+function changeCosts(db: Db, itemId: number, actor: string, change: (tx: Queryable) => void) {
+  return db.transaction((tx) => {
+    const item = requireItem(tx, itemId);
+    const before = costTotal(tx, itemId);
+    change(tx);
+    const after = costTotal(tx, itemId);
+    if (after !== before) {
+      recordActivity(tx, {
+        entity: { type: "resale_item", id: itemId },
+        action: "updated",
+        label: item.title,
+        details: { changes: { costs: { from: formatCents(before), to: formatCents(after) } } },
+        actor,
+      });
+    }
+    return oneItem(tx, requireItem(tx, itemId));
+  });
+}
+
+export function createCost(db: Db, itemId: number, input: CostCreate, actor: string): ItemJson {
+  return changeCosts(db, itemId, actor, (tx) => {
+    tx.insert(resaleCosts)
+      .values({
+        itemId,
+        kind: input.kind,
+        label: input.label ?? "",
+        amountCents: input.amountCents,
+        spentOn: input.spentOn ?? null,
+      })
+      .run();
+  });
+}
+
+export function updateCost(db: Db, id: number, patch: CostUpdate, actor: string): ItemJson {
+  const cost = requireCost(db, id);
+  return changeCosts(db, cost.itemId, actor, (tx) => {
+    tx.update(resaleCosts)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(resaleCosts.id, id))
+      .run();
+  });
+}
+
+export function deleteCost(db: Db, id: number, actor: string): ItemJson {
+  const cost = requireCost(db, id);
+  return changeCosts(db, cost.itemId, actor, (tx) => {
+    tx.delete(resaleCosts).where(eq(resaleCosts.id, id)).run();
   });
 }

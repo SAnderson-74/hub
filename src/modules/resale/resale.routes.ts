@@ -4,6 +4,8 @@ import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
 import {
+  costCreateSchema,
+  costUpdateSchema,
   itemCreateSchema,
   itemListQuerySchema,
   itemUpdateSchema,
@@ -11,20 +13,23 @@ import {
   platformUpdateSchema,
 } from "../../shared/resale";
 import {
+  createCost,
   createItem,
   createPlatform,
+  deleteCost,
   deleteItem,
   deletePlatform,
   getItem,
   listItems,
   listPlatforms,
+  updateCost,
   updateItem,
   updatePlatform,
 } from "./resale.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 
-/** Resale items and the platforms they're bought and sold on. Platform writes answer with every platform. */
+/** Resale items, their costs, and the platforms they're bought and sold on. Platform writes answer with every platform. */
 export function resaleRoutes({ db }: Deps) {
   return new Hono<AppEnv>()
     .get("/platforms", (c) => c.json(listPlatforms(db)))
@@ -59,5 +64,25 @@ export function resaleRoutes({ db }: Deps) {
     .delete("/items/:id", idParam, (c) => {
       deleteItem(db, c.req.valid("param").id, c.get("user").login);
       return c.body(null, 204);
-    });
+    })
+    .post(
+      "/items/:id/costs",
+      idParam,
+      zValidator("json", costCreateSchema, invalid("That cost isn't valid.")),
+      (c) =>
+        c.json(
+          createCost(db, c.req.valid("param").id, c.req.valid("json"), c.get("user").login),
+          201,
+        ),
+    )
+    .patch(
+      "/costs/:id",
+      idParam,
+      zValidator("json", costUpdateSchema, invalid("Those cost changes aren't valid.")),
+      (c) =>
+        c.json(updateCost(db, c.req.valid("param").id, c.req.valid("json"), c.get("user").login)),
+    )
+    .delete("/costs/:id", idParam, (c) =>
+      c.json(deleteCost(db, c.req.valid("param").id, c.get("user").login)),
+    );
 }

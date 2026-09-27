@@ -2,19 +2,21 @@ import { Play, Square } from "lucide-react";
 import { useId } from "react";
 import { secondaryButton } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
+import type { EntityRef } from "../../../shared/entities";
 import { formatMinutes } from "../../../shared/time";
 import { useEntries, useStartTimer, useStopTimer, useTimer } from "../queries";
 import { entryMinutes } from "../week";
 
-/** Time logged on one task, with a button to time it now. For the task sheet. */
-export function TaskTime({ taskId }: { taskId: number }) {
+/** Time logged on one task, item, or other subject, with a button to time it now. For sheets. */
+export function SubjectTime({ subject }: { subject: EntityRef }) {
   const headingId = useId();
   const now = useNow(30_000);
-  const entries = useEntries({ subject: { type: "task", id: taskId } });
+  const entries = useEntries({ subject });
   const timer = useTimer();
   const start = useStartTimer();
   const stop = useStopTimer();
-  const timingThis = timer.data?.subject?.type === "task" && timer.data.subject.id === taskId;
+  const timingThis =
+    timer.data?.subject?.type === subject.type && timer.data.subject.id === subject.id;
   const total = (entries.data ?? []).reduce((sum, entry) => sum + entryMinutes(entry, now), 0);
   const error = start.error ?? stop.error;
 
@@ -48,7 +50,7 @@ export function TaskTime({ taskId }: { taskId: number }) {
             type="button"
             className={secondaryButton}
             disabled={start.isPending || timer.isPending}
-            onClick={() => start.mutate({ subject: { type: "task", id: taskId } })}
+            onClick={() => start.mutate({ subject })}
           >
             <Play aria-hidden="true" className="size-4" fill="currentColor" />
             Start timer

@@ -2,6 +2,7 @@ import { inputClass } from "../../../client/components/ui";
 import { EARNED_STATUSES } from "../../../shared/education";
 import { ENTITY_TYPE_NAMES, ENTITY_TYPES, type EntityRef } from "../../../shared/entities";
 import { useTerms } from "../../education/queries";
+import { useItems } from "../../resale/queries";
 import { useProjects, useTasks } from "../../tasks/queries";
 
 /** "task:12" and back. "" is no subject. */
@@ -21,9 +22,9 @@ export function parseSubject(value: string): EntityRef | null {
 type Current = { type: EntityRef["type"]; id: number; label: string | null } | null;
 
 /**
- * What time is for: nothing in particular, a course not yet passed, an open task, or
- * an active project. The
- * current subject stays listed even when it's done, archived, or deleted.
+ * What time is for: nothing in particular, a course not yet passed, a resale item not
+ * yet sold or kept, an open task, or an active project. The current subject stays
+ * listed even when it's done, archived, or deleted.
  */
 export function SubjectSelect({
   id,
@@ -41,15 +42,20 @@ export function SubjectSelect({
   const projects = useProjects();
   const tasks = useTasks("all");
   const terms = useTerms();
+  const items = useItems();
   const activeProjects = (projects.data ?? []).filter((project) => !project.archived);
   const openTasks = (tasks.data ?? []).filter((task) => task.status !== "done");
   const openCourses = (terms.data ?? [])
     .flatMap((term) => term.courses)
     .filter((course) => !EARNED_STATUSES.includes(course.status));
+  const openItems = (items.data ?? []).filter(
+    (item) => item.status !== "sold" && item.status !== "kept",
+  );
   const listed = new Set([
     ...activeProjects.map((project) => `project:${project.id}`),
     ...openTasks.map((task) => `task:${task.id}`),
     ...openCourses.map((course) => `course:${course.id}`),
+    ...openItems.map((item) => `resale_item:${item.id}`),
   ]);
   const extra = current && !listed.has(subjectValue(current)) ? current : null;
 
@@ -72,6 +78,15 @@ export function SubjectSelect({
           {openCourses.map((course) => (
             <option key={course.id} value={`course:${course.id}`}>
               {course.code ? `${course.code} ${course.title}` : course.title}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {openItems.length > 0 ? (
+        <optgroup label="Resale items">
+          {openItems.map((item) => (
+            <option key={item.id} value={`resale_item:${item.id}`}>
+              {item.title}
             </option>
           ))}
         </optgroup>
