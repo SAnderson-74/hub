@@ -1,4 +1,4 @@
-import { Plus, Store } from "lucide-react";
+import { ChartColumn, Package, Plus, Store } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -8,15 +8,28 @@ import { StatusDot } from "../../../client/components/StatusDot";
 import { primaryButton, secondaryButton } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { formatCents } from "../../../shared/money";
+import { formatSigned, itemProfit } from "../../../shared/profit";
 import { ITEM_STATUS_LABELS, ITEM_STATUSES, type ItemStatus } from "../../../shared/resale";
 import { formatMinutes } from "../../../shared/time";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { ItemSheet } from "../components/ItemSheet";
 import { PlatformsSheet } from "../components/PlatformsSheet";
+import { ProfitView } from "../components/ProfitView";
 import { type Item, useItems } from "../queries";
 import { heldFor, STATUS_TONES, stockSummary } from "../stock";
 
 type Filter = "all" | ItemStatus;
+type View = "items" | "profit";
+
+const VIEW_KEY = "hub.resale.view";
+
+function storedView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "profit" ? "profit" : "items";
+  } catch {
+    return "items";
+  }
+}
 
 export function ResalePage() {
   const items = useItems();
@@ -25,6 +38,7 @@ export function ResalePage() {
   const location = useLocation();
   const today = localDate(useNow());
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<View>(storedView);
   const [adding, setAdding] = useState(false);
   const [managing, setManaging] = useState(false);
   const openItemId = Number(params.get("item")) || null;
@@ -58,6 +72,37 @@ export function ResalePage() {
       <PageHeader title="Resale" subtitle={items.data ? stockSummary(all) : undefined} />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
+        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+          <legend className="sr-only">View</legend>
+          {(
+            [
+              ["items", "Items", Package],
+              ["profit", "Profit", ChartColumn],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <label key={value} className="relative">
+              <input
+                type="radio"
+                name="resale-view"
+                value={value}
+                checked={view === value}
+                onChange={() => {
+                  setView(value);
+                  try {
+                    localStorage.setItem(VIEW_KEY, value);
+                  } catch {
+                    // Private browsing; the choice still applies to this visit.
+                  }
+                }}
+                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
+              />
+              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                <Icon aria-hidden="true" className="size-4" />
+                {label}
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <button type="button" className={primaryButton} onClick={() => setAdding(true)}>
           <Plus aria-hidden="true" className="size-5" />
           Add item
@@ -88,6 +133,8 @@ export function ResalePage() {
             </button>
           </div>
         </Panel>
+      ) : view === "profit" ? (
+        <ProfitView items={all} today={today} onOpen={openItemSheet} />
       ) : (
         <>
           <StatusFilter items={all} value={filter} onChange={setFilter} />
@@ -174,9 +221,12 @@ function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: 
           )
           .join(", ")}`
       : null;
+  const profit = itemProfit(item);
   const sale =
     item.status === "sold" && item.saleCents !== null
-      ? `Sold for ${formatCents(item.saleCents)}${item.salePlatform ? ` on ${item.salePlatform.name}` : ""}`
+      ? `Sold for ${formatCents(item.saleCents)}${item.salePlatform ? ` on ${item.salePlatform.name}` : ""}${
+          profit ? `, ${formatSigned(profit.profitCents)} profit` : ""
+        }`
       : null;
   const bought = [
     item.purchasedOn ? `Bought ${formatShortDate(item.purchasedOn, today)}` : null,
@@ -214,7 +264,15 @@ function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: 
           <span className="text-muted tabular-nums">{formatMinutes(item.timeMinutes)} spent</span>
         ) : null}
       </span>
-      {sale ? <span className="mt-1 block text-sm font-semibold text-ok">{sale}</span> : null}
+      {sale ? (
+        <span
+          className={`mt-1 block text-sm font-semibold ${
+            profit && profit.profitCents < 0 ? "text-danger" : "text-ok"
+          }`}
+        >
+          {sale}
+        </span>
+      ) : null}
       {asking ? (
         <span className="mt-1 block text-sm font-semibold break-words text-fg">{asking}</span>
       ) : null}

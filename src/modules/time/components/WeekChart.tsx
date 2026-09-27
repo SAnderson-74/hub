@@ -81,17 +81,20 @@ export function WeekChart({ days, summary }: { days: number[]; summary: string }
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <table className="sr-only">
-        <caption>Time logged per day</caption>
-        <tbody>
-          {data.map((datum) => (
-            <tr key={datum.day}>
-              <th scope="row">{datum.name}</th>
-              <td>{formatMinutes(datum.minutes)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* sr-only on a div: a table ignores the 1px width and would widen the page. */}
+      <div className="sr-only">
+        <table>
+          <caption>Time logged per day</caption>
+          <tbody>
+            {data.map((datum) => (
+              <tr key={datum.day}>
+                <th scope="row">{datum.name}</th>
+                <td>{formatMinutes(datum.minutes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }
