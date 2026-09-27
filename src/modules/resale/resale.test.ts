@@ -517,3 +517,114 @@ describe("CSV import", () => {
     expect(tooMany.status).toBe(400);
   });
 });
+
+describe("listing import (paste or Shortcut)", () => {
+  const example = {
+    format: "hub-listing/v1" as const,
+    item: { title: "Stereo receiver", brand: "Example", model: "RX-100", condition: "used" },
+    listing: {
+      platform: "Local classifieds",
+      price: 150,
+      title: "Stereo receiver, works great",
+      description: "Tested with speakers.",
+    },
+    purchase: { price: 60, date: "2030-01-10", source: "Garage sale" },
+  };
+  const post = (json: unknown, dryRun = false) =>
+    t.api.resale["listing-import"].$post({
+      query: dryRun ? { dryRun: "true" } : {},
+      // @ts-expect-error Deliberately loose input, as a Shortcut might send.
+      json,
+    });
+
+  it("previews, then adds the item, its listing, and a new platform", async () => {
+    const preview = await body(await post(example, true));
+    expect(preview).toEqual({
+      outcome: "created",
+      itemId: null,
+      title: "Stereo receiver",
+      platformCreated: "Local classifieds",
+      needsReview: false,
+      problems: [],
+      message: "Added Stereo receiver and listed it on Local classifieds for $150.",
+    });
+    expect(await body(await t.api.resale.items.$get({ query: {} }))).toEqual([]);
+
+    const response = await post(example);
+    expect(response.status).toBe(201);
+    const result = await body(response);
+    if (!result.itemId) throw new Error("Expected an item");
+    const item = await body(await t.api.resale.items[":id"].$get(itemParam(result.itemId)));
+    expect(item).toMatchObject({
+      title: "Stereo receiver",
+      status: "listed",
+      condition: "used",
+      notes: "Brand: Example\nModel: RX-100",
+      purchasedOn: "2030-01-10",
+      purchaseCents: 6_000,
+      purchaseFrom: "Garage sale",
+      needsReview: false,
+      listings: [
+        {
+          platform: { name: "Local classifieds" },
+          priceCents: 15_000,
+          title: "Stereo receiver, works great",
+          description: "Tested with speakers.",
+        },
+      ],
+    });
+
+    // A second listing for the same unsold item goes on that item.
+    const again = await body(
+      await post({
+        format: "hub-listing/v1",
+        item: { title: "stereo RECEIVER" },
+        listing: { platform: "Local classifieds", price: "$140" },
+      }),
+    );
+    expect(again).toMatchObject({
+      outcome: "listed",
+      itemId: result.itemId,
+      platformCreated: null,
+      needsReview: false,
+      problems: [],
+      message: "Listed Stereo receiver on Local classifieds for $140.",
+    });
+    const listed = await body(await t.api.resale.items[":id"].$get(itemParam(result.itemId)));
+    expect(listed.listings).toHaveLength(2);
+    expect(await body(await t.api.resale.items.$get({ query: {} }))).toHaveLength(1);
+  });
+
+  it("flags a new item with missing details and skips a listing without a price", async () => {
+    const result = await body(
+      await post({ format: "hub-listing/v1", listing: { title: "Desk lamp", platform: "Shop" } }),
+    );
+    expect(result).toMatchObject({
+      outcome: "created",
+      needsReview: true,
+      problems: ["No price paid.", "No purchase date.", "The listing has no price."],
+      message: "Added Desk lamp. It's flagged to review.",
+    });
+    if (!result.itemId) throw new Error("Expected an item");
+    const item = await body(await t.api.resale.items[":id"].$get(itemParam(result.itemId)));
+    expect(item).toMatchObject({
+      status: "acquired",
+      listings: [],
+      needsReview: true,
+      reviewNote: "No price paid. No purchase date. The listing has no price.",
+    });
+  });
+
+  it("explains a wrong format or a missing title", async () => {
+    expect(await failure(await post({ ...example, format: "hub-listing/v2" }))).toMatchObject({
+      status: 400,
+      issues: [{ path: "format" }],
+    });
+    expect(
+      await failure(await post({ format: "hub-listing/v1", purchase: { price: 5 } })),
+    ).toMatchObject({
+      status: 400,
+      error: "Give the item a title, in item.title or listing.title.",
+    });
+  });
+});

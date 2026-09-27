@@ -81,7 +81,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 2.3 Listings with price history, sale details, buyer notes, days held
 - [x] 2.4 Profit, margin, and profit per hour; charts by month and platform
 - [x] 2.5 CSV import with column mapping; incomplete rows flagged "needs review"
-- [ ] 2.6 "Paste listing" import (`hub-listing/v1`) and a JSON endpoint for an iOS Shortcut
+- [x] 2.6 "Paste listing" import (`hub-listing/v1`) and a JSON endpoint for an iOS Shortcut
 - [ ] 2.7 Basic buy calculator: expected price, fees, repair estimate, and target margin give a maximum offer; uses your history when available
 
 ### Phase 3: Money and tax guide
@@ -151,7 +151,9 @@ Produced by a writing assistant at the end of a listing, pasted into the app (or
 }
 ```
 
-Prices are in dollars in this format and stored as cents. Missing fields are allowed; the item is flagged for review.
+Prices are in dollars in this format and stored as cents. Missing fields are allowed; the item is flagged for review. `listing.url` (optional) is a link to the listing, and `item.category` sets the category. Brand and model go into the item's notes.
+
+It's sent to `POST /api/resale/listing-import` (add `?dryRun=true` to preview). If exactly one unsold item has the same title, ignoring case, the listing is added to it; otherwise a new item is made. The answer includes a `message` sentence for a Shortcut to show.
 
 ## Integrations
 

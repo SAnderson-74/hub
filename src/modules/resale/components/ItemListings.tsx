@@ -96,6 +96,16 @@ function ListingRow({
           {formatCents(listing.priceCents)}
         </p>
       </div>
+      {listing.title || listing.description ? (
+        <details className="mt-2 text-sm">
+          <summary className="min-h-11 cursor-pointer py-2 font-semibold text-fg">
+            {listing.title || "Listing text"}
+          </summary>
+          {listing.description ? (
+            <p className="whitespace-pre-wrap break-words text-muted">{listing.description}</p>
+          ) : null}
+        </details>
+      ) : null}
       {listing.prices.length > 1 ? (
         <p className="mt-1 text-sm text-muted">
           <span className="sr-only">Price history: </span>

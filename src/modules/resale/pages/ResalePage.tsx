@@ -1,4 +1,4 @@
-import { ChartColumn, FileUp, Package, Plus, Store } from "lucide-react";
+import { ChartColumn, ClipboardPaste, FileUp, Package, Plus, Store } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -14,6 +14,7 @@ import { formatMinutes } from "../../../shared/time";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { ImportCsvSheet } from "../components/ImportCsvSheet";
 import { ItemSheet } from "../components/ItemSheet";
+import { PasteListingSheet } from "../components/PasteListingSheet";
 import { PlatformsSheet } from "../components/PlatformsSheet";
 import { ProfitView } from "../components/ProfitView";
 import { type Item, useItems } from "../queries";
@@ -44,6 +45,7 @@ export function ResalePage() {
   const [adding, setAdding] = useState(false);
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const openItemId = Number(params.get("item")) || null;
 
   const all = items.data ?? [];
@@ -123,6 +125,10 @@ export function ResalePage() {
           <FileUp aria-hidden="true" className="size-4" />
           Import
         </button>
+        <button type="button" className={secondaryButton} onClick={() => setPasting(true)}>
+          <ClipboardPaste aria-hidden="true" className="size-4" />
+          Paste listing
+        </button>
       </div>
 
       {items.isPending ? (
@@ -180,6 +186,11 @@ export function ResalePage() {
       />
       <PlatformsSheet open={managing} onClose={() => setManaging(false)} />
       <ImportCsvSheet open={importing} onClose={() => setImporting(false)} />
+      <PasteListingSheet
+        open={pasting}
+        onClose={() => setPasting(false)}
+        onOpenItem={openItemSheet}
+      />
     </>
   );
 }
