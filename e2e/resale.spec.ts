@@ -266,3 +266,88 @@ test("a pasted listing adds an item, and a Shortcut can add another listing", as
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("the buy calculator gives a max offer and fills in from past sales", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name}${Date.now() % 100000}`;
+  const category = `Calculators ${id}`;
+  const errors = trackErrors(page);
+
+  // Two past sales in a category of their own, with fees recorded.
+  const platform = await page.request.post("/api/resale/platforms", {
+    data: { name: `Market ${id}` },
+  });
+  expect(platform.status()).toBe(201);
+  // The answer is every platform; find the new one.
+  const platformId = ((await platform.json()) as Array<{ id: number; name: string }>).find(
+    (entry) => entry.name === `Market ${id}`,
+  )?.id;
+  expect(platformId).toBeDefined();
+  for (const [paid, sold, fees] of [
+    [4_000, 10_000, 1_000],
+    [6_000, 14_000, 1_400],
+  ] as const) {
+    const item = await page.request.post("/api/resale/items", {
+      data: {
+        title: `Graphing calculator ${id}`,
+        category,
+        status: "sold",
+        purchasedOn: "2020-01-01",
+        purchaseCents: paid,
+        soldOn: "2020-01-15",
+        saleCents: sold,
+        salePlatformId: platformId,
+      },
+    });
+    expect(item.status()).toBe(201);
+    const cost = await page.request.post(`/api/resale/items/${(await item.json()).id}/costs`, {
+      data: { kind: "fees", amountCents: fees },
+    });
+    expect(cost.status()).toBe(201);
+  }
+
+  await page.goto("/resale");
+  await page.getByRole("radio", { name: "Calculator" }).check();
+  const calculator = page.getByRole("region", { name: "Buy calculator" });
+  await expect(calculator).toContainText("Enter the price you expect it to sell for");
+
+  await calculator.getByLabel("Expected price").fill("150");
+  await calculator.getByLabel("Target margin (%)").fill("30");
+  await calculator.getByLabel("Fees (% of sale)").fill("13");
+  await calculator.getByLabel("Flat fees and shipping").fill("5");
+  await calculator.getByLabel("Repair and parts").fill("15x");
+  await expect(calculator.getByText("Use an amount like 20.")).toBeVisible();
+  await calculator.getByLabel("Repair and parts").fill("15");
+  // $150 - $24.50 fees - $15 repair - $45 profit.
+  await expect(calculator).toContainText("Offer up to$65.50");
+  await calculator.getByLabel("Asking price").fill("80");
+  await expect(calculator).toContainText("$14.50 over your max offer. At $80: $30.50 profit");
+  await calculator.getByLabel("Repair and parts").fill("90");
+  await expect(calculator).toContainText("No offer makes your margin");
+  await calculator.getByLabel("Repair and parts").fill("15");
+
+  const history = page.getByRole("region", { name: "Your history" });
+  await history.getByLabel("Similar items").fill(category.toLowerCase());
+  await history.getByLabel("Sold on").selectOption({ label: `Market ${id}` });
+  await expect(history).toContainText("2 sales match");
+  await expect(history).toContainText("10% of sale");
+  await history.getByRole("button", { name: "Fill in from history" }).click();
+  await expect(history).toContainText("Filled in from 2 sales.");
+  // Median sale $120, fees 10%, margin 49% (50% and 47%); flat fees and repair stay.
+  await expect(calculator.getByLabel("Expected price")).toHaveValue("120");
+  await expect(calculator.getByLabel("Fees (% of sale)")).toHaveValue("10");
+  await expect(calculator.getByLabel("Target margin (%)")).toHaveValue("49");
+  await expect(calculator).toContainText("Offer up to$29.20");
+
+  // Fees and margin are remembered on this device.
+  await page.reload();
+  await expect(page.getByLabel("Fees (% of sale)")).toHaveValue("10");
+  await expect(page.getByLabel("Expected price")).toHaveValue("");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});
