@@ -118,6 +118,22 @@ test("items are added with a purchase, then listed", async ({ page }, testInfo) 
   await page.getByRole("radio", { name: /^Sold/ }).check();
   await expect(card).toContainText(`Sold for $70 on ${platform}`);
   await expect(card).toContainText(/Sold after \d+ days/);
+  await expect(card).toContainText("$49 profit");
+
+  // Profit: $70 sale, less $12.50 paid and $8.50 in costs.
+  await page.getByRole("radio", { name: "Profit" }).check();
+  const totals = page.getByRole("region", { name: "Profit" });
+  await expect(totals).toContainText("Profit per hour");
+  await expect(page.getByRole("region", { name: "By month" })).toContainText(
+    /profit over the last 12 months/,
+  );
+  await expect(page.getByRole("region", { name: "By platform" })).toContainText(/from \d+ sales?/);
+  const sale = page
+    .getByRole("region", { name: "Sales" })
+    .getByRole("button", { name: new RegExp(title) });
+  await expect(sale).toContainText("$49");
+  await expect(sale).toContainText("Sold for $70, in for $21");
+  await expect(sale).toContainText("70% margin");
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

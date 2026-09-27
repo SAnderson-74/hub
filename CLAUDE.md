@@ -63,7 +63,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 - Reuse `Panel`, `PageHeader`, `StatusDot`, `LoadingRows`, `ErrorNote`, `ProgressBar`, and `Sheet` (a `<dialog>` that is a bottom sheet on phones) plus the control classes in `src/client/components/ui.ts`. Status colors always come with text.
 - The phone tab bar shows five items; with more pages, the first four get tabs and the rest are listed on the More page (`src/client/lib/nav.ts`).
 - Copy: sentence case, plain verbs. Buttons say what happens ("Save accent") and confirmations reuse the verb ("Accent saved"). Errors say what happened and how to fix it. No all-caps labels.
-- Charts: `recharts`, colors from CSS variables, always with a one-line text summary.
+- Charts: `recharts`, colors from CSS variables, always with a one-line text summary. Put the screen-reader table inside a `<div className="sr-only">`; a table ignores the 1px width and would widen the page.
 - The Content-Security-Policy only allows scripts, styles, and fonts from the app itself: no inline scripts, CDNs, injected `<style>` tags, or `data:` fonts.
 - Icons come from `lucide-react`.
 - Server runtime packages go in `dependencies`. Anything bundled into the browser goes in `devDependencies`; the container installs only `dependencies`.
