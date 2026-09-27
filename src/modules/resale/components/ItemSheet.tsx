@@ -15,6 +15,7 @@ import {
   type ItemStatus,
   type ItemUpdate,
 } from "../../../shared/resale";
+import { SubjectTime } from "../../time/components/SubjectTime";
 import {
   type Item,
   type Platform,
@@ -23,6 +24,8 @@ import {
   usePlatforms,
   useUpdateItem,
 } from "../queries";
+
+import { ItemCosts } from "./ItemCosts";
 
 /** "new" adds an item; an item edits it; null is closed. */
 export type ItemTarget = "new" | Item | null;
@@ -67,7 +70,12 @@ export function ItemSheet({
 }) {
   const item = target !== null && target !== "new" ? target : null;
   return (
-    <Sheet open={target !== null} onClose={onClose} title={item ? "Item" : "Add item"}>
+    <Sheet
+      open={target !== null}
+      onClose={onClose}
+      title={item ? "Item" : "Add item"}
+      description={item ? undefined : "You can add costs and time once the item is saved."}
+    >
       {target === null ? null : (
         <ItemForm
           key={item?.id ?? "new"}
@@ -332,6 +340,8 @@ function ItemForm({
           </p>
         ) : null}
       </form>
+      {item ? <ItemCosts item={item} /> : null}
+      {item ? <SubjectTime subject={{ type: "resale_item", id: item.id }} /> : null}
       {item ? (
         confirmDelete ? (
           <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">

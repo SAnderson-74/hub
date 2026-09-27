@@ -63,8 +63,24 @@ test("items are added with a purchase, then listed", async ({ page }, testInfo) 
   await edit.getByLabel("Status").selectOption({ label: "Listed" });
   await edit.getByRole("button", { name: "Save item" }).click();
   await expect(edit.getByRole("status")).toHaveText("Item saved");
+
+  // Costs and time spent.
+  const costs = edit.getByRole("region", { name: "Costs" });
+  await expect(costs).toContainText("No costs yet.");
+  await costs.getByLabel("Cost type").selectOption({ label: "Parts" });
+  await costs.getByLabel("Cost amount").fill("8.50");
+  await costs.getByLabel("What the cost was for").fill("Light seals");
+  await costs.getByRole("button", { name: "Add cost" }).click();
+  await expect(costs).toContainText("$8.50 in costs. $21 in with the price paid.");
+  await expect(costs.getByText("Parts: Light seals")).toBeVisible();
+  const time = edit.getByRole("region", { name: "Time" });
+  await time.getByRole("button", { name: "Start timer" }).click();
+  await time.getByRole("button", { name: "Stop timer" }).click();
+  await expect(time).toContainText("1 min logged.");
   await edit.getByRole("button", { name: "Close" }).click();
   await expect(card).toContainText("Listed");
+  await expect(card).toContainText("+$8.50 costs");
+  await expect(card).toContainText("1 min spent");
 
   // Filter by status.
   await page.getByRole("radio", { name: /^Sold/ }).check();

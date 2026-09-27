@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
+import { timeEntries } from "../time/schema";
 
 let t: TestApp;
 beforeEach(() => {
@@ -140,5 +141,116 @@ describe("items", () => {
     });
     const noTitle = await failure(await t.api.resale.items.$post({ json: { title: "  " } }));
     expect(noTitle).toMatchObject({ status: 400, issues: [{ path: "title" }] });
+  });
+});
+
+describe("costs and time", () => {
+  const newItem = async () =>
+    body(await t.api.resale.items.$post({ json: { title: "Film camera", purchaseCents: 2_500 } }));
+
+  it("adds up costs per item and logs the total on its timeline", async () => {
+    const item = await newItem();
+    const withParts = await body(
+      await t.api.resale.items[":id"].costs.$post({
+        ...itemParam(item.id),
+        json: { kind: "parts", label: "Light seals", amountCents: 1_250, spentOn: "2030-01-06" },
+      }),
+    );
+    const withShipping = await body(
+      await t.api.resale.items[":id"].costs.$post({
+        ...itemParam(item.id),
+        json: { kind: "shipping", amountCents: 800 },
+      }),
+    );
+    expect(withShipping).toMatchObject({
+      costsCents: 2_050,
+      costs: [
+        { kind: "parts", label: "Light seals", amountCents: 1_250, spentOn: "2030-01-06" },
+        { kind: "shipping", label: "", amountCents: 800, spentOn: null },
+      ],
+    });
+    const [parts] = withParts.costs;
+    if (!parts) throw new Error("Expected a cost");
+
+    const changed = await body(
+      await t.api.resale.costs[":id"].$patch({
+        param: { id: String(parts.id) },
+        json: { amountCents: 1_500 },
+      }),
+    );
+    expect(changed.costsCents).toBe(2_300);
+    const afterDelete = await body(
+      await t.api.resale.costs[":id"].$delete({ param: { id: String(parts.id) } }),
+    );
+    expect(afterDelete).toMatchObject({ costsCents: 800, costs: [{ kind: "shipping" }] });
+
+    const changes = (await history(item.id)).map((entry) => entry.details);
+    expect(changes.slice(0, 4)).toEqual([
+      { changes: { costs: { from: "$23", to: "$8" } } },
+      { changes: { costs: { from: "$20.50", to: "$23" } } },
+      { changes: { costs: { from: "$12.50", to: "$20.50" } } },
+      { changes: { costs: { from: "$0", to: "$12.50" } } },
+    ]);
+
+    // Costs go with their item.
+    await t.api.resale.items[":id"].$delete(itemParam(item.id));
+    const gone = await failure(
+      await t.api.resale.costs[":id"].$delete({ param: { id: String(parts.id + 1) } }),
+    );
+    expect(gone.status).toBe(404);
+  });
+
+  it("rejects costs without an amount, with a bad kind, or for a missing item", async () => {
+    const item = await newItem();
+    const post = (json: unknown) =>
+      t.api.resale.items[":id"].costs.$post({
+        ...itemParam(item.id),
+        // @ts-expect-error Deliberately invalid input.
+        json,
+      });
+    expect(await failure(await post({ kind: "parts" }))).toMatchObject({
+      status: 400,
+      issues: [{ path: "amountCents" }],
+    });
+    expect(await failure(await post({ kind: "gas", amountCents: 100 }))).toMatchObject({
+      status: 400,
+      issues: [{ path: "kind" }],
+    });
+    const missing = await failure(
+      await t.api.resale.items[":id"].costs.$post({
+        ...itemParam(999),
+        json: { kind: "fees", amountCents: 100 },
+      }),
+    );
+    expect(missing).toMatchObject({
+      status: 404,
+      error: "That item doesn't exist. It may have been deleted.",
+    });
+  });
+
+  it("totals time logged on an item, counting a running timer", async () => {
+    const item = await newItem();
+    const subject = { type: "resale_item" as const, id: item.id };
+    const hourAgo = Date.now() - 60 * 60_000;
+    const logged = await t.api.time.entries.$post({
+      json: {
+        startedAt: new Date(hourAgo).toISOString(),
+        endedAt: new Date(hourAgo + 45 * 60_000).toISOString(),
+        subject,
+      },
+    });
+    expect(logged.status).toBe(201);
+    // A timer that has been running for ten minutes.
+    t.db
+      .insert(timeEntries)
+      .values({
+        startedAt: new Date(Date.now() - 10 * 60_000),
+        subjectType: "resale_item",
+        subjectId: item.id,
+      })
+      .run();
+    const fetched = await body(await t.api.resale.items[":id"].$get(itemParam(item.id)));
+    expect(fetched.timeMinutes).toBeGreaterThanOrEqual(55);
+    expect(fetched.timeMinutes).toBeLessThanOrEqual(56);
   });
 });

@@ -9,6 +9,7 @@ import { primaryButton, secondaryButton } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { formatCents } from "../../../shared/money";
 import { ITEM_STATUS_LABELS, ITEM_STATUSES, type ItemStatus } from "../../../shared/resale";
+import { formatMinutes } from "../../../shared/time";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { ItemSheet } from "../components/ItemSheet";
 import { PlatformsSheet } from "../components/PlatformsSheet";
@@ -191,6 +192,12 @@ function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: 
         {item.category ? <span className="text-muted">{item.category}</span> : null}
         {item.condition ? <span className="text-muted">{item.condition}</span> : null}
         {held ? <span className="text-muted">{held}</span> : null}
+        {item.costsCents > 0 ? (
+          <span className="text-muted tabular-nums">+{formatCents(item.costsCents)} costs</span>
+        ) : null}
+        {item.timeMinutes > 0 ? (
+          <span className="text-muted tabular-nums">{formatMinutes(item.timeMinutes)} spent</span>
+        ) : null}
       </span>
       {bought.length > 0 ? (
         <span className="mt-1 block text-sm break-words text-muted">{bought.join(" · ")}</span>

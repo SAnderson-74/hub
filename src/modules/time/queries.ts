@@ -3,6 +3,7 @@ import { api, toApiError } from "../../client/lib/api";
 import type { EntityRef } from "../../shared/entities";
 import type { TimeEntryCreate, TimeEntryUpdate, TimerStart } from "../../shared/time";
 import { streakKey } from "../education/queries";
+import { resaleItemsKey } from "../resale/queries";
 
 async function fetchTimer() {
   const res = await api.time.timer.$get();
@@ -48,7 +49,9 @@ function useTimeMutation<Input, Output>(mutationFn: (input: Input) => Promise<Ou
     mutationFn,
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: keys.all });
+      // Time counts toward the study streak and each resale item's time spent.
       void queryClient.invalidateQueries({ queryKey: streakKey });
+      void queryClient.invalidateQueries({ queryKey: resaleItemsKey });
     },
   });
 }

@@ -13,18 +13,22 @@ export const STATUS_TONES: Record<ItemStatus, Tone> = {
   kept: "idle",
 };
 
-type Stocked = { status: ItemStatus; purchaseCents: number | null };
+type Stocked = { status: ItemStatus; purchaseCents: number | null; costsCents: number };
 
-/** "4 in stock, $320 paid. 2 listed." Items without a price are counted and said. */
+/**
+ * "4 in stock, $320 paid, $45 in costs. 2 listed." Items without a price are
+ * counted and said.
+ */
 export function stockSummary(items: readonly Stocked[]): string {
   const stock = items.filter((item) => IN_STOCK_STATUSES.includes(item.status));
   if (items.length === 0) return "Track what you buy to resell.";
   if (stock.length === 0) return "Nothing in stock right now.";
   const paid = stock.reduce((sum, item) => sum + (item.purchaseCents ?? 0), 0);
+  const costs = stock.reduce((sum, item) => sum + item.costsCents, 0);
   const unpriced = stock.filter((item) => item.purchaseCents === null).length;
   const listed = stock.filter((item) => item.status === "listed").length;
   return [
-    `${stock.length} in stock, ${formatCents(paid)} paid${unpriced > 0 ? ` (${unpriced} without a price)` : ""}.`,
+    `${stock.length} in stock, ${formatCents(paid)} paid${unpriced > 0 ? ` (${unpriced} without a price)` : ""}${costs > 0 ? `, ${formatCents(costs)} in costs` : ""}.`,
     listed > 0 ? `${listed} listed.` : "",
   ]
     .filter(Boolean)
@@ -39,4 +43,17 @@ export function heldFor(
   if (!item.purchasedOn || !IN_STOCK_STATUSES.includes(item.status)) return null;
   const days = Math.max(0, daysBetween(item.purchasedOn, today));
   return days === 0 ? "Bought today" : `Held ${days} ${days === 1 ? "day" : "days"}`;
+}
+
+/** "$22 in costs. $47 in with the price paid." */
+export function costSummary(item: {
+  costs: readonly unknown[];
+  costsCents: number;
+  purchaseCents: number | null;
+}): string {
+  if (item.costs.length === 0) return "No costs yet.";
+  const costs = `${formatCents(item.costsCents)} in costs.`;
+  return item.purchaseCents === null
+    ? costs
+    : `${costs} ${formatCents(item.costsCents + item.purchaseCents)} in with the price paid.`;
 }

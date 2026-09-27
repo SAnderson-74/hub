@@ -23,6 +23,18 @@ export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
 /** Bought and not yet sold or kept: the money tied up in stock. */
 export const IN_STOCK_STATUSES: readonly ItemStatus[] = ["acquired", "repairing", "listed"];
 
+/** What a cost was for. */
+export const COST_KINDS = ["parts", "fees", "shipping", "supplies", "other"] as const;
+export type CostKind = (typeof COST_KINDS)[number];
+
+export const COST_KIND_LABELS: Record<CostKind, string> = {
+  parts: "Parts",
+  fees: "Fees",
+  shipping: "Shipping",
+  supplies: "Supplies",
+  other: "Other",
+};
+
 const date = z.iso.date("Use a date like 2030-01-31.");
 const cents = z
   .number()
@@ -83,3 +95,21 @@ export const itemListQuerySchema = z
       .pipe(z.array(z.enum(ITEM_STATUSES))),
   })
   .partial();
+
+const costFields = {
+  kind: z.enum(COST_KINDS),
+  /** What exactly, like "Replacement battery". Optional. */
+  label: shortText(120, "cost labels"),
+  amountCents: cents,
+  spentOn: date.nullable(),
+};
+
+export const costCreateSchema = z
+  .object(costFields)
+  .partial()
+  .required({ kind: true, amountCents: true })
+  .strict();
+export type CostCreate = z.infer<typeof costCreateSchema>;
+
+export const costUpdateSchema = z.object(costFields).partial().strict();
+export type CostUpdate = z.infer<typeof costUpdateSchema>;

@@ -1,5 +1,5 @@
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { ITEM_STATUSES } from "../../shared/resale";
+import { COST_KINDS, ITEM_STATUSES } from "../../shared/resale";
 
 const timestamps = () => ({
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -45,4 +45,21 @@ export const resaleItems = sqliteTable(
     index("resale_items_status_idx").on(t.status),
     index("resale_items_platform_idx").on(t.purchasePlatformId),
   ],
+);
+
+/** Money spent on an item besides its price: parts, fees, shipping, supplies. */
+export const resaleCosts = sqliteTable(
+  "resale_costs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    itemId: integer("item_id")
+      .notNull()
+      .references(() => resaleItems.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: COST_KINDS }).notNull().default("other"),
+    label: text("label").notNull().default(""),
+    amountCents: integer("amount_cents").notNull(),
+    spentOn: text("spent_on"),
+    ...timestamps(),
+  },
+  (t) => [index("resale_costs_item_idx").on(t.itemId)],
 );
