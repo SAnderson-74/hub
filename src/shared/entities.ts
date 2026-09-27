@@ -4,7 +4,7 @@ import { z } from "zod";
  * Everything that can be tagged, linked, or show up in the activity log. A new module
  * adds its type here and a label lookup in src/modules/core/entities.ts.
  */
-export const ENTITY_TYPES = ["project", "task", "goal", "course"] as const;
+export const ENTITY_TYPES = ["project", "task", "goal", "course", "resale_item"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 export type EntityRef = { type: EntityType; id: number };
@@ -15,6 +15,7 @@ export const ENTITY_TYPE_NAMES: Record<EntityType, string> = {
   task: "task",
   goal: "goal",
   course: "course",
+  resale_item: "item",
 };
 
 const entityId = z.number().int().positive();

@@ -43,6 +43,13 @@
       "when": 1790389195802,
       "tag": "0005_terms_courses_assessments",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790407529696,
+      "tag": "0006_resale_items_platforms",
+      "breakpoints": true
     }
   ]
 }

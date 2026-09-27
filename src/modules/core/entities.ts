@@ -4,6 +4,7 @@ import { badRequest, notFound } from "../../server/errors";
 import { ENTITY_TYPE_NAMES, type EntityRef, type EntityType } from "../../shared/entities";
 import { courses } from "../education/schema";
 import { goals } from "../goals/schema";
+import { resaleItems } from "../resale/schema";
 import { projects, tasks } from "../tasks/schema";
 import { recordActivity } from "./activity.service";
 import { links, taggings } from "./schema";
@@ -30,6 +31,12 @@ const lookups: Record<EntityType, LabelLookup> = {
       .where(inArray(courses.id, ids))
       .all()
       .map((row) => ({ id: row.id, label: row.code ? `${row.code} ${row.title}` : row.title })),
+  resale_item: (db, ids) =>
+    db
+      .select({ id: resaleItems.id, label: resaleItems.title })
+      .from(resaleItems)
+      .where(inArray(resaleItems.id, ids))
+      .all(),
 };
 
 /** Current names of the given entities. Ids that don't exist are left out. */

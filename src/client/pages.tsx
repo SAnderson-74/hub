@@ -3,6 +3,7 @@ import {
   House,
   ListTodo,
   type LucideIcon,
+  Package,
   Settings,
   Target,
   Timer,
@@ -12,6 +13,7 @@ import { DashboardPage } from "../modules/core/pages/DashboardPage";
 import { SettingsPage } from "../modules/core/pages/SettingsPage";
 import { CoursesPage } from "../modules/education/pages/CoursesPage";
 import { GoalsPage } from "../modules/goals/pages/GoalsPage";
+import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
 import { TimePage } from "../modules/time/pages/TimePage";
 
@@ -42,6 +44,7 @@ export const appPages: AppPage[] = [
     icon: GraduationCap,
     element: <CoursesPage />,
   },
+  { id: "resale", label: "Resale", path: "/resale", icon: Package, element: <ResalePage /> },
   {
     id: "settings",
     label: "Settings",
