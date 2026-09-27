@@ -420,6 +420,13 @@ function transferLabel(transaction: Transaction): string {
   return transaction.payee === label ? "Transfer" : label;
 }
 
+/** "Resale: Desk lamp", or "Resale: 3 items" for a bulk lot. */
+function resaleLabel(transaction: Transaction): string {
+  const [first, ...rest] = transaction.resaleItems;
+  if (!first) return "";
+  return rest.length === 0 ? `Resale: ${first.title}` : `Resale: ${rest.length + 1} items`;
+}
+
 /** Waits until typing pauses, so each keystroke isn't a request. */
 function useDebounced<T>(value: T, ms = 250): T {
   const [settled, setSettled] = useState(value);
@@ -614,6 +621,7 @@ function TransactionsPanel({
                             ? transferLabel(transaction)
                             : (transaction.category?.name ?? "Uncategorized"),
                           accountFilter === undefined ? transaction.account.name : "",
+                          resaleLabel(transaction),
                         ]
                           .filter(Boolean)
                           .join(" · ")}

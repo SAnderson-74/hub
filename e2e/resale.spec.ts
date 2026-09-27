@@ -351,3 +351,76 @@ test("the buy calculator gives a max offer and fills in from past sales", async 
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("an item's purchase and sale link to transactions in Money", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const post = async (url: string, data: object) =>
+    (await (await page.request.post(url, { data })).json()) as { id: number };
+
+  const book = await post("/api/money/books", { name: `Links ${id}`, kind: "personal" });
+  const card = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: `Card ${id}`,
+    kind: "credit_card",
+  });
+  const cash = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: `Cash ${id}`,
+    kind: "cash",
+  });
+  await post("/api/money/transactions", {
+    accountId: card.id,
+    date: "2030-03-12",
+    amountCents: -4_000,
+    payee: `Thrift shop ${id}`,
+  });
+  const item = await post("/api/resale/items", {
+    title: `Desk lamp ${id}`,
+    purchasedOn: "2030-03-10",
+    purchaseCents: 4_000,
+    status: "sold",
+    soldOn: "2030-04-02",
+    saleCents: 9_500,
+  });
+
+  await page.goto(`/resale?item=${item.id}`);
+  const sheet = page.getByRole("dialog", { name: "Item" });
+  const money = sheet.getByRole("region", { name: "In Money" });
+  await expect(money).toContainText("Not linked yet.");
+
+  // The card payment two days later is suggested for the purchase.
+  await money.getByRole("button", { name: "Link the purchase" }).click();
+  const match = money.getByRole("button", { name: new RegExp(`^Link Thrift shop ${id}, -\\$40`) });
+  await expect(match).toContainText("Exact amount");
+  await match.click();
+  await expect(money.getByRole("status")).toHaveText(`Linked to Thrift shop ${id}`);
+  await expect(money.getByRole("listitem")).toContainText(`Thrift shop ${id}`);
+
+  // The sale was cash, so it's added to Money from the item.
+  await money.getByRole("button", { name: "Link the sale" }).click();
+  await money.getByLabel("Account to add it to").selectOption(String(cash.id));
+  await money.getByRole("button", { name: "Add to Money" }).click();
+  await expect(money.getByRole("status")).toHaveText("The sale was added to Money and linked");
+  await expect(money.getByRole("button", { name: /^Unlink/ })).toHaveCount(2);
+
+  // Money shows the link, and it leads back to the item.
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.setItem("hub.money.view", "transactions");
+  }, String(book.id));
+  await page.goto("/money");
+  const row = page.getByRole("button", { name: new RegExp(`Desk lamp ${id}`) }).first();
+  await expect(row).toContainText(`Resale: Desk lamp ${id}`);
+  await row.click();
+  const transaction = page.getByRole("dialog", { name: "Transaction" });
+  await transaction.getByRole("link", { name: `Desk lamp ${id}` }).click();
+  await expect(page).toHaveURL(new RegExp(`/resale\\?item=${item.id}`));
+  await expect(page.getByRole("dialog", { name: "Item" })).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

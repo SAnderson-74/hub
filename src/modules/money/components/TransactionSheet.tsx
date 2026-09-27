@@ -1,5 +1,6 @@
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Package } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
+import { Link } from "react-router";
 import { Sheet } from "../../../client/components/Sheet";
 import {
   dangerButton,
@@ -282,6 +283,28 @@ function TransactionForm({
                 A transfer between your accounts isn't spending or income. Unlink it to change the
                 amount or accounts.
               </p>
+            </div>
+          </div>
+        ) : null}
+
+        {transaction && transaction.resaleItems.length > 0 ? (
+          <div className="flex items-start gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+            <Package aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="font-semibold text-fg">Resale</p>
+              <ul>
+                {transaction.resaleItems.map((item) => (
+                  <li key={item.id} className="text-sm text-muted">
+                    {item.role === "purchase" ? "Paid for " : "Sale of "}
+                    <Link
+                      to={`/resale?item=${item.id}`}
+                      className="inline-flex min-h-11 items-center font-semibold break-words text-accent-text underline-offset-4 hover:underline"
+                    >
+                      {item.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         ) : null}

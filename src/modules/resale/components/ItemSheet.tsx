@@ -29,6 +29,7 @@ import {
 
 import { ItemCosts } from "./ItemCosts";
 import { ItemListings } from "./ItemListings";
+import { ItemTransactions } from "./ItemTransactions";
 
 /** "new" adds an item; an item edits it; null is closed. */
 export type ItemTarget = "new" | Item | null;
@@ -480,6 +481,7 @@ function ItemForm({
       </form>
       {item ? <ItemListings item={item} /> : null}
       {item ? <ItemCosts item={item} /> : null}
+      {item ? <ItemTransactions item={item} /> : null}
       {item ? <SubjectTime subject={{ type: "resale_item", id: item.id }} /> : null}
       {item ? (
         confirmDelete ? (

@@ -32,7 +32,9 @@ import {
   type TransactionQuery,
   type TransactionUpdate,
 } from "../../shared/books";
+import type { LinkRole } from "../../shared/resale";
 import { goalAccounts } from "../goals/schema";
+import { transactionItems } from "../resale/transactionLinks";
 import {
   moneyAccounts,
   moneyBalanceSnapshots,
@@ -100,6 +102,8 @@ export type TransactionJson = {
   category: { id: number; name: string; kind: CategoryKind } | null;
   /** The other side when this is a transfer between accounts. Transfers have no category. */
   transfer: { transactionId: number; account: { id: number; name: string } } | null;
+  /** Resale items this paid for or came from. */
+  resaleItems: Array<{ id: number; title: string; role: LinkRole }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -604,6 +608,10 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
           .all()
           .map((row) => [row.id, row]),
   );
+  const items = transactionItems(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => ({
     id: row.id,
     account: accounts.get(row.accountId) ?? { id: row.accountId, name: "" },
@@ -613,6 +621,7 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     memo: row.memo,
     category: row.categoryId === null ? null : (categories.get(row.categoryId) ?? null),
     transfer: transferJson(row.transferPeerId, peers, accounts),
+    resaleItems: items.get(row.id) ?? [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }));
@@ -639,7 +648,7 @@ export function oneTransaction(db: Queryable, row: TransactionRow): TransactionJ
 }
 
 /** Escapes LIKE wildcards so a search for "50%" finds "50%", not everything. */
-const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+export const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 
 /** A book's transactions, newest first, with totals across every page. */
 export function listTransactions(db: Queryable, query: TransactionQuery): TransactionPage {
@@ -703,7 +712,7 @@ export function requireTransaction(db: Queryable, id: number): TransactionRow {
 }
 
 /** A transaction's category must belong to the same book as its account. */
-function checkCategoryFits(db: Queryable, account: AccountRow, categoryId: number | null) {
+export function checkCategoryFits(db: Queryable, account: AccountRow, categoryId: number | null) {
   if (categoryId === null) return;
   const category = requireCategory(db, categoryId, "body");
   if (category.bookId !== account.bookId) {

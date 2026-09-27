@@ -16,6 +16,9 @@ import {
   platformCreateSchema,
   platformUpdateSchema,
   priceChangeSchema,
+  transactionLinkSchema,
+  transactionMatchQuerySchema,
+  transactionRecordSchema,
 } from "../../shared/resale";
 import { resaleImportSchema } from "../../shared/resaleImport";
 import { listingImportSchema } from "../../shared/resaleListing";
@@ -39,6 +42,12 @@ import {
   updateListing,
   updatePlatform,
 } from "./resale.service";
+import {
+  linkTransaction,
+  recordTransaction,
+  transactionMatches,
+  unlinkTransaction,
+} from "./transactions.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 
@@ -193,6 +202,56 @@ export function resaleRoutes({ db, config }: Deps) {
             dryRun,
           );
           return c.json(result, dryRun ? 200 : 201);
+        },
+      )
+      // Money transactions that paid for an item or brought in its sale.
+      .get(
+        "/items/:id/transaction-matches",
+        idParam,
+        zValidator(
+          "query",
+          transactionMatchQuerySchema,
+          invalid("Pass role as purchase or sale, and q to search if you like."),
+        ),
+        (c) => c.json(transactionMatches(db, c.req.valid("param").id, c.req.valid("query"))),
+      )
+      .post(
+        "/items/:id/transactions",
+        idParam,
+        zValidator("json", transactionLinkSchema, invalid("That link isn't valid.")),
+        (c) =>
+          c.json(
+            linkTransaction(db, c.req.valid("param").id, c.req.valid("json"), c.get("user").login),
+          ),
+      )
+      .post(
+        "/items/:id/record-transaction",
+        idParam,
+        zValidator("json", transactionRecordSchema, invalid("Pick an account to add it to.")),
+        (c) =>
+          c.json(
+            recordTransaction(
+              db,
+              c.req.valid("param").id,
+              c.req.valid("json"),
+              c.get("user").login,
+            ),
+            201,
+          ),
+      )
+      .delete(
+        "/items/:id/transactions/:transactionId",
+        zValidator(
+          "param",
+          z.object({
+            id: z.coerce.number().int().positive(),
+            transactionId: z.coerce.number().int().positive(),
+          }),
+          invalid("Use numeric item and transaction ids."),
+        ),
+        (c) => {
+          const { id, transactionId } = c.req.valid("param");
+          return c.json(unlinkTransaction(db, id, transactionId, c.get("user").login));
         },
       )
   );

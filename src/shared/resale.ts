@@ -24,6 +24,10 @@ export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
 export const IN_STOCK_STATUSES: readonly ItemStatus[] = ["acquired", "repairing", "listed"];
 
 /** What a cost was for. */
+/** What a linked transaction was for: paying for the item, or the money from selling it. */
+export const LINK_ROLES = ["purchase", "sale"] as const;
+export type LinkRole = (typeof LINK_ROLES)[number];
+
 export const COST_KINDS = ["parts", "fees", "shipping", "supplies", "other"] as const;
 export type CostKind = (typeof COST_KINDS)[number];
 
@@ -160,3 +164,32 @@ export const priceChangeSchema = z
   .object({ priceCents: cents, changedOn: date.optional() })
   .strict();
 export type PriceChange = z.infer<typeof priceChangeSchema>;
+
+// Links to money transactions
+
+const positiveId = z.number().int().positive();
+
+/** Link an existing transaction as the item's purchase or sale. */
+export const transactionLinkSchema = z
+  .object({ transactionId: positiveId, role: z.enum(LINK_ROLES) })
+  .strict();
+export type TransactionLink = z.infer<typeof transactionLinkSchema>;
+
+/**
+ * Record the item's purchase or sale as a new transaction in an account, from the
+ * item's price and date, and link it.
+ */
+export const transactionRecordSchema = z
+  .object({
+    role: z.enum(LINK_ROLES),
+    accountId: positiveId,
+    categoryId: positiveId.nullable().optional(),
+  })
+  .strict();
+export type TransactionRecord = z.infer<typeof transactionRecordSchema>;
+
+/** `?role=purchase&q=thrift`: likely transactions for the item's purchase or sale. */
+export const transactionMatchQuerySchema = z.object({
+  role: z.enum(LINK_ROLES),
+  q: z.string().trim().max(100, "Keep searches under 100 characters.").optional(),
+});

@@ -1,5 +1,6 @@
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { COST_KINDS, ITEM_STATUSES } from "../../shared/resale";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { COST_KINDS, ITEM_STATUSES, LINK_ROLES } from "../../shared/resale";
+import { moneyTransactions } from "../money/schema";
 
 const timestamps = () => ({
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -113,4 +114,30 @@ export const resaleListingPrices = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (t) => [index("resale_listing_prices_listing_idx").on(t.listingId)],
+);
+
+/**
+ * A money transaction that paid for an item or brought in its sale. One payment can
+ * cover several items (a bulk lot), and an item can have more than one. Deleting
+ * either side removes the link.
+ */
+export const resaleItemTransactions = sqliteTable(
+  "resale_item_transactions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    itemId: integer("item_id")
+      .notNull()
+      .references(() => resaleItems.id, { onDelete: "cascade" }),
+    transactionId: integer("transaction_id")
+      .notNull()
+      .references(() => moneyTransactions.id, { onDelete: "cascade" }),
+    role: text("role", { enum: LINK_ROLES }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("resale_item_transactions_item_transaction_unique").on(t.itemId, t.transactionId),
+    index("resale_item_transactions_transaction_idx").on(t.transactionId),
+  ],
 );
