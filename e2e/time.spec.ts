@@ -70,3 +70,34 @@ test("time can be tracked with the timer and added by hand", async ({ page }, te
   await expect(page.getByRole("figure")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("time.png"), fullPage: true });
 });
+
+test.describe("on a wide screen", () => {
+  // Both browsers in CI (WebKit for the iPhone run, Chromium for desktop) at a
+  // desktop width, where sheets become centered dialogs sized to their content.
+  test.use({ viewport: { width: 2560, height: 1440 } });
+
+  test("the time dialog shows its whole form", async ({ page }, testInfo) => {
+    const note = `Wide screen ${testInfo.project.name} ${Date.now() % 100000}`;
+    const now = Date.now();
+    const created = await page.request.post("/api/time/entries", {
+      data: {
+        startedAt: new Date(now - 26 * 3_600_000).toISOString(),
+        endedAt: new Date(now - 25 * 3_600_000).toISOString(),
+        note,
+      },
+    });
+    expect(created.status()).toBe(201);
+
+    await page.goto("/time");
+    await page
+      .getByRole("button", { name: new RegExp(note) })
+      .first()
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Edit time" });
+    // In view, not just present: a collapsed body would clip the form away.
+    await expect(dialog.getByRole("button", { name: "Save time" })).toBeInViewport();
+    await expect(dialog.getByLabel("Date")).toBeInViewport();
+    const height = (await dialog.boundingBox())?.height ?? 0;
+    expect(height).toBeGreaterThan(300);
+  });
+});

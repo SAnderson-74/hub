@@ -1,4 +1,14 @@
-import { ArrowLeftRight, BookOpen, FileUp, Plus, Tags, WalletCards, Wand2 } from "lucide-react";
+import {
+  ArrowLeftRight,
+  BookOpen,
+  FileUp,
+  List,
+  PiggyBank,
+  Plus,
+  Tags,
+  WalletCards,
+  Wand2,
+} from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
@@ -16,6 +26,7 @@ import { formatSigned } from "../../../shared/profit";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
 import { BooksSheet } from "../components/BooksSheet";
+import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
 import { ImportSheet } from "../components/ImportSheet";
 import { RulesSheet } from "../components/RulesSheet";
@@ -37,6 +48,16 @@ import {
 import { accountsSummary, netBalance } from "../summary";
 
 const BOOK_KEY = "hub.money.book";
+const VIEW_KEY = "hub.money.view";
+type View = "transactions" | "budget";
+
+function storedView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "budget" ? "budget" : "transactions";
+  } catch {
+    return "transactions";
+  }
+}
 const PAGE_SIZE = 100;
 
 function storedBookId(): number | null {
@@ -131,6 +152,15 @@ function BookView({
   const rules = useRules(book.id);
   const suggestions = useTransferSuggestions(book.id);
   const [accountFilter, setAccountFilter] = useState<number | undefined>(undefined);
+  const [view, setView] = useState<View>(storedView);
+  const chooseView = (next: View) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Private browsing; the choice still applies to this visit.
+    }
+  };
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
@@ -146,6 +176,30 @@ function BookView({
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center gap-2">
+        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+          <legend className="sr-only">View</legend>
+          {(
+            [
+              ["transactions", "Transactions", List],
+              ["budget", "Budget", PiggyBank],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <label key={value} className="relative">
+              <input
+                type="radio"
+                name="money-view"
+                value={value}
+                checked={view === value}
+                onChange={() => chooseView(value)}
+                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
+              />
+              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                <Icon aria-hidden="true" className="size-4" />
+                {label}
+              </span>
+            </label>
+          ))}
+        </fieldset>
         {books.length > 1 ? (
           <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
             <legend className="sr-only">Book</legend>
@@ -206,7 +260,9 @@ function BookView({
         </button>
       </div>
 
-      {accounts.isPending ? (
+      {view === "budget" ? (
+        <BudgetView book={book} today={today} />
+      ) : accounts.isPending ? (
         <LoadingRows rows={3} />
       ) : accounts.isError ? (
         <ErrorNote error={accounts.error} onRetry={() => void accounts.refetch()} />

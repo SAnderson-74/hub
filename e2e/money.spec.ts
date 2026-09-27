@@ -358,3 +358,96 @@ test("rules sort payees, and transfers stay out of spending", async ({ page }, t
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("budgets carry forward and show what's left", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const book = `Budget ${id}`;
+  const errors = trackErrors(page);
+  // The browser and this test both run in UTC, so "this month" agrees.
+  const month = new Date().toISOString().slice(0, 7);
+
+  const bookId = (
+    await (
+      await page.request.post("/api/money/books", {
+        data: { name: book, kind: "personal", starterCategories: true },
+      })
+    ).json()
+  ).id;
+  const accountId = (
+    await (
+      await page.request.post("/api/money/accounts", {
+        data: { bookId, name: "Checking", kind: "checking" },
+      })
+    ).json()
+  ).id;
+  const categories = await (
+    await page.request.get(`/api/money/categories?bookId=${bookId}`)
+  ).json();
+  const categoryId = (name: string) =>
+    categories.find((category: { name: string }) => category.name === name).id;
+  for (const [amountCents, name] of [
+    [-8_732, "Groceries"],
+    [-4_500, "Dining out"],
+  ] as const) {
+    await page.request.post("/api/money/transactions", {
+      data: {
+        accountId,
+        date: `${month}-01`,
+        amountCents,
+        payee: name,
+        categoryId: categoryId(name),
+      },
+    });
+  }
+
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.removeItem("hub.money.view");
+  }, String(bookId));
+  await page.goto("/money");
+  await page.getByRole("radio", { name: "Budget", exact: true }).check();
+  const categoriesPanel = page.getByRole("region", { name: "Categories" });
+  await expect(categoriesPanel).toContainText("No budgets for");
+
+  const groceries = categoriesPanel.getByRole("listitem").filter({ hasText: "Groceries" });
+  await groceries.getByRole("button", { name: "Set budget for Groceries" }).click();
+  await groceries.getByLabel("Monthly budget for Groceries").fill("20x");
+  await groceries.getByRole("button", { name: "Save budget" }).click();
+  await expect(groceries).toContainText("Use an amount like 250 or 99.50.");
+  await groceries.getByLabel("Monthly budget for Groceries").fill("200");
+  await groceries.getByRole("button", { name: "Save budget" }).click();
+  await expect(categoriesPanel.getByRole("status")).toHaveText("Budget saved for Groceries");
+  const budgeted = categoriesPanel.getByRole("listitem").filter({ hasText: "Groceries" });
+  await expect(budgeted).toContainText("$87.32 of $200");
+  await expect(budgeted).toContainText("$112.68 left");
+
+  const dining = categoriesPanel.getByRole("listitem").filter({ hasText: "Dining out" });
+  await dining.getByRole("button", { name: "Set budget for Dining out" }).click();
+  await dining.getByLabel("Monthly budget for Dining out").fill("30");
+  await dining.getByRole("button", { name: "Save budget" }).click();
+  await expect(
+    categoriesPanel.getByRole("listitem").filter({ hasText: "Dining out" }),
+  ).toContainText("$15 over");
+
+  const overview = page.getByRole("region", { name: "Overview" });
+  await expect(overview).toContainText("Budgeted$230");
+  await expect(overview).toContainText("Spent$132.32");
+  await expect(overview).toContainText("Left$97.68");
+
+  // The chart's numbers, and budgets carrying forward but not back.
+  const history = page.getByRole("region", { name: "Last 6 months" });
+  await history.getByText("Show the numbers").click();
+  await expect(history.getByRole("table")).toContainText("$230");
+  await page.getByRole("button", { name: "Next month" }).click();
+  await expect(overview).toContainText("Budgeted$230");
+  await expect(overview).toContainText("Spent$0");
+  await page.getByRole("button", { name: "Back to this month" }).click();
+  await page.getByRole("button", { name: "Previous month" }).click();
+  await expect(categoriesPanel).toContainText("No budgets for");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});
