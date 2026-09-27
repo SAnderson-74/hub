@@ -415,3 +415,105 @@ describe("listings and sales", () => {
     });
   });
 });
+
+describe("CSV import", () => {
+  const rows = [
+    {
+      title: "Road bike",
+      status: "sold",
+      purchasedOn: "7/1/2030",
+      purchasePrice: "$120",
+      purchasePlatform: "Thrift store",
+      soldOn: "2030-08-10",
+      salePrice: "210",
+      salePlatform: "local classifieds",
+      fees: "5.25",
+    },
+    { title: "Desk lamp", purchasePrice: "cheap" },
+    { purchasePrice: "5" },
+  ];
+
+  it("previews without saving, then imports and flags rows to review", async () => {
+    await addPlatform("Local classifieds");
+    const preview = await body(
+      await t.api.resale.import.$post({ query: { dryRun: "true" }, json: { rows } }),
+    );
+    expect(preview).toMatchObject({
+      created: 2,
+      needsReview: 1,
+      duplicates: 0,
+      skipped: 1,
+      platformsCreated: ["Thrift store"],
+    });
+    expect(preview.rows).toEqual([
+      { row: 1, title: "Road bike", outcome: "create", problems: [] },
+      {
+        row: 2,
+        title: "Desk lamp",
+        outcome: "create",
+        problems: [`Price paid "cheap" isn't an amount Hub can read.`, "No purchase date."],
+      },
+      {
+        row: 3,
+        title: "",
+        outcome: "skip",
+        problems: ["No title, so this row can't be imported."],
+      },
+    ]);
+    expect(await body(await t.api.resale.items.$get({ query: {} }))).toEqual([]);
+    expect(
+      (await body(await t.api.resale.platforms.$get())).map((platform) => platform.name),
+    ).toEqual(["Local classifieds"]);
+
+    const imported = await body(await t.api.resale.import.$post({ query: {}, json: { rows } }));
+    expect(imported).toMatchObject({ created: 2, needsReview: 1, skipped: 1 });
+    const items = await body(await t.api.resale.items.$get({ query: {} }));
+    const bike = items.find((item) => item.title === "Road bike");
+    const lamp = items.find((item) => item.title === "Desk lamp");
+    expect(bike).toMatchObject({
+      status: "sold",
+      purchasedOn: "2030-07-01",
+      purchaseCents: 12_000,
+      purchasePlatform: { name: "Thrift store" },
+      saleCents: 21_000,
+      salePlatform: { name: "Local classifieds" },
+      costs: [{ kind: "fees", amountCents: 525, spentOn: "2030-08-10" }],
+      needsReview: false,
+    });
+    expect(lamp).toMatchObject({
+      status: "acquired",
+      purchaseCents: null,
+      needsReview: true,
+      reviewNote: `Price paid "cheap" isn't an amount Hub can read. No purchase date.`,
+    });
+
+    // Importing the same file again only reports duplicates.
+    const again = await body(await t.api.resale.import.$post({ query: {}, json: { rows } }));
+    expect(again).toMatchObject({ created: 0, duplicates: 2, skipped: 1, platformsCreated: [] });
+
+    // Marking an item reviewed clears its note.
+    if (!lamp) throw new Error("Expected the lamp");
+    const reviewed = await body(
+      await t.api.resale.items[":id"].$patch({
+        ...itemParam(lamp.id),
+        json: { needsReview: false, purchaseCents: 500 },
+      }),
+    );
+    expect(reviewed).toMatchObject({ needsReview: false, reviewNote: "", purchaseCents: 500 });
+  });
+
+  it("rejects an empty file or too many rows", async () => {
+    const empty = await failure(await t.api.resale.import.$post({ query: {}, json: { rows: [] } }));
+    expect(empty).toMatchObject({
+      status: 400,
+      issues: [{ path: "rows", message: "The file has no rows to import." }],
+    });
+    const tooMany = await failure(
+      await t.api.resale.import.$post({
+        query: {},
+        json: { rows: Array.from({ length: 2_001 }, () => ({ title: "x" })) },
+      }),
+    );
+    expect(tooMany.status).toBe(400);
+  });
+});

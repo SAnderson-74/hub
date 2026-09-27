@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { z } from "zod";
 import { localDateParts } from "../../server/db/backup";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
@@ -16,6 +17,7 @@ import {
   platformUpdateSchema,
   priceChangeSchema,
 } from "../../shared/resale";
+import { resaleImportSchema } from "../../shared/resaleImport";
 import {
   changePrice,
   createCost,
@@ -27,6 +29,7 @@ import {
   deleteListing,
   deletePlatform,
   getItem,
+  importResale,
   listItems,
   listPlatforms,
   updateCost,
@@ -146,5 +149,23 @@ export function resaleRoutes({ db, config }: Deps) {
     )
     .delete("/listings/:id", idParam, (c) =>
       c.json(deleteListing(db, c.req.valid("param").id, c.get("user").login)),
+    )
+    .post(
+      "/import",
+      zValidator(
+        "query",
+        z.object({ dryRun: z.enum(["true", "false"]).optional() }),
+        invalid("Use dryRun=true to preview, or leave it out to import."),
+      ),
+      zValidator("json", resaleImportSchema, invalid("That file can't be imported.")),
+      (c) =>
+        c.json(
+          importResale(
+            db,
+            c.req.valid("json").rows,
+            c.get("user").login,
+            c.req.valid("query").dryRun === "true",
+          ),
+        ),
     );
 }

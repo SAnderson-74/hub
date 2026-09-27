@@ -83,6 +83,8 @@ const itemFields = {
   saleCents: cents.nullable(),
   salePlatformId: z.number().int().positive().nullable(),
   buyerNotes: z.string().max(2_000, "Keep buyer notes under 2,000 characters."),
+  /** false marks an imported item as reviewed. */
+  needsReview: z.boolean(),
 };
 
 export const itemCreateSchema = z.object(itemFields).partial().required({ title: true }).strict();

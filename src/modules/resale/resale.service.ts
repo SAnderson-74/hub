@@ -16,6 +16,7 @@ import type {
   PlatformUpdate,
   PriceChange,
 } from "../../shared/resale";
+import { type ImportResult, type ImportRow, readImportRow } from "../../shared/resaleImport";
 import { changedFields, recordActivity } from "../core/activity.service";
 import { detachEntities } from "../core/entities";
 import { timeEntries } from "../time/schema";
@@ -85,6 +86,9 @@ export type ItemJson = {
   saleCents: number | null;
   salePlatform: { id: number; name: string } | null;
   buyerNotes: string;
+  /** Imported with missing or unreadable values; `reviewNote` says what. */
+  needsReview: boolean;
+  reviewNote: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -310,6 +314,8 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
       saleCents: row.saleCents,
       salePlatform: platformRef(row.salePlatformId),
       buyerNotes: row.buyerNotes,
+      needsReview: row.needsReview,
+      reviewNote: row.reviewNote,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -359,6 +365,7 @@ function tracked(row: ItemRow, names: Map<number, string>) {
     soldFor: row.saleCents === null ? null : formatCents(row.saleCents),
     soldVia: row.salePlatformId === null ? null : (names.get(row.salePlatformId) ?? null),
     buyerNotes: row.buyerNotes,
+    needsReview: row.needsReview,
   };
 }
 
@@ -454,7 +461,10 @@ export function updateItem(
       saleCents: keep(patch.saleCents, current.saleCents),
       salePlatformId: keep(patch.salePlatformId, current.salePlatformId),
       buyerNotes: keep(patch.buyerNotes, current.buyerNotes),
+      needsReview: keep(patch.needsReview, current.needsReview),
     };
+    // Marking an item reviewed clears the note that explained why.
+    if (!next.needsReview) next.reviewNote = "";
     // Selling an item dates the sale today unless a date is given, and takes down
     // its open listings. Sale details stay if it's moved back, in case that was a slip.
     const selling = next.status === "sold" && current.status !== "sold";
@@ -710,4 +720,146 @@ export function deleteListing(db: Db, id: number, actor: string): ItemJson {
     logItem(tx, item, { listed: { from: label, to: null } }, actor);
     return oneItem(tx, item);
   });
+}
+
+// Import
+
+class DryRun extends Error {
+  constructor(readonly result: ImportResult) {
+    super("dry run");
+  }
+}
+
+/**
+ * Imports mapped CSV rows as items. Rows without a title are skipped, and rows that
+ * match an item already in Hub (same title, purchase date, and price) are skipped
+ * as duplicates, so importing a file twice is safe. Rows with missing or unreadable
+ * values are imported and flagged for review. Platforms are matched by name
+ * (ignoring case) and created when new. Fees and shipping become costs.
+ * With `dryRun`, nothing is saved and the result says what would happen.
+ */
+export function importResale(
+  db: Db,
+  rows: ImportRow[],
+  actor: string,
+  dryRun: boolean,
+): ImportResult {
+  try {
+    return db.transaction((tx) => {
+      const result: ImportResult = {
+        created: 0,
+        needsReview: 0,
+        duplicates: 0,
+        skipped: 0,
+        platformsCreated: [],
+        rows: [],
+      };
+      const platforms = new Map(
+        tx
+          .select({ id: resalePlatforms.id, name: resalePlatforms.name })
+          .from(resalePlatforms)
+          .all()
+          .map((platform) => [platform.name.toLowerCase(), platform.id]),
+      );
+      const platformId = (name: string): number | null => {
+        if (!name) return null;
+        const known = platforms.get(name.toLowerCase());
+        if (known !== undefined) return known;
+        const last = tx
+          .select({ last: sql<number | null>`max(${resalePlatforms.sortOrder})` })
+          .from(resalePlatforms)
+          .get();
+        const created = tx
+          .insert(resalePlatforms)
+          .values({ name, sortOrder: (last?.last ?? 0) + 1 })
+          .returning()
+          .get();
+        platforms.set(name.toLowerCase(), created.id);
+        result.platformsCreated.push(name);
+        return created.id;
+      };
+
+      rows.forEach((raw, index) => {
+        const read = readImportRow(raw);
+        if (!read) {
+          result.skipped += 1;
+          result.rows.push({
+            row: index + 1,
+            title: "",
+            outcome: "skip",
+            problems: ["No title, so this row can't be imported."],
+          });
+          return;
+        }
+        const { item, problems } = read;
+        const duplicate = tx
+          .select({ id: resaleItems.id })
+          .from(resaleItems)
+          .where(
+            and(
+              sql`lower(${resaleItems.title}) = lower(${item.title})`,
+              sql`${resaleItems.purchasedOn} is ${item.purchasedOn}`,
+              sql`${resaleItems.purchaseCents} is ${item.purchaseCents}`,
+            ),
+          )
+          .get();
+        if (duplicate) {
+          result.duplicates += 1;
+          result.rows.push({
+            row: index + 1,
+            title: item.title,
+            outcome: "duplicate",
+            problems: ["Already in Hub with the same purchase date and price."],
+          });
+          return;
+        }
+
+        const row = tx
+          .insert(resaleItems)
+          .values({
+            title: item.title,
+            status: item.status,
+            category: item.category,
+            condition: item.condition,
+            purchasedOn: item.purchasedOn,
+            purchaseCents: item.purchaseCents,
+            purchasePlatformId: platformId(item.purchasePlatform),
+            purchaseFrom: item.purchaseFrom,
+            notes: item.notes,
+            soldOn: item.soldOn,
+            saleCents: item.saleCents,
+            salePlatformId: platformId(item.salePlatform),
+            needsReview: problems.length > 0,
+            reviewNote: problems.join(" "),
+          })
+          .returning()
+          .get();
+        for (const [kind, amountCents] of [
+          ["fees", item.feesCents],
+          ["shipping", item.shippingCents],
+        ] as const) {
+          if (amountCents !== null && amountCents > 0) {
+            tx.insert(resaleCosts)
+              .values({ itemId: row.id, kind, amountCents, spentOn: item.soldOn })
+              .run();
+          }
+        }
+        recordActivity(tx, {
+          entity: { type: "resale_item", id: row.id },
+          action: "created",
+          label: row.title,
+          actor,
+        });
+        result.created += 1;
+        if (problems.length > 0) result.needsReview += 1;
+        result.rows.push({ row: index + 1, title: item.title, outcome: "create", problems });
+      });
+
+      if (dryRun) throw new DryRun(result);
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof DryRun) return error.result;
+    throw error;
+  }
 }

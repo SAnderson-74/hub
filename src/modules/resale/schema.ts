@@ -45,6 +45,9 @@ export const resaleItems = sqliteTable(
       onDelete: "set null",
     }),
     buyerNotes: text("buyer_notes").notNull().default(""),
+    /** Set by imports with missing or unreadable values; `review_note` says what. */
+    needsReview: integer("needs_review", { mode: "boolean" }).notNull().default(false),
+    reviewNote: text("review_note").notNull().default(""),
     ...timestamps(),
   },
   (t) => [
