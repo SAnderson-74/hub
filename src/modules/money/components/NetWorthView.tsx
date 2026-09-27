@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import { lazy, Suspense, useId, useState } from "react";
 import { Panel } from "../../../client/components/Panel";
+import { Stat } from "../../../client/components/Stat";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { primaryButton } from "../../../client/components/ui";
 import { ACCOUNT_KIND_LABELS } from "../../../shared/books";
@@ -13,7 +14,6 @@ import {
 } from "../../../shared/netWorth";
 import { formatSigned, monthLabel } from "../../../shared/profit";
 import { type Book, type NetWorth, useNetWorth } from "../queries";
-import { Stat } from "./Stat";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
 const NetWorthChart = lazy(() =>

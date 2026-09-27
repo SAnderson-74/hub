@@ -49,3 +49,8 @@ export function formatShortDate(isoDate: string, today: string): string {
     year: sameYear ? undefined : "numeric",
   });
 }
+
+/** "September 27, 2026" */
+export function formatLongDate(isoDate: string): string {
+  return format(isoDate, { month: "long", day: "numeric", year: "numeric" });
+}

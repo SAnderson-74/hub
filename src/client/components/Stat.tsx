@@ -1,4 +1,4 @@
-/** A labeled number in a tile, for the Money overviews. */
+/** A labeled number in a tile, for overviews. */
 export function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">

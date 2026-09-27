@@ -1,6 +1,7 @@
 import {
   GraduationCap,
   House,
+  Landmark,
   ListTodo,
   type LucideIcon,
   Package,
@@ -17,6 +18,7 @@ import { GoalsPage } from "../modules/goals/pages/GoalsPage";
 import { MoneyPage } from "../modules/money/pages/MoneyPage";
 import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
+import { TaxesPage } from "../modules/taxes/pages/TaxesPage";
 import { TimePage } from "../modules/time/pages/TimePage";
 
 export type AppPage = {
@@ -48,6 +50,7 @@ export const appPages: AppPage[] = [
   },
   { id: "resale", label: "Resale", path: "/resale", icon: Package, element: <ResalePage /> },
   { id: "money", label: "Money", path: "/money", icon: Wallet, element: <MoneyPage /> },
+  { id: "taxes", label: "Taxes", path: "/taxes", icon: Landmark, element: <TaxesPage /> },
   {
     id: "settings",
     label: "Settings",

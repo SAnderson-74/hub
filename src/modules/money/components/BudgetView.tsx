@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type FormEvent, lazy, Suspense, useId, useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { ProgressBar } from "../../../client/components/ProgressBar";
+import { Stat } from "../../../client/components/Stat";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
 import {
@@ -21,7 +22,6 @@ import {
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
 import { type Book, type BudgetMonth, useBudget, useSetBudget } from "../queries";
-import { Stat } from "./Stat";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
 const BudgetHistoryChart = lazy(() =>
