@@ -87,7 +87,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 ### Phase 3: Money and tax guide
 
 - [x] 3.1 Books (personal and business), accounts, categories, transactions
-- [ ] 3.2 File imports: CSV with saved column mappings, OFX/QFX; duplicate detection; undo an import
+- [x] 3.2 File imports: CSV with saved column mappings, OFX/QFX; duplicate detection; undo an import
 - [ ] 3.3 Categorization rules and transfers
 - [ ] 3.4 Monthly budgets per category with remaining amounts and charts
 - [ ] 3.5 Savings goals linked to accounts; balance snapshots for accounts without exports
@@ -154,6 +154,15 @@ Produced by a writing assistant at the end of a listing, pasted into the app (or
 Prices are in dollars in this format and stored as cents. Missing fields are allowed; the item is flagged for review. `listing.url` (optional) is a link to the listing, and `item.category` sets the category. Brand and model go into the item's notes.
 
 It's sent to `POST /api/resale/listing-import` (add `?dryRun=true` to preview). If exactly one unsold item has the same title, ignoring case, the listing is added to it; otherwise a new item is made. The answer includes a `message` sentence for a Shortcut to show.
+
+### Bank and card files
+
+Money > Import reads a file in the browser and sends clean transactions to `POST /api/money/imports` (add `?dryRun=true` to preview).
+
+- **CSV:** columns are matched to Date, Amount (one signed column) or Money out and Money in, Payee, Memo, and Category (matched by name in the book). Options flip the signs (card exports that list purchases as positive) and read slash dates day first. The choices are saved by the file's headers, with the account, so the next file from the same bank maps itself.
+- **OFX/QFX:** statements from banks and cards, version 1 (SGML) or 2 (XML). Account numbers in the file are ignored.
+- **Duplicates:** a transaction with the bank's id (OFX `FITID`) is skipped when the account already has that id, or has a matching transaction entered without one. Otherwise a match is the same day, amount, and payee (ignoring case and spacing), counted, so two identical purchases on one day both import once.
+- **Undo:** each import is listed under Recent imports; undoing it removes the transactions it added, including any edited since.
 
 ## Integrations
 

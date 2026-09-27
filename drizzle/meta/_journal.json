@@ -85,6 +85,13 @@
       "when": 1790487556713,
       "tag": "0011_money_books_accounts_transactions",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790488810334,
+      "tag": "0012_money_imports",
+      "breakpoints": true
     }
   ]
 }

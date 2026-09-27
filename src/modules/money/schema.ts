@@ -1,4 +1,5 @@
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { BankColumns, BankOptions } from "../../shared/bankImport";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
 
 const timestamps = () => ({
@@ -75,11 +76,50 @@ export const moneyTransactions = sqliteTable(
     categoryId: integer("category_id").references(() => moneyCategories.id, {
       onDelete: "set null",
     }),
+    /** The file import that added it (money_imports.id), so the import can be undone. */
+    importId: integer("import_id"),
+    /** The bank's own id for it (OFX FITID), for spotting it in a later file. */
+    externalId: text("external_id"),
     ...timestamps(),
   },
   (t) => [
     index("money_transactions_account_date_idx").on(t.accountId, t.date),
     index("money_transactions_category_idx").on(t.categoryId),
     index("money_transactions_date_idx").on(t.date),
+    index("money_transactions_import_idx").on(t.importId),
+    index("money_transactions_external_idx").on(t.accountId, t.externalId),
   ],
 );
+
+/** One file imported into an account. Undoing it removes the transactions it added. */
+export const moneyImports = sqliteTable(
+  "money_imports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => moneyAccounts.id),
+    source: text("source", { enum: ["csv", "ofx"] }).notNull(),
+    fileName: text("file_name").notNull().default(""),
+    created: integer("created").notNull().default(0),
+    duplicates: integer("duplicates").notNull().default(0),
+    undoneAt: integer("undone_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index("money_imports_account_idx").on(t.accountId)],
+);
+
+/**
+ * How a CSV layout's columns map to transactions, saved by its headers so the next
+ * file from the same bank maps itself, with the account it last went into.
+ */
+export const moneyImportLayouts = sqliteTable("money_import_layouts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  headerKey: text("header_key").notNull().unique(),
+  columns: text("columns", { mode: "json" }).$type<BankColumns>().notNull(),
+  options: text("options", { mode: "json" }).$type<BankOptions>().notNull(),
+  accountId: integer("account_id").references(() => moneyAccounts.id, { onDelete: "set null" }),
+  ...timestamps(),
+});

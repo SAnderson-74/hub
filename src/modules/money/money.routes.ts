@@ -1,8 +1,10 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { z } from "zod";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
+import { bankImportSchema } from "../../shared/bankImport";
 import {
   accountCreateSchema,
   accountUpdateSchema,
@@ -15,6 +17,7 @@ import {
   transactionQuerySchema,
   transactionUpdateSchema,
 } from "../../shared/books";
+import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
 import {
   createAccount,
   createBook,
@@ -37,7 +40,7 @@ import {
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
-/** Books, their accounts and categories, and transactions. */
+/** Books, their accounts and categories, transactions, and file imports. */
 export function moneyRoutes({ db }: Deps) {
   return new Hono<AppEnv>()
     .get("/books", (c) => c.json(listBooks(db)))
@@ -109,5 +112,21 @@ export function moneyRoutes({ db }: Deps) {
     .delete("/transactions/:id", idParam, (c) => {
       deleteTransaction(db, c.req.valid("param").id);
       return c.body(null, 204);
-    });
+    })
+    .get("/imports", bookQuery, (c) => c.json(listImports(db, c.req.valid("query").bookId)))
+    .post(
+      "/imports",
+      zValidator(
+        "query",
+        z.object({ dryRun: z.enum(["true", "false"]).optional() }),
+        invalid("Use dryRun=true to preview, or leave it out to import."),
+      ),
+      zValidator("json", bankImportSchema, invalid("That file can't be imported.")),
+      (c) => {
+        const dryRun = c.req.valid("query").dryRun === "true";
+        return c.json(importBankFile(db, c.req.valid("json"), dryRun), dryRun ? 200 : 201);
+      },
+    )
+    .post("/imports/:id/undo", idParam, (c) => c.json(undoImport(db, c.req.valid("param").id)))
+    .get("/import-layouts", (c) => c.json(listLayouts(db)));
 }

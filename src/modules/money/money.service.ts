@@ -30,7 +30,13 @@ import {
   type TransactionQuery,
   type TransactionUpdate,
 } from "../../shared/books";
-import { moneyAccounts, moneyBooks, moneyCategories, moneyTransactions } from "./schema";
+import {
+  moneyAccounts,
+  moneyBooks,
+  moneyCategories,
+  moneyImports,
+  moneyTransactions,
+} from "./schema";
 
 type BookRow = typeof moneyBooks.$inferSelect;
 type AccountRow = typeof moneyAccounts.$inferSelect;
@@ -265,7 +271,11 @@ function oneAccount(db: Queryable, row: AccountRow): AccountJson {
   return account;
 }
 
-function requireAccount(db: Queryable, id: number, from: "path" | "body" = "path"): AccountRow {
+export function requireAccount(
+  db: Queryable,
+  id: number,
+  from: "path" | "body" = "path",
+): AccountRow {
   const row = db.select().from(moneyAccounts).where(eq(moneyAccounts.id, id)).get();
   if (row) return row;
   const message = "That account doesn't exist. It may have been deleted.";
@@ -334,6 +344,8 @@ export function deleteAccount(db: Db, id: number): void {
     if ((used?.n ?? 0) > 0) {
       throw conflict("This account has transactions. Archive it instead to keep them.");
     }
+    // Imports whose transactions are all gone (undone) go with it.
+    tx.delete(moneyImports).where(eq(moneyImports.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }

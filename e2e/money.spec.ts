@@ -132,3 +132,106 @@ test("a book gets accounts and transactions, with balances that follow", async (
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("bank files import once, remember their columns, and can be undone", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const book = `Imports ${id}`;
+  const errors = trackErrors(page);
+
+  const created = await page.request.post("/api/money/books", {
+    data: { name: book, kind: "personal", starterCategories: true },
+  });
+  const bookId = (await created.json()).id;
+  const account = await page.request.post("/api/money/accounts", {
+    data: { bookId, name: "Checking", kind: "checking" },
+  });
+  expect(account.status()).toBe(201);
+
+  // Open this book, as the page remembers the last one chosen.
+  await page.addInitScript(
+    (value) => localStorage.setItem("hub.money.book", value),
+    String(bookId),
+  );
+  await page.goto("/money");
+  await expect(page.getByText(`${book}: 1 account`)).toBeVisible();
+
+  // Headings Hub doesn't recognize (and unique per run, so no saved layout matches
+  // yet) are picked by hand once.
+  const csv = [
+    `When,Details,Debit,Credit,Category ${id}`,
+    "01/05/2030,Corner grocery,42.50,,Groceries",
+    '01/06/2030,Example Employer,,"1,500.00",Paycheck',
+    "someday,Nothing,1.00,,",
+  ].join("\n");
+  const file = { name: "checking.csv", mimeType: "text/csv", buffer: Buffer.from(csv) };
+
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  let sheet = page.getByRole("dialog", { name: "Import transactions" });
+  await sheet.getByLabel("File", { exact: true }).setInputFiles(file);
+  await expect(sheet.getByText("Choose the date column")).toBeVisible();
+  await sheet.getByLabel("Date", { exact: true }).selectOption({ label: "When" });
+  await sheet.getByLabel("Category", { exact: true }).selectOption({ label: `Category ${id}` });
+  await expect(sheet.getByLabel("Money out")).toHaveValue("2");
+  await sheet.getByRole("button", { name: "Check import" }).click();
+  await expect(sheet).toContainText("2 transactions to add");
+  await expect(sheet).toContainText("1 row couldn't be read");
+  await expect(sheet).toContainText("Corner grocery");
+  await sheet.getByRole("button", { name: "Import 2 transactions" }).click();
+  await expect(sheet.getByRole("status").first()).toHaveText("Imported 2 transactions");
+  await sheet.getByRole("button", { name: "Done" }).click();
+
+  const accounts = page.getByRole("region", { name: "Accounts" });
+  await expect(accounts.getByRole("button", { name: /Checking/ })).toContainText("$1,457.50");
+  const transactions = page.getByRole("region", { name: "Transactions" });
+  await expect(transactions.getByRole("button", { name: /Corner grocery/ })).toContainText(
+    "Groceries",
+  );
+
+  // The same file again: its columns come back, and nothing is added twice.
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  sheet = page.getByRole("dialog", { name: "Import transactions" });
+  await sheet.getByLabel("File", { exact: true }).setInputFiles(file);
+  await expect(sheet.getByLabel("Date", { exact: true })).toHaveValue("0");
+  await expect(sheet.getByLabel("Category", { exact: true })).toHaveValue("4");
+  await sheet.getByRole("button", { name: "Check import" }).click();
+  await expect(sheet).toContainText("Nothing new to add");
+  await expect(sheet).toContainText("2 are already in the account and will be skipped");
+  await expect(sheet.getByRole("button", { name: "Nothing to import" })).toBeDisabled();
+
+  // An OFX statement for the same account.
+  const ofx = [
+    "OFXHEADER:100",
+    "",
+    "<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>",
+    "<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20300108<TRNAMT>-9.99<FITID>S1<NAME>Streaming service</STMTTRN>",
+    "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>",
+  ].join("\n");
+  await sheet.getByLabel("File", { exact: true }).setInputFiles({
+    name: "statement.qfx",
+    mimeType: "application/vnd.intu.qfx",
+    buffer: Buffer.from(ofx),
+  });
+  await expect(sheet).toContainText("A bank statement (statement.qfx)");
+  await sheet.getByRole("button", { name: "Check import" }).click();
+  await sheet.getByRole("button", { name: "Import 1 transaction" }).click();
+  await expect(sheet.getByRole("status").first()).toHaveText("Imported 1 transaction");
+
+  // Undo the CSV import from the list.
+  const recent = sheet.getByRole("region", { name: "Recent imports" });
+  const csvImport = recent.getByRole("listitem").filter({ hasText: "checking.csv" });
+  await csvImport.getByRole("button", { name: "Undo import" }).click();
+  await expect(csvImport).toContainText("Any you've edited since go too.");
+  await csvImport.getByRole("button", { name: "Undo import" }).click();
+  await expect(recent.getByRole("status")).toHaveText("Import undone");
+  await expect(csvImport).toContainText("Undone");
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(accounts.getByRole("button", { name: /Checking/ })).toContainText("-$9.99");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});
