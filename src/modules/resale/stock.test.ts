@@ -41,6 +41,7 @@ describe("heldFor", () => {
       heldFor({ status: "sold", purchasedOn: "2030-01-01", soldOn: "2030-01-01" }, "2030-02-01"),
     ).toBe("Sold the day it was bought");
     expect(heldFor({ status: "kept", purchasedOn: "2030-01-01" }, "2030-01-13")).toBeNull();
+    expect(heldFor({ status: "acquired", purchasedOn: "2030-02-01" }, "2030-01-13")).toBeNull();
     expect(heldFor({ status: "listed", purchasedOn: null }, "2030-01-13")).toBeNull();
   });
 });

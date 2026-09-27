@@ -80,7 +80,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 2.2 Costs per item (parts, fees, shipping, supplies) and time spent (from time entries)
 - [x] 2.3 Listings with price history, sale details, buyer notes, days held
 - [x] 2.4 Profit, margin, and profit per hour; charts by month and platform
-- [ ] 2.5 CSV import with column mapping; incomplete rows flagged "needs review"
+- [x] 2.5 CSV import with column mapping; incomplete rows flagged "needs review"
 - [ ] 2.6 "Paste listing" import (`hub-listing/v1`) and a JSON endpoint for an iOS Shortcut
 - [ ] 2.7 Basic buy calculator: expected price, fees, repair estimate, and target margin give a maximum offer; uses your history when available
 

@@ -141,3 +141,68 @@ test("items are added with a purchase, then listed", async ({ page }, testInfo) 
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("a spreadsheet imports, with incomplete rows flagged to review", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const csv = [
+    "Item,Cost,Purchase Date,Status,Sold For,Date Sold,Platform",
+    `Road bike ${id},$120.00,7/1/2030,Sold,210,8/10/2030,Local classifieds`,
+    `"Desk lamp, brass ${id}",,2030-02-01,in stock,,,`,
+    ",5,,,,,",
+  ].join("\n");
+
+  await page.goto("/resale");
+  await page
+    .getByRole("button", { name: /^Import( a spreadsheet)?$/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Import from a spreadsheet" });
+  await sheet.getByLabel("Or paste it").fill(csv);
+  await sheet.getByRole("button", { name: "Read columns" }).click();
+  // Columns are guessed from the headers.
+  await expect(sheet.getByLabel("Title")).toHaveValue("0");
+  await expect(sheet.getByLabel("Price paid")).toHaveValue("1");
+  await expect(sheet.getByLabel("Sold on platform")).toHaveValue("6");
+  await sheet.getByRole("button", { name: "Check import" }).click();
+  await expect(sheet).toContainText("2 items to add, 1 flagged to review");
+  await expect(sheet).toContainText("1 row has no title and will be skipped");
+  await sheet.getByText("Rows to look at").click();
+  await expect(sheet).toContainText("No price paid.");
+  await sheet.getByRole("button", { name: "Import 2 items" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Import finished");
+  await sheet.getByRole("button", { name: "Done" }).click();
+
+  // The flagged item: find it, read why, and mark it reviewed.
+  await page.getByRole("radio", { name: "Items" }).check();
+  await page.getByRole("radio", { name: /^Needs review/ }).check();
+  const lamp = page.getByRole("button", { name: new RegExp(`Desk lamp, brass ${id}`) });
+  await expect(lamp).toContainText("Needs review");
+  await lamp.click();
+  const edit = page.getByRole("dialog", { name: "Item" });
+  await expect(edit).toContainText("No price paid.");
+  await edit.getByRole("button", { name: "Mark reviewed" }).click();
+  await expect(edit.getByRole("button", { name: "Mark reviewed" })).toBeHidden();
+  await edit.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("radio", { name: /^All/ }).check();
+  await expect(lamp).not.toContainText("Needs review");
+  await expect(page.getByRole("button", { name: new RegExp(`Road bike ${id}`) })).toContainText(
+    "Sold for $210 on Local classifieds, $90 profit",
+  );
+
+  // The same file again adds nothing.
+  await page.getByRole("button", { name: "Import" }).click();
+  await sheet.getByLabel("Or paste it").fill(csv);
+  await sheet.getByRole("button", { name: "Read columns" }).click();
+  await sheet.getByRole("button", { name: "Check import" }).click();
+  await expect(sheet).toContainText("2 rows are already in Hub and will be skipped");
+  await expect(sheet.getByRole("button", { name: "Nothing to import" })).toBeDisabled();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

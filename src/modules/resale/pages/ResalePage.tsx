@@ -1,4 +1,4 @@
-import { ChartColumn, Package, Plus, Store } from "lucide-react";
+import { ChartColumn, FileUp, Package, Plus, Store } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -12,13 +12,15 @@ import { formatSigned, itemProfit } from "../../../shared/profit";
 import { ITEM_STATUS_LABELS, ITEM_STATUSES, type ItemStatus } from "../../../shared/resale";
 import { formatMinutes } from "../../../shared/time";
 import { formatShortDate, localDate } from "../../tasks/dates";
+import { ImportCsvSheet } from "../components/ImportCsvSheet";
 import { ItemSheet } from "../components/ItemSheet";
 import { PlatformsSheet } from "../components/PlatformsSheet";
 import { ProfitView } from "../components/ProfitView";
 import { type Item, useItems } from "../queries";
 import { heldFor, STATUS_TONES, stockSummary } from "../stock";
 
-type Filter = "all" | ItemStatus;
+/** A status, everything, or the imported items flagged to review. */
+type Filter = "all" | "review" | ItemStatus;
 type View = "items" | "profit";
 
 const VIEW_KEY = "hub.resale.view";
@@ -41,10 +43,16 @@ export function ResalePage() {
   const [view, setView] = useState<View>(storedView);
   const [adding, setAdding] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [importing, setImporting] = useState(false);
   const openItemId = Number(params.get("item")) || null;
 
   const all = items.data ?? [];
-  const shown = filter === "all" ? all : all.filter((item) => item.status === filter);
+  const shown =
+    filter === "all"
+      ? all
+      : filter === "review"
+        ? all.filter((item) => item.needsReview)
+        : all.filter((item) => item.status === filter);
   const categories = [...new Set(all.map((item) => item.category).filter(Boolean))].sort();
   const openItem = all.find((item) => item.id === openItemId) ?? null;
 
@@ -111,6 +119,10 @@ export function ResalePage() {
           <Store aria-hidden="true" className="size-4" />
           Platforms
         </button>
+        <button type="button" className={secondaryButton} onClick={() => setImporting(true)}>
+          <FileUp aria-hidden="true" className="size-4" />
+          Import
+        </button>
       </div>
 
       {items.isPending ? (
@@ -131,6 +143,10 @@ export function ResalePage() {
               <Store aria-hidden="true" className="size-4" />
               Add platforms
             </button>
+            <button type="button" className={secondaryButton} onClick={() => setImporting(true)}>
+              <FileUp aria-hidden="true" className="size-4" />
+              Import a spreadsheet
+            </button>
           </div>
         </Panel>
       ) : view === "profit" ? (
@@ -140,7 +156,9 @@ export function ResalePage() {
           <StatusFilter items={all} value={filter} onChange={setFilter} />
           {shown.length === 0 ? (
             <p className="rounded-tile bg-mantle p-5 text-muted ring-1 ring-surface-0/60">
-              No items are {ITEM_STATUS_LABELS[filter as ItemStatus].toLowerCase()} right now.
+              {filter === "review"
+                ? "Nothing needs review."
+                : `No items are ${ITEM_STATUS_LABELS[filter as ItemStatus].toLowerCase()} right now.`}
             </p>
           ) : (
             <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -161,6 +179,7 @@ export function ResalePage() {
         onManagePlatforms={() => setManaging(true)}
       />
       <PlatformsSheet open={managing} onClose={() => setManaging(false)} />
+      <ImportCsvSheet open={importing} onClose={() => setImporting(false)} />
     </>
   );
 }
@@ -177,8 +196,12 @@ function StatusFilter({
 }) {
   const counts = new Map<Filter, number>([["all", items.length]]);
   for (const item of items) counts.set(item.status, (counts.get(item.status) ?? 0) + 1);
+  const toReview = items.filter((item) => item.needsReview).length;
+  counts.set("review", toReview);
   const options: Array<[Filter, string]> = [
     ["all", "All"],
+    // Only there while something needs review (or it's the chip chosen).
+    ...(toReview > 0 || value === "review" ? [["review", "Needs review"] as [Filter, string]] : []),
     ...ITEM_STATUSES.map((status): [Filter, string] => [status, ITEM_STATUS_LABELS[status]]),
   ];
   return (
@@ -254,6 +277,12 @@ function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: 
           <StatusDot tone={STATUS_TONES[item.status]} />
           {ITEM_STATUS_LABELS[item.status]}
         </span>
+        {item.needsReview ? (
+          <span className="inline-flex items-center gap-2 font-semibold text-warn">
+            <StatusDot tone="warn" />
+            Needs review
+          </span>
+        ) : null}
         {item.category ? <span className="text-muted">{item.category}</span> : null}
         {item.condition ? <span className="text-muted">{item.condition}</span> : null}
         {held ? <span className="text-muted">{held}</span> : null}

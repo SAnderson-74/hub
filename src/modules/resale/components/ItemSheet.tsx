@@ -1,11 +1,13 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Sheet } from "../../../client/components/Sheet";
+import { StatusDot } from "../../../client/components/StatusDot";
 import {
   dangerButton,
   ghostButton,
   inputClass,
   labelClass,
   primaryButton,
+  secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
 import { centsToInput, parseDollars } from "../../../shared/money";
@@ -189,6 +191,30 @@ function ItemForm({
 
   return (
     <div className="space-y-8">
+      {item?.needsReview ? (
+        <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-warn/50">
+          <p className="flex items-center gap-2 font-semibold text-warn">
+            <StatusDot tone="warn" />
+            Needs review
+          </p>
+          <p className="text-sm text-fg">
+            {item.reviewNote || "This item was imported with values to check."}
+          </p>
+          <button
+            type="button"
+            className={secondaryButton}
+            disabled={update.isPending}
+            onClick={() =>
+              update.mutate(
+                { id: item.id, patch: { needsReview: false } },
+                { onSuccess: () => setMessage("Item marked reviewed") },
+              )
+            }
+          >
+            Mark reviewed
+          </button>
+        </div>
+      ) : null}
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         <div>
           <label htmlFor={`${ids}-title`} className={labelClass}>

@@ -10,6 +10,7 @@ import type {
   PlatformUpdate,
   PriceChange,
 } from "../../shared/resale";
+import type { ImportRow } from "../../shared/resaleImport";
 
 async function fetchItems() {
   const res = await api.resale.items.$get({ query: {} });
@@ -164,4 +165,22 @@ export function useDeletePlatform() {
   return usePlatformMutation((id: number) =>
     api.resale.platforms[":id"].$delete({ param: { id: String(id) } }),
   );
+}
+
+/** Previews (dryRun) or runs a CSV import of mapped rows. */
+export function useImportResale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ rows, dryRun }: { rows: ImportRow[]; dryRun: boolean }) => {
+      const res = await api.resale.import.$post({
+        query: dryRun ? { dryRun: "true" } : {},
+        json: { rows },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (_result, { dryRun }) => {
+      if (!dryRun) void queryClient.invalidateQueries({ queryKey: keys.all });
+    },
+  });
 }

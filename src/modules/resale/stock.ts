@@ -51,8 +51,9 @@ export function heldFor(
     const days = Math.max(0, daysBetween(item.purchasedOn, item.soldOn));
     return days === 0 ? "Sold the day it was bought" : `Sold after ${dayCount(days)}`;
   }
-  if (!IN_STOCK_STATUSES.includes(item.status)) return null;
-  const days = Math.max(0, daysBetween(item.purchasedOn, today));
+  // A purchase date in the future (often a typo) says nothing about days held.
+  if (!IN_STOCK_STATUSES.includes(item.status) || item.purchasedOn > today) return null;
+  const days = daysBetween(item.purchasedOn, today);
   return days === 0 ? "Bought today" : `Held ${dayCount(days)}`;
 }
 
