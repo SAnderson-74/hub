@@ -72,7 +72,10 @@ export function Sheet({
           <X aria-hidden="true" className="size-5" />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:px-6">
+      {/* flex-initial (0 1 auto), not flex-1: the body starts at its content's height and
+          only shrinks to scroll. With a 0 basis, a dialog sized to its content (md:h-fit)
+          can collapse to its header in some browsers (Safari), hiding the form. */}
+      <div className="min-h-0 flex-initial overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:px-6">
         {children}
       </div>
     </dialog>
