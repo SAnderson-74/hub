@@ -451,3 +451,85 @@ test("budgets carry forward and show what's left", async ({ page }, testInfo) =>
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("balances from statements, and savings goals that follow an account", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const book = `Savings ${id}`;
+  const errors = trackErrors(page);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const bookId = (
+    await (
+      await page.request.post("/api/money/books", { data: { name: book, kind: "personal" } })
+    ).json()
+  ).id;
+  const account = async (name: string, kind: string, openingBalanceCents: number) =>
+    (
+      await (
+        await page.request.post("/api/money/accounts", {
+          data: { bookId, name: `${name} ${id}`, kind, openingBalanceCents },
+        })
+      ).json()
+    ).id as number;
+  const savingsId = await account("Rainy day", "savings", 250_000);
+  await account("Retirement", "investment", 0);
+
+  // A balance from a statement, for an account that isn't imported.
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.setItem("hub.money.view", "transactions");
+  }, String(bookId));
+  await page.goto("/money");
+  const accounts = page.getByRole("region", { name: "Accounts" });
+  await accounts.getByRole("button", { name: new RegExp(`^Retirement ${id}`) }).click();
+  const sheet = page.getByRole("dialog", { name: "Account" });
+  const history = sheet.getByRole("region", { name: "Balance history" });
+  await expect(history).toContainText("No balances entered yet.");
+  await history.getByLabel("Balance", { exact: true }).fill("41,250.75");
+  await history.getByLabel("Note").fill("Quarterly statement");
+  await history.getByRole("button", { name: "Save balance" }).click();
+  await expect(history.getByRole("status")).toContainText("Balance saved");
+  await expect(history.getByRole("listitem")).toContainText("$41,250.75");
+  await expect(sheet).toContainText("From the $41,250.75 balance on");
+  await expect(sheet.getByRole("button", { name: "Delete account" })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(
+    accounts.getByRole("button", { name: new RegExp(`^Retirement ${id}`) }),
+  ).toContainText("Balance from");
+
+  // A savings goal linked to the savings account follows its balance.
+  const goalTitle = `Emergency fund ${id}`;
+  const goal = await page.request.post("/api/goals", {
+    data: { title: goalTitle, progressMode: "amount", targetCents: 1_000_000 },
+  });
+  expect(goal.status()).toBe(201);
+  await page.goto("/goals");
+  await page.getByRole("radio", { name: "Goals" }).check();
+  await page.getByRole("button", { name: new RegExp(`^${goalTitle}`) }).click();
+  const goalSheet = page.getByRole("dialog", { name: "Goal" });
+  await goalSheet.getByRole("checkbox", { name: new RegExp(`Rainy day ${id}`) }).check();
+  await expect(goalSheet).toContainText("Saved so far: $2,500, the chosen accounts' balance.");
+  await expect(goalSheet.getByLabel("Saved so far")).toHaveCount(0);
+  await goalSheet.getByRole("button", { name: "Save goal" }).click();
+  await expect(goalSheet.getByRole("status")).toHaveText("Goal saved");
+  await goalSheet.getByRole("button", { name: "Close" }).click();
+  const card = page.getByRole("button", { name: new RegExp(`^${goalTitle}`) });
+  await expect(card).toContainText(`$2,500 of $10,000 in Rainy day ${id}`);
+  await expect(card).toContainText("25%");
+
+  // Money arriving in the account moves the goal.
+  await page.request.post("/api/money/transactions", {
+    data: { accountId: savingsId, date: today, amountCents: 50_000, payee: "Deposit" },
+  });
+  await page.reload();
+  await page.getByRole("radio", { name: "Goals" }).check();
+  await expect(card).toContainText("$3,000 of $10,000");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

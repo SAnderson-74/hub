@@ -1,5 +1,6 @@
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { GOAL_STATUSES, PROGRESS_MODES } from "../../shared/goals";
+import { moneyAccounts } from "../money/schema";
 
 const timestamps = () => ({
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -45,4 +46,28 @@ export const milestones = sqliteTable(
     ...timestamps(),
   },
   (t) => [index("milestones_goal_idx").on(t.goalId)],
+);
+
+/**
+ * Accounts a savings goal counts. With any linked, an amount goal's "saved so far" is
+ * their combined balance instead of a number typed in.
+ */
+export const goalAccounts = sqliteTable(
+  "goal_accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    goalId: integer("goal_id")
+      .notNull()
+      .references(() => goals.id, { onDelete: "cascade" }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => moneyAccounts.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("goal_accounts_goal_account_unique").on(t.goalId, t.accountId),
+    index("goal_accounts_account_idx").on(t.accountId),
+  ],
 );

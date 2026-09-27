@@ -58,7 +58,12 @@ export function GoalCard({
             {goal.progress.percent}%
           </span>
         </span>
-        <span className="mt-2 block text-sm text-muted">{goal.progress.summary}</span>
+        <span className="mt-2 block text-sm break-words text-muted">
+          {goal.progress.summary}
+          {goal.progressMode === "amount" && goal.accounts.length > 0
+            ? ` in ${goal.accounts.map((account) => account.name).join(" and ")}`
+            : ""}
+        </span>
         {next && goal.status === "active" ? (
           <span className="mt-1 flex items-center gap-1.5 text-sm text-muted">
             <Flag aria-hidden="true" className="size-3.5 shrink-0" />

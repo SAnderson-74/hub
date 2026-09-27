@@ -248,3 +248,15 @@ export type TransferCreate = z.infer<typeof transferCreateSchema>;
 /** Two existing transactions to join as the sides of one transfer. */
 export const transferLinkSchema = z.object({ transactionIds: z.tuple([id, id]) }).strict();
 export type TransferLink = z.infer<typeof transferLinkSchema>;
+
+// Balance snapshots
+
+/** An account's balance on a day, from a statement. One per account per day. */
+export const snapshotSaveSchema = z
+  .object({
+    date,
+    balanceCents: signedCents,
+    note: z.string().trim().max(200, "Keep notes under 200 characters.").optional(),
+  })
+  .strict();
+export type SnapshotSave = z.infer<typeof snapshotSaveSchema>;

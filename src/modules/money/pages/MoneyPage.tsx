@@ -278,7 +278,11 @@ function BookView({
         </Panel>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-          <AccountsPanel accounts={allAccounts} onOpen={(account) => setAccountTarget(account)} />
+          <AccountsPanel
+            accounts={allAccounts}
+            today={today}
+            onOpen={(account) => setAccountTarget(account)}
+          />
           <TransactionsPanel
             book={book}
             accounts={allAccounts}
@@ -294,7 +298,12 @@ function BookView({
         </div>
       )}
 
-      <AccountSheet book={book} target={shownAccount} onClose={() => setAccountTarget(null)} />
+      <AccountSheet
+        book={book}
+        target={shownAccount}
+        today={today}
+        onClose={() => setAccountTarget(null)}
+      />
       <TransactionSheet
         target={transactionTarget}
         accounts={allAccounts}
@@ -335,9 +344,11 @@ function BookView({
 
 function AccountsPanel({
   accounts,
+  today,
   onOpen,
 }: {
   accounts: Account[];
+  today: string;
   onOpen: (account: Account) => void;
 }) {
   const net = netBalance(accounts);
@@ -361,6 +372,9 @@ function AccountsPanel({
                   {[
                     ACCOUNT_KIND_LABELS[account.kind],
                     account.institution,
+                    account.latestSnapshot
+                      ? `Balance from ${formatShortDate(account.latestSnapshot.date, today)}`
+                      : "",
                     account.archived ? "Archived" : "",
                   ]
                     .filter(Boolean)
