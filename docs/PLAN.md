@@ -93,7 +93,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 3.5 Savings goals linked to accounts; balance snapshots for accounts without exports
 - [x] 3.6 Net worth over time
 - [x] 3.7 Link resale purchases and sales to transactions
-- [ ] 3.8 Tax guide: plain-language US federal lessons with sources and review dates, plus a resale income summary and set-aside estimate (education, not tax advice)
+- [x] 3.8 Tax guide: plain-language US federal lessons with sources and review dates, plus a resale income summary and set-aside estimate (education, not tax advice)
 
 ### Phase 4: Business prep, integrations, template
 
