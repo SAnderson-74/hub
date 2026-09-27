@@ -79,6 +79,12 @@ The app writes `data/backups/nightly-YYYY-MM-DD.sqlite3` after the configured ho
 
 1. Install Tailscale, sign in, and turn on **VPN On Demand** in its settings so the tunnel is there when you need it.
 2. Open the app's URL in Safari > Share > **Add to Home Screen**. It opens full screen like a native app.
+3. Optional: a Shortcut that sends a `hub-listing/v1` listing (see PLAN.md) straight to Resale. It runs on your phone over Tailscale, which signs it in as you, so there's no token to set up. In the Shortcuts app, make a new shortcut called "Add listing to Hub" with these actions:
+   1. **Get Clipboard** (copy the listing from the writing assistant first).
+   2. **Get Contents of URL**: URL `https://hub.<your-tailnet>.ts.net/api/resale/listing-import`, Method **POST**, Headers `Content-Type` = `application/json`, Request Body **File** set to the Clipboard.
+   3. **Get Dictionary Value**: `message` from Contents of URL, then **Show Notification** with it. If something's wrong, Hub answers with `error` instead, so show that when `message` is empty.
+
+   The same listing can also be pasted on the Resale page with **Paste listing**, which shows what will happen before it's added.
 
 ## 6. Changing the app with Claude Code
 

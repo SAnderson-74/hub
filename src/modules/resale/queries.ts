@@ -11,6 +11,7 @@ import type {
   PriceChange,
 } from "../../shared/resale";
 import type { ImportRow } from "../../shared/resaleImport";
+import type { ListingImport } from "../../shared/resaleListing";
 
 async function fetchItems() {
   const res = await api.resale.items.$get({ query: {} });
@@ -175,6 +176,24 @@ export function useImportResale() {
       const res = await api.resale.import.$post({
         query: dryRun ? { dryRun: "true" } : {},
         json: { rows },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (_result, { dryRun }) => {
+      if (!dryRun) void queryClient.invalidateQueries({ queryKey: keys.all });
+    },
+  });
+}
+
+/** Previews (dryRun) or adds a hub-listing/v1 listing. */
+export function useImportListing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data, dryRun }: { data: ListingImport; dryRun: boolean }) => {
+      const res = await api.resale["listing-import"].$post({
+        query: dryRun ? { dryRun: "true" } : {},
+        json: data,
       });
       if (!res.ok) throw await toApiError(res);
       return res.json();

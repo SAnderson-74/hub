@@ -137,6 +137,8 @@ export const listingCreateSchema = z
     /** Defaults to today. */
     listedOn: date.optional(),
     url: listingUrl.optional(),
+    title: z.string().trim().max(200, "Keep listing titles under 200 characters.").optional(),
+    description: z.string().max(20_000, "Keep listing text under 20,000 characters.").optional(),
   })
   .strict();
 export type ListingCreate = z.infer<typeof listingCreateSchema>;

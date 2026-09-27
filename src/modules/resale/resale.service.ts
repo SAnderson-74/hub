@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, conflict, notFound } from "../../server/errors";
 import type { ActivityValue } from "../../shared/entities";
@@ -17,6 +17,11 @@ import type {
   PriceChange,
 } from "../../shared/resale";
 import { type ImportResult, type ImportRow, readImportRow } from "../../shared/resaleImport";
+import {
+  type ListingImport,
+  type ListingImportResult,
+  readListingImport,
+} from "../../shared/resaleListing";
 import { changedFields, recordActivity } from "../core/activity.service";
 import { detachEntities } from "../core/entities";
 import { timeEntries } from "../time/schema";
@@ -38,6 +43,9 @@ export type ListingJson = {
   id: number;
   platform: { id: number; name: string } | null;
   url: string;
+  /** The listing's own title and text, as posted. */
+  title: string;
+  description: string;
   listedOn: string;
   /** null while the listing is up. */
   endedOn: string | null;
@@ -254,6 +262,8 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
           id: listing.id,
           platform: platformRef(listing.platformId),
           url: listing.url,
+          title: listing.title,
+          description: listing.description,
           listedOn: listing.listedOn,
           endedOn: listing.endedOn,
           priceCents: prices.at(-1)?.priceCents ?? 0,
@@ -603,6 +613,47 @@ function checkListingDates(listedOn: string, endedOn: string | null) {
  * Puts an item up for sale at a price. An item that wasn't listed, sold, or kept
  * yet becomes listed.
  */
+/**
+ * Adds a listing with its first price inside a transaction. An item that was
+ * sourcing, acquired, or repairing becomes listed. Logs both on the timeline.
+ */
+function insertListing(
+  tx: Queryable,
+  item: ItemRow,
+  input: ListingCreate,
+  actor: string,
+  today: string,
+) {
+  const listedOn = input.listedOn ?? today;
+  const listing = tx
+    .insert(resaleListings)
+    .values({
+      itemId: item.id,
+      platformId: input.platformId ?? null,
+      url: input.url ?? "",
+      title: input.title ?? "",
+      description: input.description ?? "",
+      listedOn,
+    })
+    .returning()
+    .get();
+  tx.insert(resaleListingPrices)
+    .values({ listingId: listing.id, priceCents: input.priceCents, changedOn: listedOn })
+    .run();
+  const changes: Record<string, { from: ActivityValue; to: ActivityValue }> = {
+    listed: { from: null, to: listingLabel(tx, input.priceCents, listing.platformId) },
+  };
+  if (item.status === "sourcing" || item.status === "acquired" || item.status === "repairing") {
+    tx.update(resaleItems)
+      .set({ status: "listed", updatedAt: new Date() })
+      .where(eq(resaleItems.id, item.id))
+      .run();
+    changes.status = { from: item.status, to: "listed" };
+  }
+  logItem(tx, item, changes, actor);
+}
+
+/** Puts an item up for sale at a price. */
 export function createListing(
   db: Db,
   itemId: number,
@@ -613,31 +664,7 @@ export function createListing(
   return db.transaction((tx) => {
     const item = requireItem(tx, itemId);
     if (input.platformId != null) requirePlatform(tx, input.platformId, "body");
-    const listedOn = input.listedOn ?? today;
-    const listing = tx
-      .insert(resaleListings)
-      .values({
-        itemId,
-        platformId: input.platformId ?? null,
-        url: input.url ?? "",
-        listedOn,
-      })
-      .returning()
-      .get();
-    tx.insert(resaleListingPrices)
-      .values({ listingId: listing.id, priceCents: input.priceCents, changedOn: listedOn })
-      .run();
-    const changes: Record<string, { from: ActivityValue; to: ActivityValue }> = {
-      listed: { from: null, to: listingLabel(tx, input.priceCents, listing.platformId) },
-    };
-    if (item.status === "sourcing" || item.status === "acquired" || item.status === "repairing") {
-      tx.update(resaleItems)
-        .set({ status: "listed", updatedAt: new Date() })
-        .where(eq(resaleItems.id, itemId))
-        .run();
-      changes.status = { from: item.status, to: "listed" };
-    }
-    logItem(tx, item, changes, actor);
+    insertListing(tx, item, input, actor, today);
     return oneItem(tx, requireItem(tx, itemId));
   });
 }
@@ -724,10 +751,41 @@ export function deleteListing(db: Db, id: number, actor: string): ItemJson {
 
 // Import
 
-class DryRun extends Error {
-  constructor(readonly result: ImportResult) {
+class DryRun<T> extends Error {
+  constructor(readonly result: T) {
     super("dry run");
   }
+}
+
+/**
+ * Finds platforms by name (ignoring case), creating ones that don't exist yet.
+ * `onCreate` hears about each new one. An empty name is no platform.
+ */
+function platformFinder(tx: Queryable, onCreate: (name: string) => void) {
+  const platforms = new Map(
+    tx
+      .select({ id: resalePlatforms.id, name: resalePlatforms.name })
+      .from(resalePlatforms)
+      .all()
+      .map((platform) => [platform.name.toLowerCase(), platform.id]),
+  );
+  return (name: string): number | null => {
+    if (!name) return null;
+    const known = platforms.get(name.toLowerCase());
+    if (known !== undefined) return known;
+    const last = tx
+      .select({ last: sql<number | null>`max(${resalePlatforms.sortOrder})` })
+      .from(resalePlatforms)
+      .get();
+    const created = tx
+      .insert(resalePlatforms)
+      .values({ name, sortOrder: (last?.last ?? 0) + 1 })
+      .returning()
+      .get();
+    platforms.set(name.toLowerCase(), created.id);
+    onCreate(name);
+    return created.id;
+  };
 }
 
 /**
@@ -754,30 +812,7 @@ export function importResale(
         platformsCreated: [],
         rows: [],
       };
-      const platforms = new Map(
-        tx
-          .select({ id: resalePlatforms.id, name: resalePlatforms.name })
-          .from(resalePlatforms)
-          .all()
-          .map((platform) => [platform.name.toLowerCase(), platform.id]),
-      );
-      const platformId = (name: string): number | null => {
-        if (!name) return null;
-        const known = platforms.get(name.toLowerCase());
-        if (known !== undefined) return known;
-        const last = tx
-          .select({ last: sql<number | null>`max(${resalePlatforms.sortOrder})` })
-          .from(resalePlatforms)
-          .get();
-        const created = tx
-          .insert(resalePlatforms)
-          .values({ name, sortOrder: (last?.last ?? 0) + 1 })
-          .returning()
-          .get();
-        platforms.set(name.toLowerCase(), created.id);
-        result.platformsCreated.push(name);
-        return created.id;
-      };
+      const platformId = platformFinder(tx, (name) => result.platformsCreated.push(name));
 
       rows.forEach((raw, index) => {
         const read = readImportRow(raw);
@@ -855,11 +890,129 @@ export function importResale(
         result.rows.push({ row: index + 1, title: item.title, outcome: "create", problems });
       });
 
-      if (dryRun) throw new DryRun(result);
+      if (dryRun) throw new DryRun<ImportResult>(result);
       return result;
     });
   } catch (error) {
-    if (error instanceof DryRun) return error.result;
+    if (error instanceof DryRun) return error.result as ImportResult;
+    throw error;
+  }
+}
+
+/**
+ * Adds a hub-listing/v1 listing, pasted in or sent by a Shortcut. When exactly one
+ * unsold item has the same title (ignoring case), the listing goes on it; otherwise
+ * a new item is made, flagged for review if details are missing. The listing's
+ * platform is found by name or created. With `dryRun`, nothing is saved.
+ */
+export function importListing(
+  db: Db,
+  data: ListingImport,
+  actor: string,
+  today: string,
+  dryRun: boolean,
+): ListingImportResult {
+  const read = readListingImport(data);
+  if (!read) throw badRequest("Give the item a title, in item.title or listing.title.");
+  try {
+    return db.transaction((tx) => {
+      let platformCreated: string | null = null;
+      const findPlatform = platformFinder(tx, (name) => {
+        platformCreated = name;
+      });
+      const matches = tx
+        .select()
+        .from(resaleItems)
+        .where(
+          and(
+            sql`lower(${resaleItems.title}) = lower(${read.title})`,
+            notInArray(resaleItems.status, ["sold", "kept"]),
+          ),
+        )
+        .all();
+      const existing = matches.length === 1 ? matches[0] : undefined;
+      // Purchase details only matter for a new item; an existing one keeps its own.
+      const problems = existing
+        ? read.problems.filter((problem) => /listing/i.test(problem))
+        : read.problems;
+
+      let item: ItemRow;
+      if (existing) {
+        item = existing;
+      } else {
+        item = tx
+          .insert(resaleItems)
+          .values({
+            title: read.title,
+            status: "acquired",
+            category: read.category,
+            condition: read.condition,
+            purchasedOn: read.purchasedOn,
+            purchaseCents: read.purchaseCents,
+            purchaseFrom: read.purchaseFrom,
+            notes: read.notes,
+            needsReview: problems.length > 0,
+            reviewNote: problems.join(" "),
+          })
+          .returning()
+          .get();
+        recordActivity(tx, {
+          entity: { type: "resale_item", id: item.id },
+          action: "created",
+          label: item.title,
+          actor,
+        });
+      }
+
+      const listing = read.listing;
+      const listed = listing !== null && listing.priceCents !== null;
+      if (listing && listing.priceCents !== null) {
+        insertListing(
+          tx,
+          item,
+          {
+            platformId: findPlatform(listing.platform),
+            priceCents: listing.priceCents,
+            url: listing.url,
+            title: listing.title,
+            description: listing.description,
+          },
+          actor,
+          today,
+        );
+      }
+
+      const where =
+        listing?.platform && listing.priceCents !== null
+          ? ` on ${listing.platform} for ${formatCents(listing.priceCents)}`
+          : listing?.priceCents != null
+            ? ` for ${formatCents(listing.priceCents)}`
+            : "";
+      const outcome: ListingImportResult["outcome"] = !existing
+        ? "created"
+        : listed
+          ? "listed"
+          : "unchanged";
+      const message =
+        outcome === "created"
+          ? `Added ${item.title}${listed ? ` and listed it${where}` : ""}.${problems.length > 0 ? " It's flagged to review." : ""}`
+          : outcome === "listed"
+            ? `Listed ${item.title}${where}.`
+            : `${item.title} is already in Hub, and there was no listing with a price to add.`;
+      const result: ListingImportResult = {
+        outcome,
+        itemId: dryRun ? null : item.id,
+        title: item.title,
+        platformCreated,
+        needsReview: !existing && problems.length > 0,
+        problems,
+        message,
+      };
+      if (dryRun) throw new DryRun<ListingImportResult>(result);
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof DryRun) return error.result as ListingImportResult;
     throw error;
   }
 }

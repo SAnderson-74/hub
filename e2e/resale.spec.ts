@@ -206,3 +206,63 @@ test("a spreadsheet imports, with incomplete rows flagged to review", async ({
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("a pasted listing adds an item, and a Shortcut can add another listing", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const title = `Stereo receiver ${id}`;
+  const platform = `Market ${id}`;
+  const errors = trackErrors(page);
+  const listing = {
+    format: "hub-listing/v1",
+    item: { title, brand: "Example", model: "RX-100", condition: "used" },
+    listing: {
+      platform,
+      price: 150,
+      title: "Stereo receiver, works great",
+      description: "Tested with speakers.",
+    },
+    purchase: { price: 60, date: "2030-01-10", source: "Garage sale" },
+  };
+
+  await page.goto("/resale");
+  await page.getByRole("button", { name: "Paste listing" }).click();
+  const sheet = page.getByRole("dialog", { name: "Paste a listing" });
+  await sheet.getByLabel("Listing").fill("{ not json");
+  await sheet.getByRole("button", { name: "Check listing" }).click();
+  await expect(sheet.getByRole("alert")).toContainText("That isn't valid JSON.");
+  await sheet.getByLabel("Listing").fill(JSON.stringify(listing));
+  await sheet.getByRole("button", { name: "Check listing" }).click();
+  await expect(sheet).toContainText(`A new item: ${title}`);
+  await expect(sheet).toContainText(`New platform: ${platform}`);
+  await sheet.getByRole("button", { name: "Add listing" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Listing added");
+  await expect(sheet).toContainText(`Added ${title} and listed it on ${platform} for $150.`);
+  await sheet.getByRole("button", { name: "Open item" }).click();
+
+  const edit = page.getByRole("dialog", { name: "Item" });
+  await expect(edit.getByLabel("Title")).toHaveValue(title);
+  await expect(edit.getByLabel("Status")).toHaveValue("listed");
+  const listings = edit.getByRole("region", { name: "Listings" });
+  await listings.getByText("Stereo receiver, works great").click();
+  await expect(listings).toContainText("Tested with speakers.");
+  await edit.getByRole("button", { name: "Close" }).click();
+
+  // What an iOS Shortcut sends: no browser headers, same sign-in.
+  const response = await page.request.post("/api/resale/listing-import", {
+    data: { format: "hub-listing/v1", item: { title }, listing: { platform, price: 120 } },
+  });
+  expect(response.status()).toBe(201);
+  expect((await response.json()).message).toBe(`Listed ${title} on ${platform} for $120.`);
+  await page.reload();
+  await expect(page.getByRole("button", { name: new RegExp(title) })).toContainText(
+    `Asking $120 on ${platform}, $150 on ${platform}`,
+  );
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

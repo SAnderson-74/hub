@@ -71,6 +71,13 @@
       "when": 1790478465109,
       "tag": "0009_resale_needs_review",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790479348442,
+      "tag": "0010_resale_listing_text",
+      "breakpoints": true
     }
   ]
 }

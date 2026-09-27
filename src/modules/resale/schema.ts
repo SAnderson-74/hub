@@ -85,6 +85,9 @@ export const resaleListings = sqliteTable(
       onDelete: "set null",
     }),
     url: text("url").notNull().default(""),
+    /** The listing's own title and text, as posted. */
+    title: text("title").notNull().default(""),
+    description: text("description").notNull().default(""),
     listedOn: text("listed_on").notNull(),
     endedOn: text("ended_on"),
     ...timestamps(),
