@@ -1,4 +1,4 @@
-import { BookOpen, FileUp, Plus, Tags, WalletCards } from "lucide-react";
+import { ArrowLeftRight, BookOpen, FileUp, Plus, Tags, WalletCards, Wand2 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
@@ -18,7 +18,9 @@ import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
 import { BooksSheet } from "../components/BooksSheet";
 import { CategoriesSheet } from "../components/CategoriesSheet";
 import { ImportSheet } from "../components/ImportSheet";
+import { RulesSheet } from "../components/RulesSheet";
 import { TransactionSheet, type TransactionTarget } from "../components/TransactionSheet";
+import { TransfersSheet } from "../components/TransfersSheet";
 import {
   type Account,
   type Book,
@@ -28,7 +30,9 @@ import {
   useAccounts,
   useBooks,
   useCategories,
+  useRules,
   useTransactions,
+  useTransferSuggestions,
 } from "../queries";
 import { accountsSummary, netBalance } from "../summary";
 
@@ -122,6 +126,10 @@ function BookView({
   const [transactionTarget, setTransactionTarget] = useState<TransactionTarget>(null);
   const [managingCategories, setManagingCategories] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [managingRules, setManagingRules] = useState(false);
+  const [reviewingTransfers, setReviewingTransfers] = useState(false);
+  const rules = useRules(book.id);
+  const suggestions = useTransferSuggestions(book.id);
   const [accountFilter, setAccountFilter] = useState<number | undefined>(undefined);
 
   const allAccounts = accounts.data ?? [];
@@ -188,6 +196,10 @@ function BookView({
           <Tags aria-hidden="true" className="size-4" />
           Categories
         </button>
+        <button type="button" className={secondaryButton} onClick={() => setManagingRules(true)}>
+          <Wand2 aria-hidden="true" className="size-4" />
+          Rules
+        </button>
         <button type="button" className={secondaryButton} onClick={onManageBooks}>
           <BookOpen aria-hidden="true" className="size-4" />
           Books
@@ -220,6 +232,8 @@ function BookView({
             onAccountFilter={setAccountFilter}
             onOpen={(transaction) => setTransactionTarget(transaction)}
             onAdd={() => setTransactionTarget("new")}
+            possibleTransfers={suggestions.data?.length ?? 0}
+            onReviewTransfers={() => setReviewingTransfers(true)}
           />
         </div>
       )}
@@ -229,9 +243,22 @@ function BookView({
         target={transactionTarget}
         accounts={allAccounts}
         categories={categories.data ?? []}
+        rules={rules.data ?? []}
         defaultAccountId={defaultAccountId}
         today={today}
         onClose={() => setTransactionTarget(null)}
+      />
+      <RulesSheet
+        book={book}
+        categories={categories.data ?? []}
+        open={managingRules}
+        onClose={() => setManagingRules(false)}
+      />
+      <TransfersSheet
+        book={book}
+        today={today}
+        open={reviewingTransfers}
+        onClose={() => setReviewingTransfers(false)}
       />
       <ImportSheet
         book={book}
@@ -299,6 +326,17 @@ function AccountsPanel({
   );
 }
 
+/**
+ * "Transfer to Savings", or just "Transfer" when the payee already says so (as it does
+ * for transfers added in Hub).
+ */
+function transferLabel(transaction: Transaction): string {
+  if (!transaction.transfer) return "";
+  const other = transaction.transfer.account.name;
+  const label = transaction.amountCents < 0 ? `Transfer to ${other}` : `Transfer from ${other}`;
+  return transaction.payee === label ? "Transfer" : label;
+}
+
 /** Waits until typing pauses, so each keystroke isn't a request. */
 function useDebounced<T>(value: T, ms = 250): T {
   const [settled, setSettled] = useState(value);
@@ -318,6 +356,8 @@ function TransactionsPanel({
   onAccountFilter,
   onOpen,
   onAdd,
+  possibleTransfers,
+  onReviewTransfers,
 }: {
   book: Book;
   accounts: Account[];
@@ -327,8 +367,11 @@ function TransactionsPanel({
   onAccountFilter: (id: number | undefined) => void;
   onOpen: (transaction: Transaction) => void;
   onAdd: () => void;
+  /** Pairs that look like transfers, waiting to be confirmed. */
+  possibleTransfers: number;
+  onReviewTransfers: () => void;
 }) {
-  const [categoryFilter, setCategoryFilter] = useState<number | "none" | undefined>(undefined);
+  const [categoryFilter, setCategoryFilter] = useState<TransactionFilters["categoryId"]>(undefined);
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
   // "Show more" grows the page; a new filter starts from the first page again.
@@ -381,13 +424,18 @@ function TransactionsPanel({
             onChange={(event) => {
               const value = event.target.value;
               setCategoryFilter(
-                value === "" ? undefined : value === "none" ? "none" : Number(value),
+                value === ""
+                  ? undefined
+                  : value === "none" || value === "transfer"
+                    ? value
+                    : Number(value),
               );
             }}
             className={inputClass}
           >
             <option value="">All categories</option>
             <option value="none">Uncategorized</option>
+            <option value="transfer">Transfers</option>
             {CATEGORY_KINDS.map((kind) => {
               const options = categories.filter((category) => category.kind === kind);
               return options.length === 0 ? null : (
@@ -418,6 +466,20 @@ function TransactionsPanel({
         </div>
       </div>
 
+      {possibleTransfers > 0 ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+          <p className="flex min-w-0 items-start gap-2 text-fg">
+            <ArrowLeftRight aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
+            {possibleTransfers === 1
+              ? "1 pair looks like a transfer between your accounts."
+              : `${possibleTransfers} pairs look like transfers between your accounts.`}
+          </p>
+          <button type="button" className={secondaryButton} onClick={onReviewTransfers}>
+            Review transfers
+          </button>
+        </div>
+      ) : null}
+
       <div className="mt-5">
         {transactions.isPending ? (
           <LoadingRows rows={4} />
@@ -444,6 +506,9 @@ function TransactionsPanel({
             <p className="mb-3 text-sm text-muted tabular-nums">
               {count(page.total)} · {formatCents(page.inCents)} in · {formatCents(-page.outCents)}{" "}
               out
+              {page.transferCount > 0
+                ? ` · ${page.transferCount} ${page.transferCount === 1 ? "transfer" : "transfers"} not counted`
+                : ""}
             </p>
             <ul className="divide-y divide-surface-0">
               {page.transactions.map((transaction) => (
@@ -462,7 +527,9 @@ function TransactionsPanel({
                       <span className="block text-sm text-muted">
                         {[
                           formatShortDate(transaction.date, today),
-                          transaction.category?.name ?? "Uncategorized",
+                          transaction.transfer
+                            ? transferLabel(transaction)
+                            : (transaction.category?.name ?? "Uncategorized"),
                           accountFilter === undefined ? transaction.account.name : "",
                         ]
                           .filter(Boolean)
@@ -471,7 +538,7 @@ function TransactionsPanel({
                     </span>
                     <span
                       className={`shrink-0 font-semibold tabular-nums ${
-                        transaction.amountCents > 0 ? "text-ok" : "text-fg"
+                        transaction.amountCents > 0 && !transaction.transfer ? "text-ok" : "text-fg"
                       }`}
                     >
                       {transaction.amountCents > 0

@@ -235,3 +235,126 @@ test("bank files import once, remember their columns, and can be undone", async 
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("rules sort payees, and transfers stay out of spending", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const book = `Rules ${id}`;
+  const errors = trackErrors(page);
+
+  const bookId = (
+    await (
+      await page.request.post("/api/money/books", {
+        data: { name: book, kind: "personal", starterCategories: true },
+      })
+    ).json()
+  ).id;
+  for (const [name, openingBalanceCents] of [
+    ["Checking", 100_000],
+    ["Savings", 0],
+  ] as const) {
+    await page.request.post("/api/money/accounts", {
+      data: { bookId, name, kind: "checking", openingBalanceCents },
+    });
+  }
+  await page.addInitScript(
+    (value) => localStorage.setItem("hub.money.book", value),
+    String(bookId),
+  );
+  await page.goto("/money");
+  await expect(page.getByText(`${book}: 2 accounts`)).toBeVisible();
+
+  // A rule that cleans up a card processor's payee.
+  await page.getByRole("button", { name: "Rules" }).click();
+  const rules = page.getByRole("dialog", { name: "Rules" });
+  await rules.getByLabel("Payee contains").fill("corner groc");
+  await rules.getByLabel("Category").selectOption({ label: "Groceries" });
+  await rules.getByLabel("Rename payee to").fill("Corner grocery");
+  await rules.getByRole("button", { name: "Add rule" }).click();
+  await expect(rules.getByRole("listitem")).toContainText("“corner groc” → Groceries");
+  await rules.getByRole("button", { name: "Close" }).click();
+
+  // Imports use it.
+  const csv = [
+    `Date,Description,Amount,Note ${id}`,
+    "2030-01-05,SQ *CORNER GROC 4412,-42.50,",
+    "2030-01-06,ONLINE TRANSFER TO SAV,-200.00,",
+  ].join("\n");
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  const importing = page.getByRole("dialog", { name: "Import transactions" });
+  await importing.getByLabel("Into account").selectOption({ label: "Checking" });
+  await importing
+    .getByLabel("File", { exact: true })
+    .setInputFiles({ name: "checking.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await importing.getByRole("button", { name: "Check import" }).click();
+  await expect(importing).toContainText("1 gets a category from your rules");
+  await importing.getByRole("button", { name: "Import 2 transactions" }).click();
+  await importing.getByRole("button", { name: "Done" }).click();
+
+  // The savings side of the transfer, as another import would bring it in.
+  const accounts = await (await page.request.get(`/api/money/accounts?bookId=${bookId}`)).json();
+  const savingsId = accounts.find((account: { name: string }) => account.name === "Savings").id;
+  await page.request.post("/api/money/transactions", {
+    data: {
+      accountId: savingsId,
+      date: "2030-01-07",
+      amountCents: 20_000,
+      payee: "TRANSFER FROM CHK",
+    },
+  });
+  await page.reload();
+
+  const transactions = page.getByRole("region", { name: "Transactions" });
+  await expect(transactions.getByRole("button", { name: /Corner grocery/ })).toContainText(
+    "Groceries",
+  );
+  await expect(transactions).toContainText("1 pair looks like a transfer between your accounts.");
+  await transactions.getByRole("button", { name: "Review transfers" }).click();
+  const pairs = page.getByRole("dialog", { name: "Possible transfers" });
+  await expect(pairs).toContainText("$200 from Checking");
+  await pairs.getByRole("button", { name: "Link as transfer" }).click();
+  await expect(pairs.getByRole("status")).toHaveText("Linked $200 from Checking to Savings");
+  await expect(pairs).toContainText("Nothing left to review.");
+  await pairs.getByRole("button", { name: "Close" }).click();
+  await expect(transactions).toContainText(
+    "3 transactions · $0 in · $42.50 out · 2 transfers not counted",
+  );
+  await expect(transactions.getByRole("button", { name: /ONLINE TRANSFER TO SAV/ })).toContainText(
+    "Transfer to Savings",
+  );
+
+  // A transfer entered by hand, then unlinked.
+  await page.getByRole("button", { name: "Add transaction" }).first().click();
+  let sheet = page.getByRole("dialog", { name: "Add transaction" });
+  await sheet.getByRole("radio", { name: "Transfer" }).check();
+  await sheet.getByLabel("Amount").fill("50");
+  await sheet.getByLabel("From account").selectOption({ label: "Checking" });
+  await sheet.getByLabel("To account").selectOption({ label: "Savings" });
+  await sheet.getByRole("button", { name: "Add transfer" }).click();
+  await expect(sheet).toBeHidden();
+  const balances = page.getByRole("region", { name: "Accounts" });
+  await expect(balances.getByRole("button", { name: /^Checking/ })).toContainText("$707.50");
+  await expect(balances.getByRole("button", { name: /^Savings/ })).toContainText("$250");
+
+  await transactions.getByRole("button", { name: /Transfer to Savings.*\$50/ }).click();
+  sheet = page.getByRole("dialog", { name: "Transfer" });
+  await expect(sheet).toContainText("$50 from Checking to Savings");
+  await sheet.getByRole("button", { name: "Unlink transfer" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(transactions).toContainText(
+    "5 transactions · $50 in · $92.50 out · 2 transfers not counted",
+  );
+
+  // Typing a payee picks the rule's category.
+  await page.getByRole("button", { name: "Add transaction" }).first().click();
+  sheet = page.getByRole("dialog", { name: "Add transaction" });
+  await sheet.getByLabel("Paid to").fill("Corner groc downtown");
+  await expect(sheet.getByText("Picked by a rule")).toBeVisible();
+  await expect(sheet.getByLabel("Category").locator("option:checked")).toHaveText("Groceries");
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

@@ -368,6 +368,8 @@ export type BankImportResult = {
   duplicates: number;
   /** Category names in the file that aren't in the book; those rows stay uncategorized. */
   unknownCategories: string[];
+  /** New transactions given a category (and maybe a cleaner payee) by the book's rules. */
+  categorizedByRules: number;
   rows: Array<{
     /** 1-based, in the order sent. */
     row: number;

@@ -1,6 +1,7 @@
 import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
+import { RULE_DIRECTIONS } from "../../shared/moneyRules";
 
 const timestamps = () => ({
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -80,6 +81,8 @@ export const moneyTransactions = sqliteTable(
     importId: integer("import_id"),
     /** The bank's own id for it (OFX FITID), for spotting it in a later file. */
     externalId: text("external_id"),
+    /** The other side of a transfer between accounts. Both sides point at each other. */
+    transferPeerId: integer("transfer_peer_id"),
     ...timestamps(),
   },
   (t) => [
@@ -88,6 +91,7 @@ export const moneyTransactions = sqliteTable(
     index("money_transactions_date_idx").on(t.date),
     index("money_transactions_import_idx").on(t.importId),
     index("money_transactions_external_idx").on(t.accountId, t.externalId),
+    index("money_transactions_transfer_idx").on(t.transferPeerId),
   ],
 );
 
@@ -123,3 +127,26 @@ export const moneyImportLayouts = sqliteTable("money_import_layouts", {
   accountId: integer("account_id").references(() => moneyAccounts.id, { onDelete: "set null" }),
   ...timestamps(),
 });
+
+/**
+ * "Payee contains X → category Y", optionally only for money in or out, optionally
+ * renaming the payee. Applied in order on imports; the first that fits wins.
+ */
+export const moneyRules = sqliteTable(
+  "money_rules",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => moneyBooks.id),
+    contains: text("contains").notNull(),
+    direction: text("direction", { enum: RULE_DIRECTIONS }).notNull().default("any"),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => moneyCategories.id),
+    renameTo: text("rename_to").notNull().default(""),
+    sortOrder: real("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [index("money_rules_book_idx").on(t.bookId)],
+);

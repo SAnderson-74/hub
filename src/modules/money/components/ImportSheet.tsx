@@ -366,6 +366,9 @@ function ImportForm({
                 {count(read.problems.length, "row", "rows")} couldn't be read and will be left out
               </li>
             ) : null}
+            {preview.categorizedByRules > 0 ? (
+              <li>{count(preview.categorizedByRules, "gets", "get")} a category from your rules</li>
+            ) : null}
             {preview.unknownCategories.length > 0 ? (
               <li>
                 Categories not in this book stay uncategorized:{" "}

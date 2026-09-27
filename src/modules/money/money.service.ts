@@ -6,6 +6,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
@@ -35,6 +36,7 @@ import {
   moneyBooks,
   moneyCategories,
   moneyImports,
+  moneyRules,
   moneyTransactions,
 } from "./schema";
 
@@ -86,6 +88,8 @@ export type TransactionJson = {
   payee: string;
   memo: string;
   category: { id: number; name: string; kind: CategoryKind } | null;
+  /** The other side when this is a transfer between accounts. Transfers have no category. */
+  transfer: { transactionId: number; account: { id: number; name: string } } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -94,8 +98,11 @@ export type TransactionPage = {
   transactions: TransactionJson[];
   /** Matching transactions across all pages, and what they add up to. */
   total: number;
+  /** Money in and out, not counting transfers between accounts. */
   inCents: number;
   outCents: number;
+  /** Matching transfers, left out of the in and out totals. */
+  transferCount: number;
 };
 
 /** Names are unique ignoring case. */
@@ -136,7 +143,7 @@ function bookJson(row: BookRow, accountCount: number): BookJson {
   return { id: row.id, name: row.name, kind: row.kind, archived: row.archived, accountCount };
 }
 
-function requireBook(db: Queryable, id: number, from: "path" | "body" = "path"): BookRow {
+export function requireBook(db: Queryable, id: number, from: "path" | "body" = "path"): BookRow {
   const row = db.select().from(moneyBooks).where(eq(moneyBooks.id, id)).get();
   if (row) return row;
   const message = "That book doesn't exist. It may have been deleted.";
@@ -208,7 +215,8 @@ export function deleteBook(db: Db, id: number): void {
     if ((accounts?.n ?? 0) > 0) {
       throw conflict("This book has accounts. Archive it instead to keep their history.");
     }
-    // Without accounts there are no transactions, so its categories are unused.
+    // Without accounts there are no transactions, so its rules and categories are unused.
+    tx.delete(moneyRules).where(eq(moneyRules.bookId, id)).run();
     tx.delete(moneyCategories).where(eq(moneyCategories.bookId, id)).run();
     tx.delete(moneyBooks).where(eq(moneyBooks.id, id)).run();
   });
@@ -391,7 +399,11 @@ function categoryJson(row: CategoryRow, transactionCount: number): CategoryJson 
   };
 }
 
-function requireCategory(db: Queryable, id: number, from: "path" | "body" = "path"): CategoryRow {
+export function requireCategory(
+  db: Queryable,
+  id: number,
+  from: "path" | "body" = "path",
+): CategoryRow {
   const row = db.select().from(moneyCategories).where(eq(moneyCategories.id, id)).get();
   if (row) return row;
   const message = "That category doesn't exist. It may have been deleted.";
@@ -455,15 +467,34 @@ export function deleteCategory(db: Db, id: number): void {
     if (oneCategory(tx, row).transactionCount > 0) {
       throw conflict("Transactions use this category. Archive it instead to keep them sorted.");
     }
+    const rules = tx
+      .select({ n: count() })
+      .from(moneyRules)
+      .where(eq(moneyRules.categoryId, id))
+      .get();
+    if ((rules?.n ?? 0) > 0) {
+      throw conflict("A rule uses this category. Delete the rule first, or archive the category.");
+    }
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
   });
 }
 
 // Transactions
 
-function transactionsJson(db: Queryable, rows: TransactionRow[]): TransactionJson[] {
+export function transactionsJson(db: Queryable, rows: TransactionRow[]): TransactionJson[] {
   if (rows.length === 0) return [];
-  const accountIds = [...new Set(rows.map((row) => row.accountId))];
+  const peerIds = rows.flatMap((row) => (row.transferPeerId === null ? [] : [row.transferPeerId]));
+  const peers = new Map(
+    peerIds.length === 0
+      ? []
+      : db
+          .select({ id: moneyTransactions.id, accountId: moneyTransactions.accountId })
+          .from(moneyTransactions)
+          .where(inArray(moneyTransactions.id, peerIds))
+          .all()
+          .map((row) => [row.id, row.accountId]),
+  );
+  const accountIds = [...new Set([...rows.map((row) => row.accountId), ...peers.values()])];
   const categoryIds = [
     ...new Set(rows.flatMap((row) => (row.categoryId === null ? [] : [row.categoryId]))),
   ];
@@ -497,12 +528,27 @@ function transactionsJson(db: Queryable, rows: TransactionRow[]): TransactionJso
     payee: row.payee,
     memo: row.memo,
     category: row.categoryId === null ? null : (categories.get(row.categoryId) ?? null),
+    transfer: transferJson(row.transferPeerId, peers, accounts),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }));
 }
 
-function oneTransaction(db: Queryable, row: TransactionRow): TransactionJson {
+function transferJson(
+  peerId: number | null,
+  peers: Map<number, number>,
+  accounts: Map<number, { id: number; name: string }>,
+): TransactionJson["transfer"] {
+  if (peerId === null) return null;
+  const accountId = peers.get(peerId);
+  if (accountId === undefined) return null;
+  return {
+    transactionId: peerId,
+    account: accounts.get(accountId) ?? { id: accountId, name: "" },
+  };
+}
+
+export function oneTransaction(db: Queryable, row: TransactionRow): TransactionJson {
   const [transaction] = transactionsJson(db, [row]);
   if (!transaction) throw new Error("Expected one transaction");
   return transaction;
@@ -518,8 +564,11 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
   if (query.accountId !== undefined) {
     conditions.push(eq(moneyTransactions.accountId, query.accountId));
   }
-  if (query.categoryId === "none") conditions.push(isNull(moneyTransactions.categoryId));
-  else if (query.categoryId !== undefined) {
+  if (query.categoryId === "none") {
+    conditions.push(isNull(moneyTransactions.categoryId), isNull(moneyTransactions.transferPeerId));
+  } else if (query.categoryId === "transfer") {
+    conditions.push(isNotNull(moneyTransactions.transferPeerId));
+  } else if (query.categoryId !== undefined) {
     conditions.push(eq(moneyTransactions.categoryId, query.categoryId));
   }
   if (query.from) conditions.push(gte(moneyTransactions.date, query.from));
@@ -535,8 +584,9 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
   const totals = db
     .select({
       n: count(),
-      inCents: sql<number>`coalesce(sum(case when ${moneyTransactions.amountCents} > 0 then ${moneyTransactions.amountCents} end), 0)`,
-      outCents: sql<number>`coalesce(sum(case when ${moneyTransactions.amountCents} < 0 then ${moneyTransactions.amountCents} end), 0)`,
+      inCents: sql<number>`coalesce(sum(case when ${moneyTransactions.transferPeerId} is null and ${moneyTransactions.amountCents} > 0 then ${moneyTransactions.amountCents} end), 0)`,
+      outCents: sql<number>`coalesce(sum(case when ${moneyTransactions.transferPeerId} is null and ${moneyTransactions.amountCents} < 0 then ${moneyTransactions.amountCents} end), 0)`,
+      transfers: sql<number>`count(${moneyTransactions.transferPeerId})`,
     })
     .from(moneyTransactions)
     .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
@@ -558,10 +608,11 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
     total: totals?.n ?? 0,
     inCents: totals?.inCents ?? 0,
     outCents: totals?.outCents ?? 0,
+    transferCount: totals?.transfers ?? 0,
   };
 }
 
-function requireTransaction(db: Queryable, id: number): TransactionRow {
+export function requireTransaction(db: Queryable, id: number): TransactionRow {
   const row = db.select().from(moneyTransactions).where(eq(moneyTransactions.id, id)).get();
   if (!row) throw notFound("That transaction doesn't exist. It may have been deleted.");
   return row;
@@ -599,6 +650,16 @@ export function createTransaction(db: Db, input: TransactionCreate): Transaction
 export function updateTransaction(db: Db, id: number, patch: TransactionUpdate): TransactionJson {
   return db.transaction((tx) => {
     const current = requireTransaction(tx, id);
+    if (
+      current.transferPeerId !== null &&
+      ((patch.amountCents !== undefined && patch.amountCents !== current.amountCents) ||
+        (patch.accountId !== undefined && patch.accountId !== current.accountId) ||
+        (patch.categoryId !== undefined && patch.categoryId !== null))
+    ) {
+      throw conflict(
+        "This is one side of a transfer. Unlink the transfer to change its amount, account, or category.",
+      );
+    }
     const accountId = patch.accountId ?? current.accountId;
     const account = requireAccount(tx, accountId, "body");
     const categoryId = patch.categoryId === undefined ? current.categoryId : patch.categoryId;
@@ -613,9 +674,11 @@ export function updateTransaction(db: Db, id: number, patch: TransactionUpdate):
   });
 }
 
+/** Deletes a transaction. A transfer is one movement of money, so both sides go. */
 export function deleteTransaction(db: Db, id: number): void {
   db.transaction((tx) => {
-    requireTransaction(tx, id);
-    tx.delete(moneyTransactions).where(eq(moneyTransactions.id, id)).run();
+    const row = requireTransaction(tx, id);
+    const ids = row.transferPeerId === null ? [id] : [id, row.transferPeerId];
+    tx.delete(moneyTransactions).where(inArray(moneyTransactions.id, ids)).run();
   });
 }

@@ -8,8 +8,10 @@ import type {
   BookUpdate,
   CategoryCreate,
   CategoryUpdate,
+  RuleCreate,
   TransactionCreate,
   TransactionUpdate,
+  TransferCreate,
 } from "../../shared/books";
 
 async function fetchBooks() {
@@ -32,8 +34,8 @@ async function fetchCategories(bookId: number) {
 
 export type TransactionFilters = {
   accountId?: number;
-  /** A category id, or "none" for uncategorized. */
-  categoryId?: number | "none";
+  /** A category id, "none" for uncategorized, or "transfer" for transfers. */
+  categoryId?: number | "none" | "transfer";
   q?: string;
   limit: number;
 };
@@ -257,5 +259,112 @@ export function useUndoImport() {
     const res = await api.money.imports[":id"].undo.$post({ param: { id: String(id) } });
     if (!res.ok) throw await toApiError(res);
     return res.json();
+  });
+}
+
+// Rules
+
+async function fetchRules(bookId: number) {
+  const res = await api.money.rules.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export type Rule = Awaited<ReturnType<typeof fetchRules>>[number];
+
+/** A book's categorization rules, in the order they're tried. */
+export function useRules(bookId: number) {
+  return useQuery({ queryKey: ["money", "rules", bookId], queryFn: () => fetchRules(bookId) });
+}
+
+export function useCreateRule() {
+  return useMoneyMutation(async (json: RuleCreate) => {
+    const res = await api.money.rules.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useMoveRule() {
+  return useMoneyMutation(async ({ id, to }: { id: number; to: "earlier" | "later" }) => {
+    const res = await api.money.rules[":id"].move.$post({
+      param: { id: String(id) },
+      json: { to },
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteRule() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.rules[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useApplyRules() {
+  return useMoneyMutation(async (bookId: number) => {
+    const res = await api.money.rules.apply.$post({ json: { bookId } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+// Transfers
+
+export function useCreateTransfer() {
+  return useMoneyMutation(async (json: TransferCreate) => {
+    const res = await api.money.transfers.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useLinkTransfer() {
+  return useMoneyMutation(async (transactionIds: [number, number]) => {
+    const res = await api.money.transfers.link.$post({ json: { transactionIds } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUnlinkTransfer() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.transactions[":id"].unlink.$post({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+/** Pairs in the book that look like transfers, for confirming. */
+export function useTransferSuggestions(bookId: number) {
+  return useQuery({
+    queryKey: ["money", "transfer-suggestions", bookId],
+    queryFn: async () => {
+      const res = await api.money.transfers.suggestions.$get({
+        query: { bookId: String(bookId) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+export type TransferPair = NonNullable<ReturnType<typeof useTransferSuggestions>["data"]>[number];
+
+/** Transactions that could be the other side of this one, as a transfer. */
+export function useTransferMatches(id: number | null) {
+  return useQuery({
+    queryKey: ["money", "transfer-matches", id ?? 0],
+    queryFn: async () => {
+      const res = await api.money.transactions[":id"]["transfer-matches"].$get({
+        param: { id: String(id ?? 0) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled: id !== null,
   });
 }
