@@ -1,12 +1,18 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { conflict, notFound } from "../../server/errors";
-import type { BankImportResult, BankLayout, BankTransaction } from "../../shared/bankImport";
+import type {
+  BankImportResult,
+  BankLayout,
+  BankTransaction,
+  StatementBalance,
+} from "../../shared/bankImport";
 import { matchRule } from "../../shared/moneyRules";
 import { requireAccount } from "./money.service";
 import { rulesForBook } from "./rules.service";
 import {
   moneyAccounts,
+  moneyBalanceSnapshots,
   moneyCategories,
   moneyImportLayouts,
   moneyImports,
@@ -36,6 +42,7 @@ export type ImportInput = {
   fileName: string;
   transactions: BankTransaction[];
   layout?: BankLayout;
+  statementBalance?: StatementBalance | undefined;
 };
 
 /** Same day, same amount, and the same payee ignoring case and spacing. */
@@ -55,13 +62,18 @@ const tally = (keys: string[]) => {
   return counts;
 };
 
+/** The bank's id with the amount: some banks reuse ids, but not for the same amount. */
+const idKey = (externalId: string, amountCents: number) => `${externalId}|${amountCents}`;
+
 /**
  * Adds a file's transactions to an account, skipping ones already there. A
- * transaction with the bank's id is a duplicate when the account has that id, or
- * matches one entered without an id. Without an id, it's a duplicate when the
- * account has a match (same day, amount, and payee) not already claimed by another
- * row, so two identical coffees on one day both import once. A dry run says what
- * would happen and changes nothing.
+ * transaction with the bank's id is a duplicate when the account has one with that
+ * id and amount not already claimed by another row, or matches one entered without
+ * an id. Without an id, it's a duplicate when the account has a match (same day,
+ * amount, and payee) not already claimed. Either way, two identical rows in one file
+ * both import the first time and are both skipped the next. Some banks give
+ * different transactions the same id, so an id alone never makes a duplicate. A dry
+ * run says what would happen and changes nothing.
  */
 export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): BankImportResult {
   return db.transaction((tx) => {
@@ -85,15 +97,18 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         ),
       )
       .all();
-    const knownIds = new Set(
+    const knownIds = tally(
       tx
-        .select({ externalId: moneyTransactions.externalId })
+        .select({
+          externalId: moneyTransactions.externalId,
+          amountCents: moneyTransactions.amountCents,
+        })
         .from(moneyTransactions)
         .where(
           and(eq(moneyTransactions.accountId, account.id), isNotNull(moneyTransactions.externalId)),
         )
         .all()
-        .map((row) => row.externalId),
+        .map((row) => idKey(row.externalId ?? "", row.amountCents)),
     );
     const anyMatch = tally(nearby.map(matchKey));
     const matchWithoutId = tally(nearby.filter((row) => row.externalId === null).map(matchKey));
@@ -118,9 +133,9 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       const keys = [matchKey(row)];
       if (rule?.renameTo) keys.push(matchKey({ ...row, payee: rule.renameTo }));
       const duplicate = row.externalId
-        ? knownIds.has(row.externalId) || keys.some((key) => take(matchWithoutId, key))
+        ? take(knownIds, idKey(row.externalId, row.amountCents)) ||
+          keys.some((key) => take(matchWithoutId, key))
         : keys.some((key) => take(anyMatch, key));
-      if (row.externalId) knownIds.add(row.externalId);
       const categoryName = row.category?.trim() ?? "";
       const fileCategory = categoryName
         ? (categories.get(categoryName.toLowerCase()) ?? null)
@@ -153,6 +168,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       });
     });
 
+    const statement = input.statementBalance;
     const result: BankImportResult = {
       importId: null,
       created: toCreate.length,
@@ -160,6 +176,13 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       unknownCategories: [...unknownCategories.values()].sort(),
       categorizedByRules,
       rows,
+      balanceCheck: statement
+        ? {
+            date: statement.date,
+            bankCents: statement.balanceCents,
+            hubCents: balanceThrough(tx, account, statement.date, toCreate),
+          }
+        : null,
     };
     if (dryRun) return result;
 
@@ -192,6 +215,37 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     }
     return { ...result, importId: record.id };
   });
+}
+
+/**
+ * The account's balance at the end of a day, by the usual rule: the latest entered
+ * balance on or before it plus later transactions, or the opening balance plus
+ * transactions so far. `adding` counts rows about to be imported.
+ */
+function balanceThrough(
+  tx: Queryable,
+  account: { id: number; openingBalanceCents: number },
+  date: string,
+  adding: ReadonlyArray<{ date: string; amountCents: number }>,
+): number {
+  const snapshot = tx
+    .select({ date: moneyBalanceSnapshots.date, balanceCents: moneyBalanceSnapshots.balanceCents })
+    .from(moneyBalanceSnapshots)
+    .where(
+      and(eq(moneyBalanceSnapshots.accountId, account.id), lte(moneyBalanceSnapshots.date, date)),
+    )
+    .orderBy(desc(moneyBalanceSnapshots.date))
+    .get();
+  const counts = (day: string) => day <= date && (!snapshot || day > snapshot.date);
+  const stored = tx
+    .select({ date: moneyTransactions.date, amountCents: moneyTransactions.amountCents })
+    .from(moneyTransactions)
+    .where(and(eq(moneyTransactions.accountId, account.id), lte(moneyTransactions.date, date)))
+    .all();
+  const sum = [...stored, ...adding]
+    .filter((row) => counts(row.date))
+    .reduce((total, row) => total + row.amountCents, 0);
+  return (snapshot ? snapshot.balanceCents : account.openingBalanceCents) + sum;
 }
 
 function importsJson(db: Queryable, rows: ImportRow[]): ImportJson[] {
