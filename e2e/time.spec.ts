@@ -9,6 +9,18 @@ function trackErrors(page: Page): string[] {
   return errors;
 }
 
+/** Whether a time falls in an earlier week than now, as the Time page counts weeks. */
+function inLastWeek(page: Page, time: number): Promise<boolean> {
+  return page.evaluate((at) => {
+    const monday = (date: Date) => {
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+      return start.getTime();
+    };
+    return monday(new Date(at)) < monday(new Date());
+  }, time);
+}
+
 test("time can be tracked with the timer and added by hand", async ({ page }, testInfo) => {
   // One timer is shared by every test; start from a stopped one.
   await page.request.post("/api/time/timer/stop");
@@ -35,12 +47,17 @@ test("time can be tracked with the timer and added by hand", async ({ page }, te
   await expect(timed).toContainText("1 min");
 
   // Adding time by hand; the form starts as the last 30 minutes.
+  const openedAt = Date.now();
   await entries.getByRole("button", { name: "Add time" }).click();
   const add = page.getByRole("dialog", { name: "Add time" });
-  await expect(add.getByText("30 min.")).toBeVisible();
+  // Just after midnight it adds ", ending the next day".
+  await expect(add.getByText(/^30 min[.,]/)).toBeVisible();
   await add.getByLabel("Note").fill("Flashcards");
   await add.getByRole("button", { name: "Add time" }).click();
   await expect(add).toBeHidden();
+  // Just after midnight on a Monday, those 30 minutes started last week.
+  const movedBack = await inLastWeek(page, openedAt - 30 * 60_000);
+  if (movedBack) await page.getByRole("button", { name: "Previous week" }).click();
   const manual = entries.getByRole("button", { name: /^Flashcards/ }).first();
   await expect(manual).toContainText("30 min");
 
@@ -53,6 +70,8 @@ test("time can be tracked with the timer and added by hand", async ({ page }, te
   await expect(
     entries.getByRole("button", { name: /^Flashcards, round two/ }).first(),
   ).toBeVisible();
+
+  if (movedBack) await page.getByRole("button", { name: "Next week" }).click();
 
   // The week chart's summary and the page width on phones
   await expect(page.getByRole("figure")).toContainText("this week, most on");
@@ -89,6 +108,10 @@ test.describe("on a wide screen", () => {
     expect(created.status()).toBe(201);
 
     await page.goto("/time");
+    // Early in the week, a day and a bit ago is last week: go there first.
+    if (await inLastWeek(page, now - 26 * 3_600_000)) {
+      await page.getByRole("button", { name: "Previous week" }).click();
+    }
     await page
       .getByRole("button", { name: new RegExp(note) })
       .first()

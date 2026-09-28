@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { businessRoutes } from "../modules/business/business.routes";
 import { activityRoutes } from "../modules/core/activity.routes";
 import { linkRoutes } from "../modules/core/links.routes";
 import { settingsRoutes } from "../modules/core/settings.routes";
@@ -33,7 +34,8 @@ export function createApi(deps: Deps) {
     .route("/goals", goalRoutes(deps))
     .route("/education", educationRoutes(deps))
     .route("/resale", resaleRoutes(deps))
-    .route("/money", moneyRoutes(deps));
+    .route("/money", moneyRoutes(deps))
+    .route("/business", businessRoutes(deps));
 }
 
 export type Api = ReturnType<typeof createApi>;
