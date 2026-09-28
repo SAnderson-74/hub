@@ -4,7 +4,7 @@ import { secondaryButton } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import type { EntityRef } from "../../../shared/entities";
 import { formatMinutes } from "../../../shared/time";
-import { useEntries, useStartTimer, useStopTimer, useTimer } from "../queries";
+import { useEntries, useStartTimer, useStopTimer, useTimers } from "../queries";
 import { entryMinutes } from "../week";
 
 /** Time logged on one task, item, or other subject, with a button to time it now. For sheets. */
@@ -12,11 +12,13 @@ export function SubjectTime({ subject }: { subject: EntityRef }) {
   const headingId = useId();
   const now = useNow(30_000);
   const entries = useEntries({ subject });
-  const timer = useTimer();
+  const timers = useTimers();
   const start = useStartTimer();
   const stop = useStopTimer();
-  const timingThis =
-    timer.data?.subject?.type === subject.type && timer.data.subject.id === subject.id;
+  const running = timers.data?.find(
+    (timer) => timer.subject?.type === subject.type && timer.subject.id === subject.id,
+  );
+  const timingThis = running !== undefined;
   const total = (entries.data ?? []).reduce((sum, entry) => sum + entryMinutes(entry, now), 0);
   const error = start.error ?? stop.error;
 
@@ -40,7 +42,7 @@ export function SubjectTime({ subject }: { subject: EntityRef }) {
             type="button"
             className={secondaryButton}
             disabled={stop.isPending}
-            onClick={() => stop.mutate(undefined)}
+            onClick={() => running && stop.mutate(running.id)}
           >
             <Square aria-hidden="true" className="size-4" fill="currentColor" />
             Stop timer
@@ -49,7 +51,7 @@ export function SubjectTime({ subject }: { subject: EntityRef }) {
           <button
             type="button"
             className={secondaryButton}
-            disabled={start.isPending || timer.isPending}
+            disabled={start.isPending || timers.isPending}
             onClick={() => start.mutate({ subject })}
           >
             <Play aria-hidden="true" className="size-4" fill="currentColor" />
@@ -57,9 +59,6 @@ export function SubjectTime({ subject }: { subject: EntityRef }) {
           </button>
         )}
       </div>
-      {!timingThis && timer.data ? (
-        <p className="mt-2 text-sm text-muted">Starting this stops the timer that's running now.</p>
-      ) : null}
       {error ? (
         <p role="alert" className="mt-2 text-sm text-danger">
           {error.message}

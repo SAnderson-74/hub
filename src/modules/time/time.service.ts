@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, isNull, lt, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt, type SQL } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
-import { badRequest, notFound } from "../../server/errors";
+import { badRequest, conflict, notFound } from "../../server/errors";
 import type { EntityRef, EntityType } from "../../shared/entities";
 import { MAX_ENTRY_MINUTES } from "../../shared/time";
 import { entityLabels, requireEntity } from "../core/entities";
@@ -101,13 +101,24 @@ export function listEntries(
   return toJson(db, rows);
 }
 
-function runningRow(db: Queryable): EntryRow | undefined {
-  return db.select().from(timeEntries).where(isNull(timeEntries.endedAt)).get();
+/** Running timers, oldest first. */
+function runningRows(db: Queryable): EntryRow[] {
+  return db
+    .select()
+    .from(timeEntries)
+    .where(isNull(timeEntries.endedAt))
+    .orderBy(asc(timeEntries.startedAt), asc(timeEntries.id))
+    .all();
 }
 
-/** The running timer, or null. */
+/** Every running timer, oldest first. */
+export function listTimers(db: Queryable): TimeEntryJson[] {
+  return toJson(db, runningRows(db));
+}
+
+/** The most recently started timer, or null. For clients from before several could run. */
 export function getTimer(db: Queryable): TimeEntryJson | null {
-  const row = runningRow(db);
+  const row = runningRows(db).at(-1);
   return row ? one(db, row) : null;
 }
 
@@ -123,16 +134,28 @@ function finish(db: Queryable, row: EntryRow, now: Date): EntryRow {
     .get();
 }
 
-/** Starts a timer now. A timer that is already running is stopped first. */
+/**
+ * Starts a timer now, alongside any already running. A subject that's already being
+ * timed keeps its timer instead of getting a second one. `stopOthers` stops the rest
+ * first, as when only one timer could run.
+ */
 export function startTimer(
   db: Db,
-  input: { note?: string; subject?: EntityRef | null },
+  input: { note?: string; subject?: EntityRef | null; stopOthers?: boolean },
   now: Date,
-): { timer: TimeEntryJson; stopped: TimeEntryJson | null } {
+): { timer: TimeEntryJson; stopped: TimeEntryJson[] } {
   return db.transaction((tx) => {
     const subject = subjectColumns(tx, input.subject);
-    const running = runningRow(tx);
-    const stopped = running ? finish(tx, running, now) : null;
+    const running = runningRows(tx);
+    const same =
+      subject.subjectType === null
+        ? undefined
+        : running.find(
+            (row) => row.subjectType === subject.subjectType && row.subjectId === subject.subjectId,
+          );
+    const stopping = input.stopOthers ? running.filter((row) => row !== same) : [];
+    const stopped = stopping.map((row) => one(tx, finish(tx, row, now)));
+    if (same) return { timer: one(tx, same), stopped };
     const row = tx
       .insert(timeEntries)
       .values({
@@ -144,15 +167,25 @@ export function startTimer(
       })
       .returning()
       .get();
-    return { timer: one(tx, row), stopped: stopped ? one(tx, stopped) : null };
+    return { timer: one(tx, row), stopped };
   });
 }
 
-export function stopTimer(db: Db, now: Date): TimeEntryJson {
+/** Stops every running timer. */
+export function stopTimers(db: Db, now: Date): TimeEntryJson[] {
   return db.transaction((tx) => {
-    const running = runningRow(tx);
-    if (!running) throw notFound("No timer is running. Start one first.");
-    return one(tx, finish(tx, running, now));
+    const running = runningRows(tx);
+    if (running.length === 0) throw notFound("No timer is running. Start one first.");
+    return running.map((row) => one(tx, finish(tx, row, now)));
+  });
+}
+
+/** Stops one running timer. */
+export function stopTimer(db: Db, id: number, now: Date): TimeEntryJson {
+  return db.transaction((tx) => {
+    const row = requireEntry(tx, id);
+    if (row.endedAt !== null) throw conflict("That timer has already stopped.");
+    return one(tx, finish(tx, row, now));
   });
 }
 

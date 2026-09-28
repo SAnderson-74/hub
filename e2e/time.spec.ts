@@ -32,13 +32,21 @@ test("time can be tracked with the timer and added by hand", async ({ page }, te
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Time" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Time" })).toBeVisible();
 
-  // Timer
-  const timer = page.getByRole("region", { name: "Timer" });
+  // Timers: two run at once, and each stops on its own.
+  const timer = page.getByRole("region", { name: "Timers" });
   await timer.getByLabel("What are you working on?").fill("Focus session");
   await timer.getByLabel("For").selectOption({ label: title });
   await timer.getByRole("button", { name: "Start timer" }).click();
   await expect(timer.getByText(title)).toBeVisible();
-  await timer.getByRole("button", { name: "Stop timer" }).click();
+  await timer.getByRole("button", { name: "Start another timer" }).click();
+  const other = `Laundry ${testInfo.project.name}`;
+  await timer.getByLabel("What are you working on?").fill(other);
+  await timer.getByRole("button", { name: "Start another timer" }).click();
+  await expect(timer).toContainText("2 running.");
+  await timer.getByRole("button", { name: `Stop timer: ${title}` }).click();
+  await expect(timer.getByText(title)).toBeHidden();
+  await expect(timer.getByText(other)).toBeVisible();
+  await timer.getByRole("button", { name: `Stop timer: ${other}` }).click();
   await expect(timer.getByRole("button", { name: "Start timer" })).toBeVisible();
 
   const entries = page.getByRole("region", { name: "Entries" });

@@ -14,39 +14,50 @@ import {
   deleteEntry,
   getTimer,
   listEntries,
+  listTimers,
   startTimer,
   stopTimer,
+  stopTimers,
   updateEntry,
 } from "./time.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric time entry id."));
 
-/** Time entries and the one running timer. */
+/** Time entries and running timers. Several can run at once. */
 export function timeRoutes({ db }: Deps) {
-  return new Hono<AppEnv>()
-    .get("/timer", (c) => c.json({ timer: getTimer(db) }))
-    .post("/timer", zValidator("json", timerStartSchema, invalid("That timer isn't valid.")), (c) =>
-      c.json(startTimer(db, c.req.valid("json"), new Date()), 201),
-    )
-    .post("/timer/stop", (c) => c.json(stopTimer(db, new Date())))
-    .get(
-      "/entries",
-      zValidator("query", timeEntryListQuerySchema, invalid("Those filters aren't valid.")),
-      (c) => c.json(listEntries(db, c.req.valid("query"))),
-    )
-    .post(
-      "/entries",
-      zValidator("json", timeEntryCreateSchema, invalid("That time entry isn't valid.")),
-      (c) => c.json(createEntry(db, c.req.valid("json"), new Date()), 201),
-    )
-    .patch(
-      "/entries/:id",
-      idParam,
-      zValidator("json", timeEntryUpdateSchema, invalid("Those changes aren't valid.")),
-      (c) => c.json(updateEntry(db, c.req.valid("param").id, c.req.valid("json"), new Date())),
-    )
-    .delete("/entries/:id", idParam, (c) => {
-      deleteEntry(db, c.req.valid("param").id);
-      return c.body(null, 204);
-    });
+  return (
+    new Hono<AppEnv>()
+      .get("/timers", (c) => c.json({ timers: listTimers(db) }))
+      // The latest timer alone, for Shortcuts made when only one could run.
+      .get("/timer", (c) => c.json({ timer: getTimer(db) }))
+      .post(
+        "/timer",
+        zValidator("json", timerStartSchema, invalid("That timer isn't valid.")),
+        (c) => c.json(startTimer(db, c.req.valid("json"), new Date()), 201),
+      )
+      .post("/timer/stop", (c) => c.json({ stopped: stopTimers(db, new Date()) }))
+      .post("/entries/:id/stop", idParam, (c) =>
+        c.json(stopTimer(db, c.req.valid("param").id, new Date())),
+      )
+      .get(
+        "/entries",
+        zValidator("query", timeEntryListQuerySchema, invalid("Those filters aren't valid.")),
+        (c) => c.json(listEntries(db, c.req.valid("query"))),
+      )
+      .post(
+        "/entries",
+        zValidator("json", timeEntryCreateSchema, invalid("That time entry isn't valid.")),
+        (c) => c.json(createEntry(db, c.req.valid("json"), new Date()), 201),
+      )
+      .patch(
+        "/entries/:id",
+        idParam,
+        zValidator("json", timeEntryUpdateSchema, invalid("Those changes aren't valid.")),
+        (c) => c.json(updateEntry(db, c.req.valid("param").id, c.req.valid("json"), new Date())),
+      )
+      .delete("/entries/:id", idParam, (c) => {
+        deleteEntry(db, c.req.valid("param").id);
+        return c.body(null, 204);
+      })
+  );
 }

@@ -3,7 +3,7 @@ import { ENTITY_TYPES } from "../../shared/entities";
 
 /**
  * Time spent, optionally on something (a task, a project, and later courses and
- * resale items). An entry without an end is the running timer; there is at most one.
+ * resale items). An entry without an end is a running timer; several can run at once.
  * The subject is kept after that entity is deleted, so logged time isn't lost.
  */
 export const timeEntries = sqliteTable(
