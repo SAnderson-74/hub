@@ -57,7 +57,7 @@ Other Docker hosts work the same way: the compose file is standard, minus the Tr
 
 ## 4. Backups
 
-The app writes `data/backups/nightly-YYYY-MM-DD.sqlite3` after the configured hour (default 3 AM, kept 14 days) and a `pre-migrate-*.sqlite3` copy before every schema change (newest 10 kept).
+The app writes `data/backups/nightly-YYYY-MM-DD.sqlite3` after the configured hour (default 3 AM, kept 14 days), a `pre-migrate-*.sqlite3` copy before every schema change (newest 10 kept), and a `pre-restore-*.sqlite3` copy before every restore (newest 10 kept).
 
 1. **Snapshots:** Data Protection > Periodic Snapshot Tasks: the `apps/hub` dataset, hourly, keep 2 weeks.
 2. **Offsite (Backblaze B2):**
@@ -66,7 +66,13 @@ The app writes `data/backups/nightly-YYYY-MM-DD.sqlite3` after the configured ho
    - TrueNAS: Credentials > Backup Credentials > Cloud Credentials > Add, provider Backblaze B2, with that key.
    - Data Protection > Cloud Sync Tasks > Add: direction **Push**, transfer mode **Sync**, source `/mnt/<POOL>/apps/hub/data/backups` (never the live `hub.db`), daily at 04:30, **Remote Encryption** on.
    - Store the encryption password and salt in your password manager. Without them the offsite copies can't be read.
-3. **Restore drill** (do it once so you know it works):
+3. **Restoring:** Settings > Backups lists the backups. Choose **Restore** on one, or **Choose backup file** for a copy from elsewhere (like one downloaded from B2 and decrypted). Hub checks that the file is a readable Hub database, saves the current data as a `pre-restore-*` backup, and restarts. At startup it puts the backup in place and applies any newer migrations, and the page reloads when Hub is back. To undo a restore, restore the newest **Before a restore** backup.
+
+   Do a restore drill once so you know it works: download a backup, restore it, then restore **Before a restore** to go back.
+
+   To undo a bad migration, run the **Roll back** workflow to the build from before it first, then restore the matching **Before an update** (`pre-migrate-*`) backup. Otherwise the newer build applies the migration again at startup.
+
+   If Hub won't start at all, restore by hand:
    ```bash
    # Stop the app in the TrueNAS UI first.
    cd /mnt/<POOL>/apps/hub/data
@@ -74,7 +80,6 @@ The app writes `data/backups/nightly-YYYY-MM-DD.sqlite3` after the configured ho
    cp backups/<BACKUP_FILE>.sqlite3 hub.db && chown 568:568 hub.db
    # Start the app again.
    ```
-   If you restore a `pre-migrate-*` file, also run the **Roll back** workflow to the build that was running before that migration.
 
 ### Encrypting an existing dataset
 

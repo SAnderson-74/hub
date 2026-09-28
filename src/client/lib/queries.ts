@@ -38,3 +38,32 @@ export function useSaveSettings() {
     },
   });
 }
+
+export function useBackups() {
+  return useQuery({
+    queryKey: ["backups"],
+    queryFn: async () => {
+      const res = await api.backups.$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+/** Restores a listed backup (by name) or a chosen file. Hub restarts afterwards. */
+export function useRestoreBackup() {
+  return useMutation({
+    mutationFn: async (from: { name: string } | { file: File }) => {
+      const res =
+        "name" in from
+          ? await api.backups[":name"].restore.$post({ param: { name: from.name } })
+          : await fetch("/api/backups/upload", {
+              method: "POST",
+              headers: { "Content-Type": "application/octet-stream" },
+              body: from.file,
+            });
+      if (!res.ok) throw await toApiError(res);
+      return (await res.json()) as { message: string };
+    },
+  });
+}

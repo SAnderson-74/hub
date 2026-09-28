@@ -39,7 +39,7 @@ async function setup() {
     sqlite.close();
     rmSync(dataDir, { recursive: true, force: true });
   });
-  return createApp({ config, db, sqlite, startedAt: new Date() });
+  return createApp({ config, db, sqlite, startedAt: new Date(), restart: () => {} });
 }
 
 const owner = {

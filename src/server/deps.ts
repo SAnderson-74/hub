@@ -7,4 +7,6 @@ export type Deps = {
   db: Db;
   sqlite: Sqlite;
   startedAt: Date;
+  /** Stops the server so its container starts it again, like after a restore. */
+  restart: () => void;
 };

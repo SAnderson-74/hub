@@ -13,6 +13,7 @@ import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../.
 import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
 import { streakKey } from "../../education/queries";
 import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
+import { BackupsPanel } from "../components/BackupsPanel";
 
 function normalizeHex(value: string): string {
   const trimmed = value.trim().toLowerCase();
@@ -278,7 +279,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Appearance, study streak, Home Assistant, and details about this installation."
+        subtitle="Appearance, study streak, Home Assistant, backups, and details about this installation."
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
@@ -321,6 +322,14 @@ export function SettingsPage() {
           ) : (
             <LoadingRows rows={3} />
           )}
+        </Panel>
+
+        <Panel
+          title="Backups"
+          description="Hub saves a copy of everything each night and before updates. Restore one to go back to it."
+          className="lg:col-span-7 lg:row-start-4"
+        >
+          <BackupsPanel startedAt={info?.startedAt ?? null} />
         </Panel>
 
         <Panel title="About" className="lg:col-span-5 lg:col-start-8 lg:row-start-1">

@@ -5,7 +5,18 @@ import type { Sqlite } from "./client";
 
 const NIGHTLY = /^nightly-(\d{4}-\d{2}-\d{2})\.sqlite3$/;
 const PRE_MIGRATE = /^pre-migrate-\d{8}T\d{6}Z\.sqlite3$/;
+const PRE_RESTORE = /^pre-restore-\d{8}T\d{6}Z\.sqlite3$/;
 const KEEP_PRE_MIGRATE = 10;
+
+/** Why a backup was taken, from its name. */
+export type BackupKind = "nightly" | "pre-migrate" | "pre-restore";
+
+export function backupKind(name: string): BackupKind | null {
+  if (NIGHTLY.test(name)) return "nightly";
+  if (PRE_MIGRATE.test(name)) return "pre-migrate";
+  if (PRE_RESTORE.test(name)) return "pre-restore";
+  return null;
+}
 
 export type BackupInfo = { name: string; sizeBytes: number; createdAt: Date };
 
@@ -45,6 +56,11 @@ export function preMigrateBackupName(now = new Date()): string {
   return `pre-migrate-${utcStamp(now)}.sqlite3`;
 }
 
+/** The data as it was just before a restore replaced it. */
+export function preRestoreBackupName(now = new Date()): string {
+  return `pre-restore-${utcStamp(now)}.sqlite3`;
+}
+
 export function nightlyBackupName(localDate: string): string {
   return `nightly-${localDate}.sqlite3`;
 }
@@ -57,7 +73,7 @@ export function listBackups(dir: string): BackupInfo[] {
     return [];
   }
   return names
-    .filter((name) => NIGHTLY.test(name) || PRE_MIGRATE.test(name))
+    .filter((name) => backupKind(name) !== null)
     .map((name) => {
       const stat = statSync(join(dir, name));
       return { name, sizeBytes: stat.size, createdAt: stat.mtime };
@@ -65,7 +81,10 @@ export function listBackups(dir: string): BackupInfo[] {
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
-/** Deletes nightly backups older than `keepDays` and all but the newest pre-migration backups. */
+/**
+ * Deletes nightly backups older than `keepDays`, and all but the newest ten taken
+ * before migrations and before restores.
+ */
 export function pruneBackups(dir: string, keepDays: number, today: string): string[] {
   const cutoff = new Date(`${today}T00:00:00Z`);
   cutoff.setUTCDate(cutoff.getUTCDate() - keepDays);
@@ -78,10 +97,12 @@ export function pruneBackups(dir: string, keepDays: number, today: string): stri
       removed.push(backup.name);
     }
   }
-  const preMigrate = backups.filter((b) => PRE_MIGRATE.test(b.name));
-  for (const backup of preMigrate.slice(KEEP_PRE_MIGRATE)) {
-    rmSync(join(dir, backup.name), { force: true });
-    removed.push(backup.name);
+  for (const pattern of [PRE_MIGRATE, PRE_RESTORE]) {
+    const older = backups.filter((b) => pattern.test(b.name)).slice(KEEP_PRE_MIGRATE);
+    for (const backup of older) {
+      rmSync(join(dir, backup.name), { force: true });
+      removed.push(backup.name);
+    }
   }
   return removed;
 }
