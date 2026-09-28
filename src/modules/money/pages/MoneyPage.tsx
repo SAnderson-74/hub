@@ -47,9 +47,9 @@ import {
   useTransactions,
   useTransferSuggestions,
 } from "../queries";
+import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
-const BOOK_KEY = "hub.money.book";
 const VIEW_KEY = "hub.money.view";
 type View = "transactions" | "budget" | "net-worth";
 const VIEWS: readonly View[] = ["transactions", "budget", "net-worth"];
@@ -63,14 +63,6 @@ function storedView(): View {
   }
 }
 const PAGE_SIZE = 100;
-
-function storedBookId(): number | null {
-  try {
-    return Number(localStorage.getItem(BOOK_KEY)) || null;
-  } catch {
-    return null;
-  }
-}
 
 export function MoneyPage() {
   const books = useBooks();
