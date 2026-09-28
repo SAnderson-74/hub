@@ -2,6 +2,7 @@ import { z } from "zod";
 import { businessRateSchema, defaultBusinessRate } from "./businessRate";
 import { HEX_COLOR } from "./color";
 import { defaultHomeAssistant, homeAssistantSchema } from "./homeAssistant";
+import { defaultReminders, remindersSchema } from "./reminders";
 
 export type AccentPreset = { name: string; hex: string };
 
@@ -35,6 +36,8 @@ export const settingsSchema = z.object({
   businessRate: businessRateSchema,
   /** Home Assistant webhooks for the summary and reminders. */
   homeAssistant: homeAssistantSchema,
+  /** Which reminders go to Home Assistant, and when. */
+  reminders: remindersSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -47,4 +50,5 @@ export const defaultSettings: Settings = {
   studyMinimumMinutes: 30,
   businessRate: defaultBusinessRate,
   homeAssistant: defaultHomeAssistant,
+  reminders: defaultReminders,
 };

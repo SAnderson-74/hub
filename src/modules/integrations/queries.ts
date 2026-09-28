@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import type { ReminderKind } from "../../shared/reminders";
 
 const key = ["integrations", "home-assistant"] as const;
 
@@ -46,4 +47,34 @@ export function useSendSummary() {
 
 export function useSendTestReminder() {
   return useSend(() => api.integrations["home-assistant"].reminder.test.$post());
+}
+
+const remindersKey = ["integrations", "reminders"] as const;
+
+/** What each reminder would say now, and the latest sent. */
+export function useReminders() {
+  return useQuery({
+    queryKey: remindersKey,
+    queryFn: async () => {
+      const res = await api.integrations.reminders.$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+/** Sends one reminder now; it counts as today's. */
+export function useSendReminderNow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (kind: ReminderKind) => {
+      const res = await api.integrations.reminders[":kind"].send.$post({ param: { kind } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: remindersKey });
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
 }

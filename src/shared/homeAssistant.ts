@@ -37,5 +37,12 @@ export const defaultHomeAssistant: HomeAssistantSettings = {
   summaryMinutes: 15,
 };
 
-/** What a reminder carries. Home Assistant decides how to show it. */
-export type Reminder = { title: string; message: string };
+/**
+ * What a reminder carries. Home Assistant decides how to show it; `kind` lets an
+ * automation treat them differently (digest, due_soon, streak, or test).
+ */
+export type Reminder = {
+  title: string;
+  message: string;
+  kind?: "digest" | "due_soon" | "streak" | "test";
+};
