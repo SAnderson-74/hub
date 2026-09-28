@@ -11,7 +11,10 @@ export const RULE_DIRECTION_LABELS: Record<RuleDirection, string> = {
 };
 
 export type RuleLike = {
-  /** Matched anywhere in the payee, ignoring case. */
+  /**
+   * Matched anywhere in the payee (or the person a payment-app transaction was with),
+   * ignoring case, and also ignoring punctuation: "trader joes" fits "TRADER JOE'S".
+   */
   contains: string;
   direction: RuleDirection;
   categoryId: number;
@@ -19,15 +22,28 @@ export type RuleLike = {
   renameTo: string;
 };
 
+/** Lowercase letters, digits, and single spaces: "SQ *Joe's" is "sq joes". */
+const loose = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/'/g, "")
+    .replace(/[^a-z0-9&]+/g, " ")
+    .trim();
+
 /** The first rule (in order) that fits a transaction, or null. */
 export function matchRule<R extends RuleLike>(
   rules: readonly R[],
-  transaction: { payee: string; amountCents: number },
+  transaction: { payee: string; amountCents: number; counterparty?: string | null },
 ): R | null {
-  const payee = transaction.payee.toLowerCase();
+  const text = [transaction.payee, transaction.counterparty ?? ""].join(" ").toLowerCase();
+  const looseText = ` ${loose(text)} `;
   for (const rule of rules) {
     const needle = rule.contains.trim().toLowerCase();
-    if (needle === "" || !payee.includes(needle)) continue;
+    if (needle === "") continue;
+    const looseNeedle = loose(needle);
+    if (!text.includes(needle) && (looseNeedle === "" || !looseText.includes(looseNeedle))) {
+      continue;
+    }
     if (rule.direction === "out" && transaction.amountCents >= 0) continue;
     if (rule.direction === "in" && transaction.amountCents <= 0) continue;
     return rule;

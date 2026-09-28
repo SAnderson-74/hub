@@ -127,6 +127,13 @@
       "when": 1790552959379,
       "tag": "0017_business_prep",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1790631768587,
+      "tag": "0018_transaction_bank_payee_and_counterparty",
+      "breakpoints": true
     }
   ]
 }

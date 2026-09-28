@@ -53,25 +53,30 @@ function checkCategoryInBook(db: Queryable, bookId: number, categoryId: number) 
 
 export function createRule(db: Db, input: RuleCreate): RuleJson[] {
   return db.transaction((tx) => {
-    requireBook(tx, input.bookId, "body");
-    checkCategoryInBook(tx, input.bookId, input.categoryId);
-    const last = tx
-      .select({ last: sql<number | null>`max(${moneyRules.sortOrder})` })
-      .from(moneyRules)
-      .where(eq(moneyRules.bookId, input.bookId))
-      .get();
-    tx.insert(moneyRules)
-      .values({
-        bookId: input.bookId,
-        contains: input.contains,
-        direction: input.direction ?? "any",
-        categoryId: input.categoryId,
-        renameTo: input.renameTo ?? "",
-        sortOrder: (last?.last ?? 0) + 1,
-      })
-      .run();
+    insertRule(tx, input);
     return listRules(tx, input.bookId);
   });
+}
+
+/** Adds a rule after the book's others, inside a transaction the caller runs. */
+export function insertRule(tx: Queryable, input: RuleCreate) {
+  requireBook(tx, input.bookId, "body");
+  checkCategoryInBook(tx, input.bookId, input.categoryId);
+  const last = tx
+    .select({ last: sql<number | null>`max(${moneyRules.sortOrder})` })
+    .from(moneyRules)
+    .where(eq(moneyRules.bookId, input.bookId))
+    .get();
+  tx.insert(moneyRules)
+    .values({
+      bookId: input.bookId,
+      contains: input.contains,
+      direction: input.direction ?? "any",
+      categoryId: input.categoryId,
+      renameTo: input.renameTo ?? "",
+      sortOrder: (last?.last ?? 0) + 1,
+    })
+    .run();
 }
 
 export function updateRule(db: Db, id: number, patch: RuleUpdate): RuleJson[] {
@@ -163,6 +168,8 @@ export function applyRules(db: Db, bookId: number): { categorized: number } {
         .set({
           categoryId: rule.categoryId,
           payee: rule.renameTo || row.payee,
+          // Keep what the bank wrote, so a later import still recognizes it.
+          bankPayee: row.bankPayee ?? (rule.renameTo ? row.payee : null),
           updatedAt: now,
         })
         .where(eq(moneyTransactions.id, row.id))

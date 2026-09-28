@@ -8,6 +8,7 @@ import type {
   StatementBalance,
 } from "../../shared/bankImport";
 import { matchRule } from "../../shared/moneyRules";
+import { findPerson, memoWithPerson } from "../../shared/payees";
 import { requireAccount } from "./money.service";
 import { rulesForBook } from "./rules.service";
 import {
@@ -86,6 +87,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         date: moneyTransactions.date,
         amountCents: moneyTransactions.amountCents,
         payee: moneyTransactions.payee,
+        bankPayee: moneyTransactions.bankPayee,
         externalId: moneyTransactions.externalId,
       })
       .from(moneyTransactions)
@@ -110,8 +112,12 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         .all()
         .map((row) => idKey(row.externalId ?? "", row.amountCents)),
     );
-    const anyMatch = tally(nearby.map(matchKey));
-    const matchWithoutId = tally(nearby.filter((row) => row.externalId === null).map(matchKey));
+    // A stored transaction matches by the bank's own payee when it has one, so renaming
+    // it since doesn't make the same row import again.
+    const storedKey = (row: (typeof nearby)[number]) =>
+      matchKey({ ...row, payee: row.bankPayee ?? row.payee });
+    const anyMatch = tally(nearby.map(storedKey));
+    const matchWithoutId = tally(nearby.filter((row) => row.externalId === null).map(storedKey));
 
     const categories = new Map(
       tx
@@ -128,7 +134,9 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     const rows: BankImportResult["rows"] = [];
     const toCreate: Array<typeof moneyTransactions.$inferInsert> = [];
     input.transactions.forEach((row, index) => {
-      const rule = matchRule(rules, row);
+      // Payment apps: who it was with goes in the memo, and rules can look for them.
+      const person = findPerson(row.payee, row.memo, row.amountCents);
+      const rule = matchRule(rules, { ...row, counterparty: person?.name ?? null });
       // An earlier import may have stored the rule's cleaner payee, so match either.
       const keys = [matchKey(row)];
       if (rule?.renameTo) keys.push(matchKey({ ...row, payee: rule.renameTo }));
@@ -162,9 +170,11 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         date: row.date,
         amountCents: row.amountCents,
         payee,
-        memo: row.memo,
+        memo: person ? memoWithPerson(row.memo, person) : row.memo,
         categoryId,
         externalId: row.externalId ?? null,
+        bankPayee: row.payee.trim(),
+        counterparty: person?.name ?? null,
       });
     });
 

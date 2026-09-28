@@ -34,6 +34,25 @@ describe("matchRule", () => {
 
   it("ignores rules with no text", () => {
     expect(matchRule([rule("  ", 1)], { payee: "Anything", amountCents: -1 })).toBeNull();
+    expect(matchRule([rule("*", 1)], { payee: "SQ *Shop", amountCents: -1 })?.categoryId).toBe(1);
+    expect(matchRule([rule("#", 1)], { payee: "Shop", amountCents: -1 })).toBeNull();
+  });
+
+  it("ignores punctuation, and finds the person on a payment app", () => {
+    expect(
+      matchRule([rule("trader joes", 1)], { payee: "TRADER JOE'S #552", amountCents: -1 })
+        ?.categoryId,
+    ).toBe(1);
+    expect(
+      matchRule([rule("corner grocery", 1)], { payee: "SQ *CORNER-GROCERY", amountCents: -1 })
+        ?.categoryId,
+    ).toBe(1);
+    const rent = [rule("John Smith", 2, { direction: "out" })];
+    expect(
+      matchRule(rent, { payee: "VENMO", amountCents: -80_000, counterparty: "John Smith" })
+        ?.categoryId,
+    ).toBe(2);
+    expect(matchRule(rent, { payee: "VENMO", amountCents: -80_000 })).toBeNull();
   });
 });
 

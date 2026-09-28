@@ -5,6 +5,7 @@ import {
   List,
   PiggyBank,
   Plus,
+  Sparkles,
   Tags,
   TrendingUp,
   WalletCards,
@@ -32,6 +33,7 @@ import { CategoriesSheet } from "../components/CategoriesSheet";
 import { ImportSheet } from "../components/ImportSheet";
 import { NetWorthView } from "../components/NetWorthView";
 import { RulesSheet } from "../components/RulesSheet";
+import { SortSheet } from "../components/SortSheet";
 import { TransactionSheet, type TransactionTarget } from "../components/TransactionSheet";
 import { TransfersSheet } from "../components/TransfersSheet";
 import {
@@ -43,6 +45,7 @@ import {
   useAccounts,
   useBooks,
   useCategories,
+  useCategorize,
   useRules,
   useTransactions,
   useTransferSuggestions,
@@ -147,6 +150,8 @@ function BookView({
   const [reviewingTransfers, setReviewingTransfers] = useState(false);
   const rules = useRules(book.id);
   const suggestions = useTransferSuggestions(book.id);
+  const sorting = useCategorize(book.id);
+  const [sortingOpen, setSortingOpen] = useState(false);
   const [accountFilter, setAccountFilter] = useState<number | undefined>(undefined);
   const [view, setView] = useState<View>(storedView);
   const chooseView = (next: View) => {
@@ -299,6 +304,8 @@ function BookView({
             onAdd={() => setTransactionTarget("new")}
             possibleTransfers={suggestions.data?.length ?? 0}
             onReviewTransfers={() => setReviewingTransfers(true)}
+            toSort={sorting.data ?? null}
+            onSort={() => setSortingOpen(true)}
           />
         </div>
       )}
@@ -323,6 +330,13 @@ function BookView({
         categories={categories.data ?? []}
         open={managingRules}
         onClose={() => setManagingRules(false)}
+      />
+      <SortSheet
+        book={book}
+        categories={categories.data ?? []}
+        today={today}
+        open={sortingOpen}
+        onClose={() => setSortingOpen(false)}
       />
       <TransfersSheet
         book={book}
@@ -429,6 +443,25 @@ function useDebounced<T>(value: T, ms = 250): T {
   return settled;
 }
 
+/** "12 uncategorized transactions, 5 with a suggestion." */
+function sortLine(toSort: {
+  uncategorized: number;
+  peopleToFill: number;
+  groups: Array<{ suggestion: unknown }>;
+}): string {
+  const { uncategorized, peopleToFill, groups } = toSort;
+  if (uncategorized === 0) {
+    return peopleToFill === 1
+      ? "1 payment-app transaction doesn't have its person saved yet."
+      : `${peopleToFill} payment-app transactions don't have their person saved yet.`;
+  }
+  const suggested = groups.filter((group) => group.suggestion !== null).length;
+  const what = `${uncategorized} uncategorized ${uncategorized === 1 ? "transaction" : "transactions"}`;
+  return suggested > 0
+    ? `${what}, in ${groups.length} ${groups.length === 1 ? "group" : "groups"}. ${suggested} ${suggested === 1 ? "has" : "have"} a suggested category.`
+    : `${what}, in ${groups.length} ${groups.length === 1 ? "group" : "groups"}.`;
+}
+
 function TransactionsPanel({
   book,
   accounts,
@@ -440,6 +473,8 @@ function TransactionsPanel({
   onAdd,
   possibleTransfers,
   onReviewTransfers,
+  toSort,
+  onSort,
 }: {
   book: Book;
   accounts: Account[];
@@ -452,6 +487,13 @@ function TransactionsPanel({
   /** Pairs that look like transfers, waiting to be confirmed. */
   possibleTransfers: number;
   onReviewTransfers: () => void;
+  /** Uncategorized transactions, grouped, and payment-app names to fill in. */
+  toSort: {
+    uncategorized: number;
+    peopleToFill: number;
+    groups: Array<{ suggestion: unknown }>;
+  } | null;
+  onSort: () => void;
 }) {
   const [categoryFilter, setCategoryFilter] = useState<TransactionFilters["categoryId"]>(undefined);
   const [search, setSearch] = useState("");
@@ -562,6 +604,18 @@ function TransactionsPanel({
         </div>
       ) : null}
 
+      {toSort && (toSort.uncategorized > 0 || toSort.peopleToFill > 0) ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+          <p className="flex min-w-0 items-start gap-2 text-fg">
+            <Sparkles aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
+            {sortLine(toSort)}
+          </p>
+          <button type="button" className={secondaryButton} onClick={onSort}>
+            Sort transactions
+          </button>
+        </div>
+      ) : null}
+
       <div className="mt-5">
         {transactions.isPending ? (
           <LoadingRows rows={4} />
@@ -609,6 +663,9 @@ function TransactionsPanel({
                       <span className="block text-sm text-muted">
                         {[
                           formatShortDate(transaction.date, today),
+                          transaction.counterparty
+                            ? `${transaction.amountCents < 0 ? "To" : "From"} ${transaction.counterparty}`
+                            : "",
                           transaction.transfer
                             ? transferLabel(transaction)
                             : (transaction.category?.name ?? "Uncategorized"),
