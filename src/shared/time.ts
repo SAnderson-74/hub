@@ -28,7 +28,12 @@ export const timeEntryUpdateSchema = z
 export type TimeEntryUpdate = z.input<typeof timeEntryUpdateSchema>;
 
 export const timerStartSchema = z
-  .object({ note: note.optional(), subject: subject.optional() })
+  .object({
+    note: note.optional(),
+    subject: subject.optional(),
+    /** Stops the other running timers first, as when only one could run. */
+    stopOthers: z.boolean().optional(),
+  })
   .strict();
 export type TimerStart = z.input<typeof timerStartSchema>;
 

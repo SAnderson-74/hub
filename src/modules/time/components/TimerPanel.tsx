@@ -1,72 +1,143 @@
-import { Play, Square } from "lucide-react";
+import { Play, Plus, Square } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
-import { inputClass, labelClass, primaryButton } from "../../../client/components/ui";
+import {
+  ghostButton,
+  inputClass,
+  labelClass,
+  primaryButton,
+  secondaryButton,
+} from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
-import { useStartTimer, useStopTimer, useTimer } from "../queries";
+import {
+  type RunningTimer,
+  useStartTimer,
+  useStopAllTimers,
+  useStopTimer,
+  useTimers,
+} from "../queries";
 import { formatClock, formatElapsed } from "../week";
 import { parseSubject, SubjectSelect, subjectLabel } from "./SubjectSelect";
 
+/** Running timers, each with its own stop button, and a form to start another. */
 export function TimerPanel({ className = "" }: { className?: string }) {
-  const timer = useTimer();
-  const running = timer.data ?? null;
+  const timers = useTimers();
+  const running = timers.data ?? [];
+  const stopAll = useStopAllTimers();
+  const [adding, setAdding] = useState(false);
+  const showForm = running.length === 0 || adding;
+
   return (
     <Panel
-      title="Timer"
+      title="Timers"
       className={className}
       description={
-        running ? `Running since ${formatClock(new Date(running.startedAt))}.` : undefined
+        running.length === 0
+          ? undefined
+          : running.length === 1
+            ? "1 running."
+            : `${running.length} running. Each counts its own time.`
       }
     >
-      {timer.isPending ? (
+      {timers.isPending ? (
         <LoadingRows rows={1} />
-      ) : timer.isError ? (
-        <ErrorNote error={timer.error} onRetry={() => void timer.refetch()} />
-      ) : running ? (
-        <RunningTimer timer={running} />
+      ) : timers.isError ? (
+        <ErrorNote error={timers.error} onRetry={() => void timers.refetch()} />
       ) : (
-        <StartTimerForm />
+        <div className="space-y-5">
+          {running.length > 0 ? (
+            <ul className="space-y-3">
+              {running.map((timer) => (
+                <RunningTimerRow key={timer.id} timer={timer} />
+              ))}
+            </ul>
+          ) : null}
+          {showForm ? (
+            <StartTimerForm
+              another={running.length > 0}
+              onStarted={() => setAdding(false)}
+              onCancel={running.length > 0 ? () => setAdding(false) : undefined}
+            />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={secondaryButton} onClick={() => setAdding(true)}>
+                <Plus aria-hidden="true" className="size-4" />
+                Start another timer
+              </button>
+              {running.length > 1 ? (
+                <button
+                  type="button"
+                  className={ghostButton}
+                  disabled={stopAll.isPending}
+                  onClick={() => stopAll.mutate(undefined)}
+                >
+                  <Square aria-hidden="true" className="size-4" fill="currentColor" />
+                  Stop all
+                </button>
+              ) : null}
+            </div>
+          )}
+          {stopAll.isError ? (
+            <p role="alert" className="text-sm text-danger">
+              {stopAll.error.message}
+            </p>
+          ) : null}
+        </div>
       )}
     </Panel>
   );
 }
 
-function RunningTimer({ timer }: { timer: NonNullable<ReturnType<typeof useTimer>["data"]> }) {
+function RunningTimerRow({ timer }: { timer: RunningTimer }) {
   const now = useNow(1000);
   const stop = useStopTimer();
   const label = subjectLabel(timer.subject);
+  const name = label || timer.note || "Timer";
   return (
-    <div className="space-y-4">
-      <div>
+    <li
+      aria-label={name}
+      className="flex items-center gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+    >
+      <div className="min-w-0 flex-1">
         <p
-          className="text-5xl font-bold tracking-[-0.03em] tabular-nums text-fg"
+          className="text-3xl font-bold tracking-[-0.03em] tabular-nums text-fg"
           aria-hidden="true"
         >
           {formatElapsed(timer.startedAt, now)}
         </p>
-        {label ? <p className="mt-2 font-semibold text-accent-text">{label}</p> : null}
-        {timer.note ? <p className="mt-1 text-muted">{timer.note}</p> : null}
+        {label ? <p className="mt-1 font-semibold break-words text-accent-text">{label}</p> : null}
+        {timer.note ? <p className="mt-0.5 break-words text-muted">{timer.note}</p> : null}
+        <p className="mt-0.5 text-sm text-muted">Since {formatClock(new Date(timer.startedAt))}</p>
+        {stop.isError ? (
+          <p role="alert" className="mt-1 text-sm text-danger">
+            {stop.error.message}
+          </p>
+        ) : null}
       </div>
       <button
         type="button"
         className={primaryButton}
         disabled={stop.isPending}
-        onClick={() => stop.mutate(undefined)}
+        onClick={() => stop.mutate(timer.id)}
+        aria-label={`Stop timer: ${name}`}
       >
         <Square aria-hidden="true" className="size-4" fill="currentColor" />
-        Stop timer
+        Stop
       </button>
-      {stop.isError ? (
-        <p role="alert" className="text-sm text-danger">
-          {stop.error.message}
-        </p>
-      ) : null}
-    </div>
+    </li>
   );
 }
 
-function StartTimerForm() {
+function StartTimerForm({
+  another,
+  onStarted,
+  onCancel,
+}: {
+  another: boolean;
+  onStarted: () => void;
+  onCancel?: (() => void) | undefined;
+}) {
   const [note, setNote] = useState("");
   const [subject, setSubject] = useState("");
   const start = useStartTimer();
@@ -80,6 +151,7 @@ function StartTimerForm() {
         onSuccess: () => {
           setNote("");
           setSubject("");
+          onStarted();
         },
       },
     );
@@ -106,10 +178,17 @@ function StartTimerForm() {
         </label>
         <SubjectSelect id={`${ids}-subject`} value={subject} onChange={setSubject} />
       </div>
-      <button type="submit" className={primaryButton} disabled={start.isPending}>
-        <Play aria-hidden="true" className="size-4" fill="currentColor" />
-        Start timer
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className={primaryButton} disabled={start.isPending}>
+          <Play aria-hidden="true" className="size-4" fill="currentColor" />
+          {another ? "Start another timer" : "Start timer"}
+        </button>
+        {onCancel ? (
+          <button type="button" className={ghostButton} onClick={onCancel}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
       {start.isError ? (
         <p role="alert" className="text-sm text-danger">
           {start.error.message}

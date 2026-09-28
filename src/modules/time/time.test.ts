@@ -12,17 +12,15 @@ const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).
 const newTask = async (title: string) => body(await t.api.tasks.$post({ json: { title } }));
 const addEntry = (json: TimeEntryCreate) => t.api.time.entries.$post({ json });
 
-describe("timer", () => {
-  it("runs one timer at a time and records minutes when it stops", async () => {
+describe("timers", () => {
+  it("run several at once, one per subject, and record minutes when they stop", async () => {
+    expect(await body(await t.api.time.timers.$get())).toEqual({ timers: [] });
     expect(await body(await t.api.time.timer.$get())).toEqual({ timer: null });
     const task = await newTask("Write report");
+    const subject = { type: "task" as const, id: task.id };
 
-    const first = await body(
-      await t.api.time.timer.$post({
-        json: { note: "Outline", subject: { type: "task", id: task.id } },
-      }),
-    );
-    expect(first.stopped).toBeNull();
+    const first = await body(await t.api.time.timer.$post({ json: { note: "Outline", subject } }));
+    expect(first.stopped).toEqual([]);
     expect(first.timer).toMatchObject({
       endedAt: null,
       minutes: null,
@@ -30,16 +28,50 @@ describe("timer", () => {
       subject: { type: "task", id: task.id, label: "Write report" },
     });
 
-    // Starting another timer stops the running one; even a quick one counts a minute.
-    const second = await body(await t.api.time.timer.$post({ json: {} }));
-    expect(second.stopped).toMatchObject({ id: first.timer.id, minutes: 1 });
-    expect(second.stopped?.endedAt).not.toBeNull();
+    // Another timer runs alongside it.
+    const second = await body(await t.api.time.timer.$post({ json: { note: "Laundry" } }));
+    expect(second.stopped).toEqual([]);
+    const running = await body(await t.api.time.timers.$get());
+    expect(running.timers.map((timer) => timer.id)).toEqual([first.timer.id, second.timer.id]);
+    // The single-timer view shows the newest.
     expect((await body(await t.api.time.timer.$get())).timer?.id).toBe(second.timer.id);
 
-    const stopped = await body(await t.api.time.timer.stop.$post());
-    expect(stopped).toMatchObject({ id: second.timer.id, minutes: 1, subject: null });
+    // Timing the same task again keeps its timer instead of starting a second one.
+    const same = await body(await t.api.time.timer.$post({ json: { subject } }));
+    expect(same.timer.id).toBe(first.timer.id);
+    expect((await body(await t.api.time.timers.$get())).timers).toHaveLength(2);
+
+    // Stopping one leaves the other running; even a quick one counts a minute.
+    const stopped = await body(
+      await t.api.time.entries[":id"].stop.$post({ param: { id: String(first.timer.id) } }),
+    );
+    expect(stopped).toMatchObject({ id: first.timer.id, minutes: 1 });
+    expect(stopped.endedAt).not.toBeNull();
+    expect(
+      await failure(
+        await t.api.time.entries[":id"].stop.$post({ param: { id: String(first.timer.id) } }),
+      ),
+    ).toEqual({ status: 409, error: "That timer has already stopped." });
+    expect((await body(await t.api.time.timers.$get())).timers.map((timer) => timer.id)).toEqual([
+      second.timer.id,
+    ]);
+
+    const all = await body(await t.api.time.timer.stop.$post());
+    expect(all.stopped.map((timer) => timer.id)).toEqual([second.timer.id]);
     const again = await failure(await t.api.time.timer.stop.$post());
     expect(again).toEqual({ status: 404, error: "No timer is running. Start one first." });
+  });
+
+  it("can stop the others when starting, as when only one could run", async () => {
+    const one = await body(await t.api.time.timer.$post({ json: { note: "One" } }));
+    const two = await body(await t.api.time.timer.$post({ json: { note: "Two" } }));
+    const three = await body(
+      await t.api.time.timer.$post({ json: { note: "Three", stopOthers: true } }),
+    );
+    expect(three.stopped.map((timer) => timer.id)).toEqual([one.timer.id, two.timer.id]);
+    expect((await body(await t.api.time.timers.$get())).timers.map((timer) => timer.id)).toEqual([
+      three.timer.id,
+    ]);
   });
 
   it("lets a running timer be edited but not given an end", async () => {
@@ -56,7 +88,7 @@ describe("timer", () => {
       await t.api.time.entries[":id"].$patch({ param, json: { endedAt: minutesAgo(0) } }),
     );
     expect(ended.error).toContain("Stop the timer first");
-    const stopped = await body(await t.api.time.timer.stop.$post());
+    const stopped = await body(await t.api.time.entries[":id"].stop.$post({ param }));
     expect(stopped.minutes).toBe(30);
   });
 });
