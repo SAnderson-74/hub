@@ -74,6 +74,16 @@ describe("parseBankAmount", () => {
     expect(parseBankAmount(" 7.5 ")).toBe(750);
   });
 
+  it("reads amounts without a leading zero, and OFX's extra decimals", () => {
+    expect(parseBankAmount(".50")).toBe(50);
+    expect(parseBankAmount("-.5")).toBe(-50);
+    expect(parseBankAmount("-12.3400", true)).toBe(-1_234);
+    expect(parseBankAmount("0.125", true)).toBe(13);
+    expect(parseBankAmount("1,234.5678", true)).toBe(123_457);
+    // In a CSV, "12.345" might mean twelve thousand, so it isn't guessed at.
+    expect(parseBankAmount("12.345")).toBeNull();
+  });
+
   it("rejects anything else", () => {
     for (const text of ["", "abc", "1.234,56", "--5", "12.345", "(5"]) {
       expect(parseBankAmount(text)).toBeNull();
@@ -161,6 +171,14 @@ VERSION:102
 <FITID>bad
 </STMTTRN>
 </BANKTRANLIST>
+<LEDGERBAL>
+<BALAMT>1957.50
+<DTASOF>20300131120000.000[-5:EST]
+</LEDGERBAL>
+<AVAILBAL>
+<BALAMT>1900.00
+<DTASOF>20300131
+</AVAILBAL>
 </STMTRS></STMTTRNRS></BANKMSGSRSV1>
 </OFX>`;
 
@@ -168,7 +186,8 @@ const OFX2 = `<?xml version="1.0" encoding="UTF-8"?>
 <?OFX OFXHEADER="200" VERSION="220"?>
 <OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
 <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20300107</DTPOSTED><TRNAMT>-9,99</TRNAMT><FITID>X-1</FITID><NAME>Streaming service</NAME></STMTTRN>
-</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+<STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20300108</DTPOSTED><TRNAMT>-.5000</TRNAMT><FITID>X-2</FITID><NAME>Fee</NAME></STMTTRN>
+</BANKTRANLIST><LEDGERBAL><BALAMT>-.50</BALAMT><DTASOF>20300108</DTASOF></LEDGERBAL></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
 
 describe("readOfx", () => {
   it("reads OFX 1 statements with the bank's ids, skipping unreadable ones", () => {
@@ -191,12 +210,15 @@ describe("readOfx", () => {
         },
       ],
       problems: [{ row: 3, message: 'The date "2030" isn\'t one Hub can read.' }],
+      // The ledger balance, not the available one.
+      statementBalance: { date: "2030-01-31", balanceCents: 195_750 },
     });
   });
 
-  it("reads OFX 2 (XML) statements", () => {
+  it("reads OFX 2 (XML) statements, with amounts like -.5000", () => {
     expect(isOfx(OFX2)).toBe(true);
-    expect(readOfx(OFX2).transactions).toEqual([
+    const read = readOfx(OFX2);
+    expect(read.transactions).toEqual([
       {
         date: "2030-01-07",
         amountCents: -999,
@@ -204,7 +226,10 @@ describe("readOfx", () => {
         memo: "",
         externalId: "X-1",
       },
+      { date: "2030-01-08", amountCents: -50, payee: "Fee", memo: "", externalId: "X-2" },
     ]);
+    expect(read.problems).toEqual([]);
+    expect(read.statementBalance).toEqual({ date: "2030-01-08", balanceCents: -50 });
   });
 
   it("isn't fooled by a CSV", () => {

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { parseDollars } from "./money";
 import { parseImportDate } from "./resaleImport";
 
 // Bank and card exports: CSV files (columns matched by the person, then saved for next
@@ -126,11 +125,13 @@ export function parseBankDate(value: string, dayFirst = false): string | null {
 }
 
 /**
- * Signed cents from "-42.50", "$1,234.56", "(42.50)", "42.50-", "+15", or "USD 12".
- * Parentheses and a trailing minus mean negative, as accountants write it. null if
+ * Signed cents from "-42.50", "$1,234.56", "(42.50)", "42.50-", "+15", ".50", or
+ * "USD 12". Parentheses and a trailing minus mean negative, as accountants write it.
+ * `ofx` also rounds amounts with more than two decimals, like "12.3400", which OFX
+ * files use; in a CSV that could be a thousands separator, so it's refused. null if
  * unreadable.
  */
-export function parseBankAmount(value: string): number | null {
+export function parseBankAmount(value: string, ofx = false): number | null {
   let text = value
     .trim()
     .replace(/^usd\s*/i, "")
@@ -151,9 +152,25 @@ export function parseBankAmount(value: string): number | null {
     negative = !negative;
     text = text.slice(0, -1);
   }
-  const cents = parseDollars(text);
+  const cents = bankDollars(text.replace(/^\$/, ""), ofx);
   if (cents === null) return null;
   return negative ? -cents : cents;
+}
+
+/**
+ * Cents from an unsigned amount: "1,234.56", "1234.5", ".50". Commas only as
+ * thousands separators. With `roundExtra`, "12.3400" or "0.125" round to the nearest
+ * cent; otherwise more than two decimals is refused.
+ */
+function bankDollars(text: string, roundExtra: boolean): number | null {
+  const match = /^(\d{1,3}(?:,\d{3})+|\d*)(?:\.(\d+))?$/.exec(text);
+  if (!match || (!match[1] && !match[2])) return null;
+  const decimals = match[2] ?? "";
+  if (decimals.length > 2 && !roundExtra) return null;
+  const whole = Number((match[1] ?? "").replace(/,/g, "") || "0");
+  const digits = decimals.padEnd(3, "0");
+  const cents = whole * 100 + Number(digits.slice(0, 2)) + (Number(digits[2]) >= 5 ? 1 : 0);
+  return Number.isSafeInteger(cents) ? cents : null;
 }
 
 /** A transaction read from a file, ready for the server. */
@@ -171,7 +188,15 @@ export type BankTransaction = {
 
 export type ReadProblem = { row: number; message: string };
 
-export type ReadResult = { transactions: BankTransaction[]; problems: ReadProblem[] };
+/** The balance a statement file reports, as of a date (OFX LEDGERBAL). */
+export type StatementBalance = { date: string; balanceCents: number };
+
+export type ReadResult = {
+  transactions: BankTransaction[];
+  problems: ReadProblem[];
+  /** Only OFX files say what the bank's balance was. */
+  statementBalance?: StatementBalance;
+};
 
 const clip = (value: string | undefined, max: number) => (value ?? "").trim().slice(0, max);
 
@@ -279,7 +304,7 @@ export function readOfx(text: string): ReadResult {
     const date = dateText ? parseBankDate(dateText) : null;
     const amountText = ofxValue(block, "TRNAMT");
     const amountCents = amountText
-      ? parseBankAmount(amountText.replace(/,(\d{1,2})$/, ".$1"))
+      ? parseBankAmount(amountText.replace(/,(\d{1,2})$/, ".$1"), true)
       : null;
     if (!date) {
       problems.push({
@@ -307,7 +332,21 @@ export function readOfx(text: string): ReadResult {
       ...(externalId ? { externalId } : {}),
     });
   });
-  return { transactions, problems };
+  const statementBalance = readLedgerBalance(text);
+  return { transactions, problems, ...(statementBalance ? { statementBalance } : {}) };
+}
+
+/** The bank's own balance in the file (LEDGERBAL), to check Hub's against. */
+function readLedgerBalance(text: string): StatementBalance | undefined {
+  const block = /<LEDGERBAL>[\s\S]*?(?=<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|<\/CCSTMTRS>)/i.exec(
+    text,
+  )?.[0];
+  if (!block) return undefined;
+  const amount = ofxValue(block, "BALAMT");
+  const dateText = ofxValue(block, "DTASOF");
+  const balanceCents = amount ? parseBankAmount(amount.replace(/,(\d{1,2})$/, ".$1"), true) : null;
+  const date = dateText ? parseBankDate(dateText) : null;
+  return balanceCents === null || !date ? undefined : { date, balanceCents };
 }
 
 // What the browser sends
@@ -357,6 +396,14 @@ export const bankImportSchema = z
       ),
     /** A CSV's column choices, saved for the next file with the same headers. */
     layout: bankLayoutSchema.optional(),
+    /** The balance the file reports, to compare with Hub's after the import. */
+    statementBalance: z
+      .object({
+        date: z.iso.date(),
+        balanceCents: z.number().int().min(-100_000_000_000).max(100_000_000_000),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type BankImport = z.input<typeof bankImportSchema>;
@@ -378,4 +425,9 @@ export type BankImportResult = {
     payee: string;
     outcome: "create" | "duplicate";
   }>;
+  /**
+   * The file's own balance next to Hub's for the end of that day, counting this
+   * import. null when the file doesn't say.
+   */
+  balanceCheck: { date: string; bankCents: number; hubCents: number } | null;
 };

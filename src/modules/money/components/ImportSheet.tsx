@@ -36,6 +36,7 @@ import {
   useImports,
   useUndoImport,
 } from "../queries";
+import { BalanceCheck } from "./BalanceCheck";
 
 const count = (n: number, one: string, many: string) =>
   `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
@@ -152,6 +153,7 @@ function ImportForm({
       ...(loaded.kind === "csv"
         ? { layout: { headerKey: headerKey(loaded.table[0] ?? []), columns, options } }
         : {}),
+      ...(result.statementBalance ? { statementBalance: result.statementBalance } : {}),
     };
   };
 
@@ -181,6 +183,14 @@ function ImportForm({
           <p className="text-fg">
             {count(done.duplicates, "was", "were")} already in the account and skipped.
           </p>
+        ) : null}
+        {done.balanceCheck ? (
+          <BalanceCheck
+            check={done.balanceCheck}
+            imported
+            accountId={Number(accountId)}
+            fileName={loaded?.name ?? "the file"}
+          />
         ) : null}
         <p className="text-sm text-muted">Changed your mind? Undo it from Recent imports below.</p>
         <button type="button" className={primaryButton} onClick={onDone}>
@@ -376,6 +386,14 @@ function ImportForm({
               </li>
             ) : null}
           </ul>
+          {preview.balanceCheck ? (
+            <BalanceCheck
+              check={preview.balanceCheck}
+              imported={false}
+              accountId={Number(accountId)}
+              fileName={loaded?.name ?? "the file"}
+            />
+          ) : null}
           <PreviewRows preview={preview} />
           {read.problems.length > 0 ? (
             <details className="text-sm">

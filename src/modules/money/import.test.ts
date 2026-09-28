@@ -184,6 +184,78 @@ describe("OFX imports", () => {
     expect(renamed.rows.map((row) => row.outcome)).toEqual(["duplicate", "create"]);
   });
 
+  it("keep different transactions that share a bank id, and still skip them next time", async () => {
+    const { book, account } = await setup();
+    // Some banks give a day's transactions the same id; only the amount tells them apart.
+    const statement = {
+      accountId: account.id,
+      source: "ofx" as const,
+      transactions: [
+        tx("2030-01-05", 21_703, "DEPOSIT", { externalId: "20300105" }),
+        tx("2030-01-05", -2_000, "GROCERY", { externalId: "20300105" }),
+        tx("2030-01-05", -2_000, "GROCERY", { externalId: "20300105" }),
+      ],
+    };
+    expect(await run(statement)).toMatchObject({ created: 3, duplicates: 0 });
+    expect(await balance(book.id)).toBe(10_000 + 21_703 - 4_000);
+    expect(await run(statement, true)).toMatchObject({ created: 0, duplicates: 3 });
+    // A later file with the same id and a new amount is a new transaction.
+    const later = await run(
+      { ...statement, transactions: [tx("2030-01-05", -150, "FEE", { externalId: "20300105" })] },
+      true,
+    );
+    expect(later).toMatchObject({ created: 1, duplicates: 0 });
+  });
+
+  it("add back rows an earlier import skipped when the same file comes in again", async () => {
+    const { book, account } = await setup();
+    // As an older Hub left it: the deposit was dropped for sharing the grocery's id.
+    await run({
+      accountId: account.id,
+      source: "ofx",
+      transactions: [tx("2030-01-05", -2_000, "GROCERY", { externalId: "X" })],
+    });
+    const again = await run({
+      accountId: account.id,
+      source: "ofx",
+      transactions: [
+        tx("2030-01-05", -2_000, "GROCERY", { externalId: "X" }),
+        tx("2030-01-05", 21_703, "DEPOSIT", { externalId: "X" }),
+      ],
+    });
+    expect(again.rows.map((row) => row.outcome)).toEqual(["duplicate", "create"]);
+    expect(await balance(book.id)).toBe(10_000 - 2_000 + 21_703);
+  });
+
+  it("compare Hub's balance with the one in the file", async () => {
+    const { account } = await setup();
+    const statement = {
+      accountId: account.id,
+      source: "ofx" as const,
+      transactions: [
+        tx("2030-01-05", -4_250, "GROCERY", { externalId: "C1" }),
+        tx("2030-01-09", 150_000, "PAYROLL", { externalId: "C2" }),
+      ],
+      statementBalance: { date: "2030-01-08", balanceCents: 27_453 },
+    };
+    // The preview counts what's about to be added; payroll is after the bank's date.
+    expect((await run(statement, true)).balanceCheck).toEqual({
+      date: "2030-01-08",
+      bankCents: 27_453,
+      hubCents: 10_000 - 4_250,
+    });
+    expect((await run(statement)).balanceCheck).toMatchObject({ hubCents: 5_750 });
+    // An entered balance is where Hub starts counting from.
+    await t.api.money.accounts[":id"].snapshots.$put({
+      param: { id: String(account.id) },
+      json: { date: "2030-01-08", balanceCents: 27_453 },
+    });
+    expect((await run(statement, true)).balanceCheck).toMatchObject({ hubCents: 27_453 });
+    expect(
+      (await run({ ...statement, statementBalance: undefined }, true)).balanceCheck,
+    ).toBeNull();
+  });
+
   it("match a transaction entered by hand before the statement arrived", async () => {
     const { account } = await setup();
     await body(

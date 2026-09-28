@@ -601,3 +601,59 @@ test("net worth adds up every account over time", async ({ page }, testInfo) => 
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("an OFX file's own balance is checked against Hub's", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const book = `Balance check ${id}`;
+  const errors = trackErrors(page);
+  const bookId = (
+    await (
+      await page.request.post("/api/money/books", { data: { name: book, kind: "personal" } })
+    ).json()
+  ).id;
+  // The starting balance is off by $217.03, as if typed from the wrong day.
+  await page.request.post("/api/money/accounts", {
+    data: { bookId, name: "Checking", kind: "checking", openingBalanceCents: 80_000 },
+  });
+  await page.addInitScript(
+    (value) => localStorage.setItem("hub.money.book", value),
+    String(bookId),
+  );
+  await page.goto("/money");
+
+  // Two transactions share a bank id, and one amount has no leading zero.
+  const ofx = [
+    "OFXHEADER:100",
+    "",
+    "<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>",
+    "<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20300105<TRNAMT>250.00<FITID>20300105<NAME>PAYROLL</STMTTRN>",
+    "<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20300105<TRNAMT>-42.50<FITID>20300105<NAME>CORNER GROCERY</STMTTRN>",
+    "<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20300106<TRNAMT>-.50<FITID>F3<NAME>FEE</STMTTRN>",
+    "</BANKTRANLIST><LEDGERBAL><BALAMT>1224.03<DTASOF>20300107</LEDGERBAL>",
+    "</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>",
+  ].join("\n");
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Import transactions" });
+  await sheet.getByLabel("File", { exact: true }).setInputFiles({
+    name: "statement.ofx",
+    mimeType: "application/x-ofx",
+    buffer: Buffer.from(ofx),
+  });
+  await sheet.getByRole("button", { name: "Check import" }).click();
+  await expect(sheet).toContainText("3 transactions to add");
+  await expect(sheet).toContainText("$217.03 less than your bank.");
+  await expect(sheet).toContainText(
+    "After this import, Hub will have $1,007 at the end of that day.",
+  );
+  await sheet.getByRole("button", { name: "Import 3 transactions" }).click();
+  await expect(sheet.getByRole("status").first()).toHaveText("Imported 3 transactions");
+  await sheet.getByRole("button", { name: "Use the bank's balance" }).click();
+  await expect(
+    sheet.getByText(/Hub now counts from your bank's balance on January 7, 2030\./),
+  ).toBeVisible();
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await expect(
+    page.getByRole("region", { name: "Accounts" }).getByRole("button", { name: /Checking/ }),
+  ).toContainText("$1,224.03");
+  expect(errors).toEqual([]);
+});
