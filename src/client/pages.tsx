@@ -1,4 +1,5 @@
 import {
+  Briefcase,
   GraduationCap,
   House,
   Landmark,
@@ -11,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import type { ReactElement } from "react";
+import { BusinessPage } from "../modules/business/pages/BusinessPage";
 import { DashboardPage } from "../modules/core/pages/DashboardPage";
 import { SettingsPage } from "../modules/core/pages/SettingsPage";
 import { CoursesPage } from "../modules/education/pages/CoursesPage";
@@ -51,6 +53,13 @@ export const appPages: AppPage[] = [
   { id: "resale", label: "Resale", path: "/resale", icon: Package, element: <ResalePage /> },
   { id: "money", label: "Money", path: "/money", icon: Wallet, element: <MoneyPage /> },
   { id: "taxes", label: "Taxes", path: "/taxes", icon: Landmark, element: <TaxesPage /> },
+  {
+    id: "business",
+    label: "Business",
+    path: "/business",
+    icon: Briefcase,
+    element: <BusinessPage />,
+  },
   {
     id: "settings",
     label: "Settings",

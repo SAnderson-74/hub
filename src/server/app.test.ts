@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { defaultBusinessRate } from "../shared/businessRate";
 import { createApp } from "./app";
 import { decodeHeaderName } from "./auth";
 import { loadConfig } from "./config";
@@ -87,7 +88,11 @@ describe("settings API", () => {
   it("returns defaults, saves changes, and rejects invalid values", async () => {
     const app = await setup();
     const initial = await app.request("/api/settings", { headers: owner });
-    expect(await initial.json()).toEqual({ accentColor: "#22d3ee", studyMinimumMinutes: 30 });
+    expect(await initial.json()).toEqual({
+      accentColor: "#22d3ee",
+      studyMinimumMinutes: 30,
+      businessRate: defaultBusinessRate,
+    });
 
     const saved = await app.request("/api/settings", {
       method: "PUT",
@@ -95,10 +100,18 @@ describe("settings API", () => {
       body: JSON.stringify({ accentColor: "#FF5FB7" }),
     });
     expect(saved.status).toBe(200);
-    expect(await saved.json()).toEqual({ accentColor: "#ff5fb7", studyMinimumMinutes: 30 });
+    expect(await saved.json()).toEqual({
+      accentColor: "#ff5fb7",
+      studyMinimumMinutes: 30,
+      businessRate: defaultBusinessRate,
+    });
 
     const reread = await app.request("/api/settings", { headers: owner });
-    expect(await reread.json()).toEqual({ accentColor: "#ff5fb7", studyMinimumMinutes: 30 });
+    expect(await reread.json()).toEqual({
+      accentColor: "#ff5fb7",
+      studyMinimumMinutes: 30,
+      businessRate: defaultBusinessRate,
+    });
 
     const invalid = await app.request("/api/settings", {
       method: "PUT",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { businessRateSchema, defaultBusinessRate } from "./businessRate";
 import { HEX_COLOR } from "./color";
 
 export type AccentPreset = { name: string; hex: string };
@@ -29,6 +30,8 @@ export const settingsSchema = z.object({
     .int("Use whole minutes.")
     .min(5, "Use at least 5 minutes a day.")
     .max(720, "Use 720 minutes (12 hours) a day or fewer."),
+  /** The business rate calculator's inputs. */
+  businessRate: businessRateSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -39,4 +42,5 @@ export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export const defaultSettings: Settings = {
   accentColor: "#22d3ee",
   studyMinimumMinutes: 30,
+  businessRate: defaultBusinessRate,
 };
