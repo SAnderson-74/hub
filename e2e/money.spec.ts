@@ -657,3 +657,57 @@ test("an OFX file's own balance is checked against Hub's", async ({ page }, test
   ).toContainText("$1,224.03");
   expect(errors).toEqual([]);
 });
+
+test("cash flow shows where money came from and went", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const post = async (url: string, data: object) => {
+    const res = await page.request.post(url, { data });
+    expect(res.ok()).toBe(true);
+    return res.json();
+  };
+  const book = await post("/api/money/books", { name: `Flow ${id}`, kind: "personal" });
+  const account = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: "Checking",
+    kind: "checking",
+  });
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  for (const [name, kind, cents] of [
+    ["Paycheck", "income", 300_000],
+    ["Rent", "expense", -150_000],
+    ["Groceries", "expense", -40_000],
+  ] as const) {
+    const category = await post("/api/money/categories", { bookId: book.id, name, kind });
+    await post("/api/money/transactions", {
+      accountId: account.id,
+      date: `${month}-15`,
+      amountCents: cents,
+      categoryId: category.id,
+      payee: name,
+    });
+  }
+
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.setItem("hub.money.view", "budget");
+  }, String(book.id));
+  await page.goto("/money");
+  const panel = page.getByRole("region", { name: "Cash flow" });
+  await expect(panel).toContainText(
+    "$3,000 came in and $1,900 went out, leaving $1,100. The most went to Rent, $1,500.",
+  );
+
+  // A band says its amount and share: Paycheck in, then Rent, then Groceries out.
+  // (Its center can sit under another band or a label, so press it directly.)
+  await panel.locator("svg path").nth(2).dispatchEvent("pointerdown");
+  await expect(panel).toContainText("$400 · 21% of money out");
+
+  await panel.getByRole("radio", { name: "12 months" }).check();
+  await expect(panel).toContainText("In the 12 months to");
+  await panel.getByText("Show the numbers").click();
+  const table = panel.getByRole("table", { name: "Money in and out" });
+  await expect(table.getByRole("row", { name: /^Groceries/ })).toContainText("$400");
+  expect(errors).toEqual([]);
+});

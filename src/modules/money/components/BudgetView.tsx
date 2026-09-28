@@ -22,6 +22,7 @@ import {
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
 import { type Book, type BudgetMonth, useBudget, useSetBudget } from "../queries";
+import { CashFlowPanel } from "./CashFlowPanel";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
 const BudgetHistoryChart = lazy(() =>
@@ -84,6 +85,7 @@ export function BudgetView({ book, today }: { book: Book; today: string }) {
           }`}
         >
           <Summary data={budget.data} />
+          <CashFlowPanel book={book} month={month} />
           <Panel title="Categories" className="lg:col-span-7">
             <CategoryBudgets data={budget.data} />
           </Panel>

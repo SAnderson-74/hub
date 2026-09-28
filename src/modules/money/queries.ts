@@ -15,6 +15,7 @@ import type {
   TransferCreate,
 } from "../../shared/books";
 import type { BudgetSet } from "../../shared/budget";
+import type { CashFlowPeriod } from "../../shared/cashFlow";
 
 async function fetchBooks() {
   const res = await api.money.books.$get();
@@ -397,6 +398,20 @@ export function useBudget(bookId: number, month: string) {
 }
 
 export type BudgetMonth = NonNullable<ReturnType<typeof useBudget>["data"]>;
+
+export function useCashFlow(bookId: number, month: string, months: CashFlowPeriod) {
+  return useQuery({
+    queryKey: ["money", "cash-flow", bookId, month, months],
+    queryFn: async () => {
+      const res = await api.money["cash-flow"].$get({
+        query: { bookId: String(bookId), month, months: String(months) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+}
 
 export function useSetBudget() {
   return useMoneyMutation(async (json: BudgetSet) => {

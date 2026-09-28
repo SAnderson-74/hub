@@ -25,8 +25,10 @@ import {
   transferLinkSchema,
 } from "../../shared/books";
 import { budgetQuerySchema, budgetSetSchema } from "../../shared/budget";
+import { cashFlowQuerySchema } from "../../shared/cashFlow";
 import { netWorthQuerySchema } from "../../shared/netWorth";
 import { budgetMonth, setBudget } from "./budget.service";
+import { cashFlow } from "./cashFlow.service";
 import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
 import {
   allAccounts,
@@ -68,7 +70,7 @@ import {
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
-/** Books, their accounts and categories, transactions, transfers, rules, budgets, net worth, and imports. */
+/** Books, their accounts and categories, transactions, transfers, rules, budgets, cash flow, net worth, and imports. */
 export function moneyRoutes({ db }: Deps) {
   return (
     new Hono<AppEnv>()
@@ -226,6 +228,15 @@ export function moneyRoutes({ db }: Deps) {
           const { bookId, month } = c.req.valid("query");
           return c.json(budgetMonth(db, bookId, month));
         },
+      )
+      .get(
+        "/cash-flow",
+        zValidator(
+          "query",
+          cashFlowQuerySchema,
+          invalid("Pass the book as bookId, a month like 2030-01, and months as 1, 3, or 12."),
+        ),
+        (c) => c.json(cashFlow(db, c.req.valid("query"))),
       )
       .put(
         "/budgets",
