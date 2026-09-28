@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { startHomeAssistantScheduler } from "../modules/integrations/homeAssistant.service";
+import { startReminderScheduler } from "../modules/integrations/reminders.service";
 import { createApp } from "./app";
 import { type Config, ConfigError, loadConfig } from "./config";
 import { startBackupScheduler } from "./db/backup";
@@ -34,6 +35,7 @@ async function start(config: Config, restart: () => void): Promise<() => Promise
   });
 
   const stopHomeAssistant = startHomeAssistantScheduler(db, config);
+  const stopReminders = startReminderScheduler(db, config);
 
   const app = createApp({ config, db, sqlite, startedAt: new Date(), restart });
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
@@ -50,6 +52,7 @@ async function start(config: Config, restart: () => void): Promise<() => Promise
     new Promise((resolve) => {
       stopBackups();
       stopHomeAssistant();
+      stopReminders();
       server.close(() => {
         sqlite.close();
         resolve();

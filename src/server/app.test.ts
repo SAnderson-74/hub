@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultBusinessRate } from "../shared/businessRate";
 import { defaultHomeAssistant } from "../shared/homeAssistant";
+import { defaultReminders } from "../shared/reminders";
 import { createApp } from "./app";
 import { decodeHeaderName } from "./auth";
 import { loadConfig } from "./config";
@@ -94,6 +95,7 @@ describe("settings API", () => {
       studyMinimumMinutes: 30,
       businessRate: defaultBusinessRate,
       homeAssistant: defaultHomeAssistant,
+      reminders: defaultReminders,
     });
 
     const saved = await app.request("/api/settings", {
@@ -107,6 +109,7 @@ describe("settings API", () => {
       studyMinimumMinutes: 30,
       businessRate: defaultBusinessRate,
       homeAssistant: defaultHomeAssistant,
+      reminders: defaultReminders,
     });
 
     const reread = await app.request("/api/settings", { headers: owner });
@@ -115,6 +118,7 @@ describe("settings API", () => {
       studyMinimumMinutes: 30,
       businessRate: defaultBusinessRate,
       homeAssistant: defaultHomeAssistant,
+      reminders: defaultReminders,
     });
 
     const invalid = await app.request("/api/settings", {

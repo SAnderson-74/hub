@@ -57,7 +57,7 @@ const NO_DATE = "~";
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
-function todayTasks(db: Queryable, today: string, timeZone: string) {
+export function todayTasks(db: Queryable, today: string, timeZone: string) {
   const rows = db
     .select({
       title: tasks.title,
@@ -98,9 +98,9 @@ function todayTasks(db: Queryable, today: string, timeZone: string) {
 }
 
 /** Dated things from tomorrow through two weeks out, soonest first. */
-function upcomingDates(db: Queryable, today: string): UpcomingDate[] {
+export function upcomingDates(db: Queryable, today: string, days = UPCOMING_DAYS): UpcomingDate[] {
   const from = addDays(today, 1);
-  const to = addDays(today, UPCOMING_DAYS);
+  const to = addDays(today, days);
   const within = (date: string | null): date is string =>
     date !== null && date >= from && date <= to;
   const found: UpcomingDate[] = [];

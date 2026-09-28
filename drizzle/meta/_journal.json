@@ -134,6 +134,13 @@
       "when": 1790631768587,
       "tag": "0018_transaction_bank_payee_and_counterparty",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1790635674942,
+      "tag": "0019_reminder_sends",
+      "breakpoints": true
     }
   ]
 }

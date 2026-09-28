@@ -13,6 +13,7 @@ import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../.
 import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
 import { streakKey } from "../../education/queries";
 import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
+import { RemindersPanel } from "../../integrations/components/RemindersPanel";
 import { BackupsPanel } from "../components/BackupsPanel";
 import { ImportsPanel } from "../components/ImportsPanel";
 
@@ -280,7 +281,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Appearance, study streak, Home Assistant, imports, backups, and details about this installation."
+        subtitle="Appearance, study streak, Home Assistant, reminders, imports, backups, and details about this installation."
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
@@ -326,9 +327,26 @@ export function SettingsPage() {
         </Panel>
 
         <Panel
+          title="Reminders"
+          description="A morning digest, things coming due, and a nudge before your study streak breaks, sent through Home Assistant."
+          className="lg:col-span-7 lg:row-start-4"
+        >
+          {settings.data ? (
+            <RemindersPanel
+              saved={settings.data.reminders}
+              configured={settings.data.homeAssistant.reminderUrl !== ""}
+            />
+          ) : settings.isError ? (
+            <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
+          ) : (
+            <LoadingRows rows={3} />
+          )}
+        </Panel>
+
+        <Panel
           title="Imports"
           description="Bring in files and listings from other apps. Each import is also on its own page."
-          className="lg:col-span-7 lg:row-start-4"
+          className="lg:col-span-7 lg:row-start-5"
         >
           <ImportsPanel />
         </Panel>
@@ -336,7 +354,7 @@ export function SettingsPage() {
         <Panel
           title="Backups"
           description="Hub saves a copy of everything each night and before updates. Restore one to go back to it."
-          className="lg:col-span-7 lg:row-start-5"
+          className="lg:col-span-7 lg:row-start-6"
         >
           <BackupsPanel startedAt={info?.startedAt ?? null} />
         </Panel>

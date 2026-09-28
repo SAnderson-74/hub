@@ -50,3 +50,31 @@ test("Home Assistant webhooks are checked, and a failed send says why", async ({
   expect(overflow).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("reminders show what they'd say, and their times save", async ({ page }, testInfo) => {
+  const errors = trackErrors(page);
+  const title = `Renew the parking permit ${testInfo.project.name}`;
+  // Overdue, so it's in today's digest whatever time zone the test runs in.
+  const created = await page.request.post("/api/tasks", {
+    data: { title, dueDate: "2020-01-01" },
+  });
+  expect(created.ok()).toBe(true);
+
+  await page.goto("/settings");
+  const panel = page.getByRole("region", { name: "Reminders" });
+  await expect(panel).toContainText("Add the reminder webhook under Home Assistant");
+  await expect(panel).toContainText(title);
+
+  const time = testInfo.project.name === "iphone" ? "06:45" : "08:15";
+  const digest = panel.getByRole("group", { name: "Daily digest" });
+  await digest.getByLabel("At").fill(time);
+  const due = panel.getByRole("group", { name: "Due soon" });
+  await due.getByLabel("Looking at").selectOption({ label: "The next 3 days" });
+  await panel.getByRole("button", { name: "Save reminders" }).click();
+  await expect(panel.getByRole("status").filter({ hasText: "Reminders saved" })).toBeVisible();
+
+  await page.reload();
+  await expect(digest.getByLabel("At")).toHaveValue(time);
+  await expect(due.getByLabel("Looking at")).toHaveValue("3");
+  expect(errors).toEqual([]);
+});

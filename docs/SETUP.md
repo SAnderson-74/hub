@@ -160,6 +160,14 @@ Hub can send Home Assistant a summary (study streak, today's tasks, and dates co
 
 4. In Hub, open Settings > **Home Assistant** and enter `http://<HOME_ASSISTANT_IP>:8123/api/webhook/<SUMMARY_WEBHOOK_ID>` and the same with the reminder ID. Save, then use **Send summary now** and **Send a test reminder**. The sensors show up in Home Assistant under Developer tools > States, and the test reminder on your phone.
 
+**Reminders.** Settings > **Reminders** chooses what Hub sends to the reminder webhook, and when (in Hub's time zone):
+
+- **Daily digest**: today's tasks, what's due in the next three days, and the study streak. Skipped when nothing is due.
+- **Due soon**: tasks, goals, milestones, business steps, and lead follow-ups due today or within the days you pick. Each is reminded once per due date.
+- **Study streak at risk**: when there's a streak and today's minimum isn't met yet.
+
+Each goes out once a day. If Hub is down or Home Assistant doesn't answer at that time, Hub tries again every 15 minutes for up to three hours, then skips that day. The panel shows what each reminder would say right now, even before the webhook is set up. Every reminder carries a `kind` (`digest`, `due_soon`, `streak`, or `test`), so an automation can treat them differently, for example with a condition on `{{ trigger.json.kind == 'streak' }}`.
+
 **Reaching Home Assistant.** Use its local network IP address, like `http://192.0.2.10:8123`. Hub reaches your network through the TrueNAS host, which Home Assistant counts as local, and webhooks accept only local requests by default (`local_only: true`). Names like `homeassistant.local` often don't resolve inside containers, so use the IP. If Home Assistant is reachable only over Tailscale, add the optional grant at the end of `deploy/tailscale/policy.hujson` and use its Tailscale address; if the webhook then doesn't fire, Home Assistant may not count that address as local, so set `local_only: false`.
 
 **Checking it.** Settings > Home Assistant > **See what the summary sends** shows the exact JSON, so you can add more sensors from it. Hub reports what Home Assistant answered; an answer in the 200s means it accepted the request. If Hub says it was sent but nothing changes in Home Assistant, check that the webhook ID matches and look in Home Assistant's logs.

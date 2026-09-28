@@ -4,6 +4,7 @@ export * from "../../modules/business/schema";
 export * from "../../modules/core/schema";
 export * from "../../modules/education/schema";
 export * from "../../modules/goals/schema";
+export * from "../../modules/integrations/schema";
 export * from "../../modules/money/schema";
 export * from "../../modules/resale/schema";
 export * from "../../modules/tasks/schema";
