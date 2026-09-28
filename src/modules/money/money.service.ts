@@ -99,6 +99,10 @@ export type TransactionJson = {
   amountCents: number;
   payee: string;
   memo: string;
+  /** Who a payment-app transaction was with. */
+  counterparty: string | null;
+  /** The payee as the bank wrote it, when it came from a file. */
+  bankPayee: string | null;
   category: { id: number; name: string; kind: CategoryKind } | null;
   /** The other side when this is a transfer between accounts. Transfers have no category. */
   transfer: { transactionId: number; account: { id: number; name: string } } | null;
@@ -619,6 +623,8 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     amountCents: row.amountCents,
     payee: row.payee,
     memo: row.memo,
+    counterparty: row.counterparty,
+    bankPayee: row.bankPayee,
     category: row.categoryId === null ? null : (categories.get(row.categoryId) ?? null),
     transfer: transferJson(row.transferPeerId, peers, accounts),
     resaleItems: items.get(row.id) ?? [],
@@ -669,7 +675,7 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
   if (query.q) {
     const pattern = likePattern(query.q);
     conditions.push(
-      sql`(${moneyTransactions.payee} like ${pattern} escape '\\' or ${moneyTransactions.memo} like ${pattern} escape '\\')`,
+      sql`(${moneyTransactions.payee} like ${pattern} escape '\\' or ${moneyTransactions.memo} like ${pattern} escape '\\' or ${moneyTransactions.counterparty} like ${pattern} escape '\\')`,
     );
   }
   const where = and(...conditions);
@@ -733,6 +739,7 @@ export function createTransaction(db: Db, input: TransactionCreate): Transaction
         payee: input.payee ?? "",
         memo: input.memo ?? "",
         categoryId: input.categoryId ?? null,
+        counterparty: input.counterparty ?? null,
       })
       .returning()
       .get();

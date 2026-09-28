@@ -26,9 +26,15 @@ import {
 } from "../../shared/books";
 import { budgetQuerySchema, budgetSetSchema } from "../../shared/budget";
 import { cashFlowQuerySchema } from "../../shared/cashFlow";
+import {
+  categorizeApplySchema,
+  categorizeQuerySchema,
+  fillPeopleSchema,
+} from "../../shared/categorize";
 import { netWorthQuerySchema } from "../../shared/netWorth";
 import { budgetMonth, setBudget } from "./budget.service";
 import { cashFlow } from "./cashFlow.service";
+import { applyCategory, categorizeOverview, fillPeople } from "./categorize.service";
 import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
 import {
   allAccounts,
@@ -70,7 +76,7 @@ import {
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
-/** Books, their accounts and categories, transactions, transfers, rules, budgets, cash flow, net worth, and imports. */
+/** Books, their accounts and categories, transactions, transfers, rules, sorting, budgets, cash flow, net worth, and imports. */
 export function moneyRoutes({ db }: Deps) {
   return (
     new Hono<AppEnv>()
@@ -228,6 +234,25 @@ export function moneyRoutes({ db }: Deps) {
           const { bookId, month } = c.req.valid("query");
           return c.json(budgetMonth(db, bookId, month));
         },
+      )
+      .get(
+        "/categorize",
+        zValidator("query", categorizeQuerySchema, invalid("Pass the book as bookId.")),
+        (c) => c.json(categorizeOverview(db, c.req.valid("query").bookId)),
+      )
+      .post(
+        "/categorize",
+        zValidator(
+          "json",
+          categorizeApplySchema,
+          invalid("Pick the transactions and a category to put them in."),
+        ),
+        (c) => c.json(applyCategory(db, c.req.valid("json"))),
+      )
+      .post(
+        "/people/fill",
+        zValidator("json", fillPeopleSchema, invalid("Pass the book as bookId.")),
+        (c) => c.json(fillPeople(db, c.req.valid("json").bookId)),
       )
       .get(
         "/cash-flow",

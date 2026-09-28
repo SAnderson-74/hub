@@ -103,7 +103,7 @@ function RuleList({ book, categories }: { book: Book; categories: Category[] }) 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="min-w-0">
             <label htmlFor={`${ids}-contains`} className={labelClass}>
-              Payee contains
+              Payee or person contains
             </label>
             <input
               id={`${ids}-contains`}
@@ -270,7 +270,7 @@ function RuleRow({
     <li className="flex items-center gap-1 rounded-tile bg-base/80 py-1 pr-1 pl-4 ring-1 ring-surface-0/50">
       <div className="min-w-0 flex-1 py-2">
         <p className="break-words text-fg">
-          <span className="text-muted">Payee contains</span>{" "}
+          <span className="text-muted">Payee or person contains</span>{" "}
           <span className="font-semibold">“{rule.contains}”</span>{" "}
           <span className="text-muted">→</span>{" "}
           <span className="font-semibold">{rule.category.name}</span>

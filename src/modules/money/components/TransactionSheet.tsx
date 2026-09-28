@@ -46,6 +46,8 @@ type Draft = {
   payee: string;
   categoryId: string;
   memo: string;
+  /** Who a payment-app transaction was with. */
+  counterparty: string;
 };
 
 function toDraft(transaction: Transaction | null, accountId: number | null, today: string): Draft {
@@ -58,6 +60,7 @@ function toDraft(transaction: Transaction | null, accountId: number | null, toda
     payee: transaction?.payee ?? "",
     categoryId: transaction?.category ? String(transaction.category.id) : "",
     memo: transaction?.memo ?? "",
+    counterparty: transaction?.counterparty ?? "",
   };
 }
 
@@ -135,6 +138,9 @@ function TransactionForm({
   const ids = useId();
 
   const isTransferSide = transaction?.transfer != null;
+  // The bank's own text, when the payee has been renamed since.
+  const bankText =
+    transaction?.bankPayee && transaction.bankPayee !== draft.payee ? transaction.bankPayee : "";
   const transferring = draft.kind === "transfer";
   const cents = parseDollars(draft.amount);
   const amountInvalid = cents === null || cents === 0;
@@ -161,7 +167,11 @@ function TransactionForm({
   /** Fills in the category a rule gives this payee, unless one was picked by hand. */
   const suggest = (payee: string, kind: Kind) => {
     if (categoryTouched || kind === "transfer") return;
-    const rule = matchRule(rules, { payee, amountCents: kind === "in" ? 1 : -1 });
+    const rule = matchRule(rules, {
+      payee,
+      amountCents: kind === "in" ? 1 : -1,
+      counterparty: draft.counterparty,
+    });
     setSuggested(rule !== null);
     setDraft((current) => ({ ...current, categoryId: rule ? String(rule.categoryId) : "" }));
   };
@@ -190,6 +200,7 @@ function TransactionForm({
       payee: draft.payee.trim(),
       categoryId: isTransferSide || !draft.categoryId ? null : Number(draft.categoryId),
       memo: draft.memo,
+      counterparty: isTransferSide ? null : draft.counterparty.trim() || null,
     };
     if (!transaction) {
       create.mutate(fields, { onSuccess: onDone });
@@ -400,9 +411,36 @@ function TransactionForm({
                 }}
                 maxLength={200}
                 placeholder={draft.kind === "in" ? "Employer or customer" : "Store or person"}
+                aria-describedby={bankText ? `${ids}-bank` : undefined}
                 className={inputClass}
               />
+              {bankText ? (
+                <p id={`${ids}-bank`} className="mt-1.5 text-sm break-words text-muted">
+                  Your bank wrote “{bankText}”.
+                </p>
+              ) : null}
             </div>
+            {isTransferSide ? null : (
+              <div>
+                <label htmlFor={`${ids}-person`} className={labelClass}>
+                  Person (optional)
+                </label>
+                <input
+                  id={`${ids}-person`}
+                  value={draft.counterparty}
+                  onChange={(event) => set("counterparty", event.target.value)}
+                  maxLength={120}
+                  autoComplete="off"
+                  placeholder="Like John Smith"
+                  aria-describedby={`${ids}-person-hint`}
+                  className={inputClass}
+                />
+                <p id={`${ids}-person-hint`} className="mt-1.5 text-sm text-muted">
+                  Who you paid, or who paid you, on Venmo, Zelle, or Cash App. Rules can look for
+                  it.
+                </p>
+              </div>
+            )}
             {isTransferSide ? null : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="min-w-0">

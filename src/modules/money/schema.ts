@@ -83,6 +83,13 @@ export const moneyTransactions = sqliteTable(
     externalId: text("external_id"),
     /** The other side of a transfer between accounts. Both sides point at each other. */
     transferPeerId: integer("transfer_peer_id"),
+    /**
+     * The payee as the bank wrote it, kept when an import adds it, so a later file still
+     * matches after the payee is renamed. Null for transactions entered by hand.
+     */
+    bankPayee: text("bank_payee"),
+    /** Who was paid or paid, for payment apps like Venmo: "John Smith". */
+    counterparty: text("counterparty"),
     ...timestamps(),
   },
   (t) => [

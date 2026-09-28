@@ -16,6 +16,7 @@ import type {
 } from "../../shared/books";
 import type { BudgetSet } from "../../shared/budget";
 import type { CashFlowPeriod } from "../../shared/cashFlow";
+import type { CategorizeApply } from "../../shared/categorize";
 
 async function fetchBooks() {
   const res = await api.money.books.$get();
@@ -320,6 +321,40 @@ export function useDeleteRule() {
 export function useApplyRules() {
   return useMoneyMutation(async (bookId: number) => {
     const res = await api.money.rules.apply.$post({ json: { bookId } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+// Sorting
+
+/** Uncategorized transactions in groups of similar ones, with suggested categories. */
+export function useCategorize(bookId: number) {
+  return useQuery({
+    queryKey: ["money", "categorize", bookId],
+    queryFn: async () => {
+      const res = await api.money.categorize.$get({ query: { bookId: String(bookId) } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+export type CategorizeData = NonNullable<ReturnType<typeof useCategorize>["data"]>;
+export type TransactionGroup = CategorizeData["groups"][number];
+
+export function useApplyCategory() {
+  return useMoneyMutation(async (json: CategorizeApply) => {
+    const res = await api.money.categorize.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+/** Saves who payment-app transactions were with, for ones from before Hub read names. */
+export function useFillPeople() {
+  return useMoneyMutation(async (bookId: number) => {
+    const res = await api.money.people.fill.$post({ json: { bookId } });
     if (!res.ok) throw await toApiError(res);
     return res.json();
   });

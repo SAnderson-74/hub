@@ -164,6 +164,13 @@ const transactionFields = {
   memo: z.string().max(2_000, "Keep memos under 2,000 characters."),
   /** A category in the same book as the account, or null for none. */
   categoryId: id.nullable(),
+  /** Who a payment-app transaction was with, like "John Smith". Empty clears it. */
+  counterparty: z
+    .string()
+    .trim()
+    .max(120, "Keep names under 120 characters.")
+    .transform((value) => value || null)
+    .nullable(),
 };
 
 export const transactionCreateSchema = z
@@ -198,7 +205,7 @@ export type TransactionQuery = z.infer<typeof transactionQuerySchema>;
 // Rules
 
 const ruleFields = {
-  /** Text to find in the payee, ignoring case. */
+  /** Text to find in the payee (or a payment app's person), ignoring case and punctuation. */
   contains: z
     .string()
     .trim()
@@ -209,6 +216,11 @@ const ruleFields = {
   /** A cleaner payee name, or "" to keep payees as they are. */
   renameTo: z.string().trim().max(200, "Keep payees under 200 characters."),
 };
+
+/** A rule's text and direction, for making one along with something else. */
+export const ruleMatchSchema = z
+  .object({ contains: ruleFields.contains, direction: ruleFields.direction })
+  .strict();
 
 export const ruleCreateSchema = z
   .object({ bookId: id, ...ruleFields })

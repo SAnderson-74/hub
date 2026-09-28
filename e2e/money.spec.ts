@@ -266,7 +266,7 @@ test("rules sort payees, and transfers stay out of spending", async ({ page }, t
   // A rule that cleans up a card processor's payee.
   await page.getByRole("button", { name: "Rules" }).click();
   const rules = page.getByRole("dialog", { name: "Rules" });
-  await rules.getByLabel("Payee contains").fill("corner groc");
+  await rules.getByLabel("Payee or person contains").fill("corner groc");
   await rules.getByLabel("Category").selectOption({ label: "Groceries" });
   await rules.getByLabel("Rename payee to").fill("Corner grocery");
   await rules.getByRole("button", { name: "Add rule" }).click();
@@ -709,5 +709,91 @@ test("cash flow shows where money came from and went", async ({ page }, testInfo
   await panel.getByText("Show the numbers").click();
   const table = panel.getByRole("table", { name: "Money in and out" });
   await expect(table.getByRole("row", { name: /^Groceries/ })).toContainText("$400");
+  expect(errors).toEqual([]);
+});
+
+test("similar transactions sort together, and payment-app names are saved", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const post = async (url: string, data: object) => {
+    const res = await page.request.post(url, { data });
+    expect(res.ok()).toBe(true);
+    return res.json();
+  };
+  const book = await post("/api/money/books", { name: `Sorting ${id}`, kind: "personal" });
+  const account = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: "Checking",
+    kind: "checking",
+  });
+  const groceries = await post("/api/money/categories", {
+    bookId: book.id,
+    name: "Groceries",
+    kind: "expense",
+  });
+  await post("/api/money/categories", { bookId: book.id, name: "Rent", kind: "expense" });
+  await post("/api/money/transactions", {
+    accountId: account.id,
+    date: "2030-02-01",
+    amountCents: -1_000,
+    payee: "CORNER GROCERY #9",
+    categoryId: groceries.id,
+  });
+  await post("/api/money/imports", {
+    accountId: account.id,
+    source: "csv",
+    fileName: "march.csv",
+    transactions: [
+      { date: "2030-03-02", amountCents: -2_140, payee: "SQ *CORNER GROCERY 4412", memo: "" },
+      { date: "2030-03-09", amountCents: -3_875, payee: "CORNER GROCERY SEATTLE WA", memo: "" },
+      { date: "2030-03-01", amountCents: -80_000, payee: "VENMO *JOHN SMITH", memo: "" },
+    ],
+  });
+
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.setItem("hub.money.view", "transactions");
+  }, String(book.id));
+  await page.goto("/money");
+  const transactions = page.getByRole("region", { name: "Transactions" });
+  // The person is saved from the bank's text.
+  await expect(transactions.getByRole("button", { name: /VENMO \*JOHN SMITH/ })).toContainText(
+    "To John Smith",
+  );
+  await expect(transactions).toContainText("3 uncategorized transactions, in 2 groups.");
+  await transactions.getByRole("button", { name: "Sort transactions" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Sort transactions" });
+  const grocery = sheet.getByRole("listitem", { name: "Corner Grocery" });
+  await expect(grocery).toContainText("Suggested: Groceries");
+  await expect(grocery).toContainText("You put another one like this in Groceries");
+  await expect(grocery.getByLabel("Rename to (optional)")).toHaveValue("Corner Grocery");
+  await grocery.getByRole("button", { name: "Put all 2 in Groceries" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("2 transactions put in Groceries");
+  await expect(grocery).toBeHidden();
+
+  const john = sheet.getByRole("listitem", { name: "Venmo: John Smith" });
+  await john.getByLabel("Category").selectOption({ label: "Rent" });
+  await expect(john.getByLabel("Rule looks for the name")).toHaveValue("John Smith");
+  await john.getByRole("button", { name: "Put it in Rent" }).click();
+  await expect(sheet).toContainText("Everything has a category.");
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  await expect(transactions.getByRole("button", { name: /^Corner Grocery/ })).toHaveCount(2);
+  const venmo = transactions.getByRole("button", { name: /VENMO \*JOHN SMITH/ });
+  await expect(venmo).toContainText("Rent");
+  await venmo.click();
+  const detail = page.getByRole("dialog", { name: "Transaction" });
+  await expect(detail.getByLabel("Person (optional)")).toHaveValue("John Smith");
+  await expect(detail.getByLabel("Memo")).toHaveValue("Venmo to John Smith");
+
+  // Both rules are saved for the next import.
+  const rules = await (await page.request.get(`/api/money/rules?bookId=${book.id}`)).json();
+  expect(rules.map((rule: { contains: string }) => rule.contains)).toEqual([
+    "corner grocery",
+    "John Smith",
+  ]);
   expect(errors).toEqual([]);
 });
