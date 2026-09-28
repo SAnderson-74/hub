@@ -12,6 +12,7 @@ import { applyAccent, previewAccent } from "../../../client/theme";
 import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../../../shared/color";
 import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
 import { streakKey } from "../../education/queries";
+import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
 
 function normalizeHex(value: string): string {
   const trimmed = value.trim().toLowerCase();
@@ -277,7 +278,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Appearance, study streak, and details about this installation."
+        subtitle="Appearance, study streak, Home Assistant, and details about this installation."
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
@@ -305,6 +306,20 @@ export function SettingsPage() {
             <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
           ) : (
             <LoadingRows rows={2} />
+          )}
+        </Panel>
+
+        <Panel
+          title="Home Assistant"
+          description="Send Hub's summary to Home Assistant for dashboards, and reminders for it to pass to your phone."
+          className="lg:col-span-7 lg:row-start-3"
+        >
+          {settings.data ? (
+            <HomeAssistantPanel saved={settings.data.homeAssistant} />
+          ) : settings.isError ? (
+            <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
+          ) : (
+            <LoadingRows rows={3} />
           )}
         </Panel>
 

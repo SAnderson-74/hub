@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultBusinessRate } from "../shared/businessRate";
+import { defaultHomeAssistant } from "../shared/homeAssistant";
 import { createApp } from "./app";
 import { decodeHeaderName } from "./auth";
 import { loadConfig } from "./config";
@@ -92,6 +93,7 @@ describe("settings API", () => {
       accentColor: "#22d3ee",
       studyMinimumMinutes: 30,
       businessRate: defaultBusinessRate,
+      homeAssistant: defaultHomeAssistant,
     });
 
     const saved = await app.request("/api/settings", {
@@ -104,6 +106,7 @@ describe("settings API", () => {
       accentColor: "#ff5fb7",
       studyMinimumMinutes: 30,
       businessRate: defaultBusinessRate,
+      homeAssistant: defaultHomeAssistant,
     });
 
     const reread = await app.request("/api/settings", { headers: owner });
@@ -111,6 +114,7 @@ describe("settings API", () => {
       accentColor: "#ff5fb7",
       studyMinimumMinutes: 30,
       businessRate: defaultBusinessRate,
+      homeAssistant: defaultHomeAssistant,
     });
 
     const invalid = await app.request("/api/settings", {

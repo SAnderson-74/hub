@@ -23,6 +23,10 @@
 
     // Only you can open the hub, and only over HTTPS.
     { "src": ["<YOUR_TAILSCALE_LOGIN>"], "dst": ["tag:hub"], "ip": ["tcp:443"] },
+
+    // Optional: let the hub send its summary and reminders to Home Assistant over
+    // Tailscale (see docs/SETUP.md). Not needed when it uses Home Assistant's LAN address.
+    // { "src": ["tag:hub"], "dst": ["<HOME_ASSISTANT_TAILSCALE_IP>"], "ip": ["tcp:8123"] },
   ],
 
   // Keep your existing "ssh" section here unchanged.
