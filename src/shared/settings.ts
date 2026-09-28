@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { businessRateSchema, defaultBusinessRate } from "./businessRate";
 import { HEX_COLOR } from "./color";
+import { defaultHomeAssistant, homeAssistantSchema } from "./homeAssistant";
 
 export type AccentPreset = { name: string; hex: string };
 
@@ -32,6 +33,8 @@ export const settingsSchema = z.object({
     .max(720, "Use 720 minutes (12 hours) a day or fewer."),
   /** The business rate calculator's inputs. */
   businessRate: businessRateSchema,
+  /** Home Assistant webhooks for the summary and reminders. */
+  homeAssistant: homeAssistantSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -43,4 +46,5 @@ export const defaultSettings: Settings = {
   accentColor: "#22d3ee",
   studyMinimumMinutes: 30,
   businessRate: defaultBusinessRate,
+  homeAssistant: defaultHomeAssistant,
 };

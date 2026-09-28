@@ -14,4 +14,5 @@ Please use GitHub's private vulnerability reporting (Security tab > Report a vul
 - Development sign-in (`HUB_AUTH_MODE=dev`) refuses to start when `NODE_ENV=production`.
 - API answers are sent with `Cache-Control: no-store`, so browsers don't keep copies of your data on disk. Browser storage holds only view choices and form defaults.
 - The app sets a private umask and makes its data folder `700` and its files `600` at startup, so other accounts on the host can't read the database or backups.
+- The app makes outbound requests only to Home Assistant webhook addresses entered in Settings, to send the summary and reminders there. It doesn't follow redirects, and it never logs the addresses (a webhook ID works like a password) or what it sends. With the addresses empty, it makes none.
 - The repository and container image contain no personal data or secrets. Data stays in the SQLite file on the host. The file itself isn't encrypted; put it on an encrypted dataset (see docs/SETUP.md), and keep offsite backups encrypted before upload.

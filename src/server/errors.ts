@@ -14,3 +14,8 @@ export function badRequest(message: string) {
 export function conflict(message: string) {
   return new HTTPException(409, { message });
 }
+
+/** Another service Hub talks to, like Home Assistant, failed or couldn't be reached. */
+export function badGateway(message: string) {
+  return new HTTPException(502, { message });
+}

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { serve } from "@hono/node-server";
+import { startHomeAssistantScheduler } from "../modules/integrations/homeAssistant.service";
 import { createApp } from "./app";
 import { ConfigError, loadConfig } from "./config";
 import { startBackupScheduler } from "./db/backup";
@@ -35,6 +36,8 @@ async function main() {
     keepDays: config.backupKeepDays,
   });
 
+  const stopHomeAssistant = startHomeAssistantScheduler(db, config);
+
   const app = createApp({ config, db, sqlite, startedAt: new Date() });
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     log.info("Listening", {
@@ -52,6 +55,7 @@ async function main() {
     closing = true;
     log.info("Shutting down", { signal });
     stopBackups();
+    stopHomeAssistant();
     server.close(() => {
       sqlite.close();
       process.exit(0);

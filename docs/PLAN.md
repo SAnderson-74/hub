@@ -98,7 +98,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 ### Phase 4: Business prep, integrations, template
 
 - [x] 4.1 Business prep: phased checklist with costs, gear inventory, skills and certifications, rate calculator, leads, notes
-- [ ] 4.2 Home Assistant: push a summary (study streak, today's tasks, upcoming dates) and reminders to Home Assistant webhooks
+- [x] 4.2 Home Assistant: push a summary (study streak, today's tasks, upcoming dates) and reminders to Home Assistant webhooks
 - [ ] 4.3 Reminder scheduler: daily digest, due soon, streak at risk
 - [ ] 4.4 Optional token-protected calendar feed (ICS)
 - [ ] 4.5 First-run setup (modules, time zone), module on/off setting, demo data with neutral examples
