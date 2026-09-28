@@ -80,7 +80,7 @@ describe("backups", () => {
     });
   });
 
-  it("prunes old nightly backups and extra pre-migration backups", () => {
+  it("prunes old nightly backups and extra pre-migration and pre-restore backups", () => {
     const dir = tempDir();
     for (const day of ["2026-08-01", "2026-09-10", "2026-09-15"]) {
       writeFileSync(join(dir, nightlyBackupName(day)), "x");
@@ -91,10 +91,17 @@ describe("backups", () => {
         "x",
       );
     }
+    for (let i = 0; i < 11; i++) {
+      writeFileSync(
+        join(dir, `pre-restore-202609${String(i + 10).padStart(2, "0")}T000000Z.sqlite3`),
+        "x",
+      );
+    }
     writeFileSync(join(dir, "notes.txt"), "not a backup");
     const removed = pruneBackups(dir, 14, "2026-09-16");
     expect(removed).toContain("nightly-2026-08-01.sqlite3");
     expect(removed.filter((name) => name.startsWith("pre-migrate-"))).toHaveLength(2);
+    expect(removed.filter((name) => name.startsWith("pre-restore-"))).toHaveLength(1);
     expect(existsSync(join(dir, "nightly-2026-09-10.sqlite3"))).toBe(true);
     expect(existsSync(join(dir, "notes.txt"))).toBe(true);
   });

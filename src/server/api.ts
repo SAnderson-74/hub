@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { businessRoutes } from "../modules/business/business.routes";
 import { activityRoutes } from "../modules/core/activity.routes";
+import { backupRoutes } from "../modules/core/backups.routes";
 import { linkRoutes } from "../modules/core/links.routes";
 import { settingsRoutes } from "../modules/core/settings.routes";
 import { systemRoutes } from "../modules/core/system.routes";
@@ -26,6 +27,7 @@ export function createApi(deps: Deps) {
     .get("/me", (c) => c.json(c.get("user")))
     .route("/system", systemRoutes(deps))
     .route("/settings", settingsRoutes(deps))
+    .route("/backups", backupRoutes(deps))
     .route("/projects", projectRoutes(deps))
     .route("/tasks", taskRoutes(deps))
     .route("/tags", tagRoutes(deps))

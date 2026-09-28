@@ -38,7 +38,7 @@ sequenceDiagram
   NAS->>NAS: Redeploy (app backs up DB, then migrates)
 ```
 
-Rollback: run the **Roll back** workflow with an earlier build id. Because migrations are additive, the older build still works against the newer database. If a migration itself was the problem, restore the matching `pre-migrate-*.sqlite3` backup (see SETUP.md).
+Rollback: run the **Roll back** workflow with an earlier build id. Because migrations are additive, the older build still works against the newer database. If a migration itself was the problem, roll back first, then restore the matching `pre-migrate-*.sqlite3` backup from Settings > Backups (see SETUP.md).
 
 ## Cross-cutting data model
 

@@ -10,22 +10,33 @@ import { openDatabase } from "./db/client";
 /**
  * The whole app (auth, headers, error handling) over a fresh in-memory database,
  * signed in with the dev login, plus the same typed client the browser uses.
- * Call close() after each test.
+ * Pass a temporary `dataDir` for tests that write files, like backups. Call close()
+ * after each test.
  */
-export function createTestApp() {
+export function createTestApp({ dataDir }: { dataDir?: string } = {}) {
   const config = loadConfig({
     NODE_ENV: "test",
     HUB_AUTH_MODE: "dev",
-    HUB_DATA_DIR: join(tmpdir(), "hub-test-unused"),
+    HUB_DATA_DIR: dataDir ?? join(tmpdir(), "hub-test-unused"),
     HUB_MIGRATIONS_DIR: "drizzle",
   });
   const { sqlite, db } = openDatabase(":memory:");
   migrate(db, { migrationsFolder: config.migrationsDir });
-  const app = createApp({ config, db, sqlite, startedAt: new Date() });
+  // Counts restarts instead of restarting.
+  const restarts = { count: 0 };
+  const app = createApp({
+    config,
+    db,
+    sqlite,
+    startedAt: new Date(),
+    restart: () => {
+      restarts.count += 1;
+    },
+  });
   const api = hc<Api>("http://localhost/api", {
     fetch: (input: RequestInfo | URL, init?: RequestInit) => app.request(input, init),
   });
-  return { app, api, db, sqlite, close: () => sqlite.close() };
+  return { app, api, db, sqlite, config, restarts, close: () => sqlite.close() };
 }
 
 export type TestApp = ReturnType<typeof createTestApp>;

@@ -46,12 +46,13 @@ export function createApp(deps: Deps) {
 
   app.use("*", identify(config.auth));
   app.use("/api/*", sameOriginWrites());
-  app.use(
-    "/api/*",
-    bodyLimit({
-      maxSize: 1024 * 1024,
-      onError: (c) => c.json({ error: "That request is too large." }, 413),
-    }),
+  const limitBody = bodyLimit({
+    maxSize: 1024 * 1024,
+    onError: (c) => c.json({ error: "That request is too large." }, 413),
+  });
+  // A backup upload streams to disk with its own, larger limit.
+  app.use("/api/*", (c, next) =>
+    c.req.path === "/api/backups/upload" ? next() : limitBody(c, next),
   );
   app.route("/api", createApi(deps));
   app.all("/api/*", (c) => c.json({ error: "Not found." }, 404));
