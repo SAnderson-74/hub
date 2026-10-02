@@ -60,12 +60,19 @@ export type DueItem = { key: string; kind: string; title: string; date: string }
 
 /** Unfinished things due from today through `days` ahead, soonest first. */
 export function dueItems(db: Queryable, today: string, days: number): DueItem[] {
-  const to = addDays(today, days);
+  return datedItems(db, today, addDays(today, days));
+}
+
+/**
+ * Unfinished things dated from `from` through `to`: tasks, active goals and their
+ * milestones, business steps, and open leads' next steps. Soonest first.
+ */
+export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
   const items: DueItem[] = [];
   for (const task of db
     .select({ id: tasks.id, title: tasks.title, date: tasks.dueDate })
     .from(tasks)
-    .where(and(ne(tasks.status, "done"), gte(tasks.dueDate, today), lte(tasks.dueDate, to)))
+    .where(and(ne(tasks.status, "done"), gte(tasks.dueDate, from), lte(tasks.dueDate, to)))
     .all()) {
     if (task.date)
       items.push({ key: `task:${task.id}`, kind: "task", title: task.title, date: task.date });
@@ -76,7 +83,7 @@ export function dueItems(db: Queryable, today: string, days: number): DueItem[] 
     .where(eq(goals.status, "active"))
     .all();
   for (const goal of active) {
-    if (goal.date && goal.date >= today && goal.date <= to) {
+    if (goal.date && goal.date >= from && goal.date <= to) {
       items.push({ key: `goal:${goal.id}`, kind: "goal", title: goal.title, date: goal.date });
     }
   }
@@ -89,7 +96,7 @@ export function dueItems(db: Queryable, today: string, days: number): DueItem[] 
         and(
           inArray(milestones.goalId, goalIds),
           isNull(milestones.doneAt),
-          gte(milestones.targetDate, today),
+          gte(milestones.targetDate, from),
           lte(milestones.targetDate, to),
         ),
       )
@@ -110,7 +117,7 @@ export function dueItems(db: Queryable, today: string, days: number): DueItem[] 
     .where(
       and(
         eq(businessSteps.done, false),
-        gte(businessSteps.dueOn, today),
+        gte(businessSteps.dueOn, from),
         lte(businessSteps.dueOn, to),
       ),
     )
@@ -135,7 +142,7 @@ export function dueItems(db: Queryable, today: string, days: number): DueItem[] 
     .where(
       and(
         or(...OPEN_LEAD_STATUSES.map((status) => eq(businessLeads.status, status))),
-        gte(businessLeads.nextStepOn, today),
+        gte(businessLeads.nextStepOn, from),
         lte(businessLeads.nextStepOn, to),
       ),
     )
