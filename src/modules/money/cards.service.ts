@@ -9,6 +9,7 @@ import {
   cardKindFor,
   guessCard,
 } from "../../shared/cards";
+import { dropRewards } from "./rewards.service";
 import { moneyAccounts, moneyBooks, moneyCards, moneyTransactions } from "./schema";
 
 type CardRow = typeof moneyCards.$inferSelect;
@@ -250,10 +251,11 @@ export function updateCard(db: Db, id: number, patch: CardUpdate): CardSaved {
   });
 }
 
-/** Deletes a card. Its transactions stay, without a card. */
+/** Deletes a card and its rewards. Its transactions stay, without a card. */
 export function deleteCard(db: Db, id: number): void {
   db.transaction((tx) => {
     requireCard(tx, id);
+    dropRewards(tx, [id]);
     tx.update(moneyTransactions)
       .set({ cardId: null, updatedAt: new Date() })
       .where(eq(moneyTransactions.cardId, id))

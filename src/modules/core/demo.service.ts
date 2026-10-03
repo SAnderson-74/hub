@@ -53,6 +53,7 @@ import {
   deleteTransaction,
   listCategories,
 } from "../money/money.service";
+import { saveRewards } from "../money/rewards.service";
 import { createTransfer } from "../money/transfers.service";
 import { createItem, createPlatform, deleteItem, deletePlatform } from "../resale/resale.service";
 import { createProject, deleteProject } from "../tasks/projects.service";
@@ -334,13 +335,23 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       "card",
       createCard(db, { accountId: checking.id, name: "Everyday debit", last4: "1234" }).card,
     );
-    note(
+    const rewardsCard = note(
       "card",
       createCard(db, { accountId: rewards.id, name: "Rewards card", last4: "4321" }).card,
     );
     const categoryId = new Map(
       listCategories(db, book.id).map((category) => [category.name, category.id]),
     );
+    // 1% back, more on dining and groceries, and a store bonus. Removed with the card.
+    saveRewards(db, rewardsCard.id, {
+      kind: "cash_back",
+      baseRate: 100,
+      rates: [
+        { contains: "StreamCo", rate: 500 },
+        { categoryId: categoryId.get("Dining out") ?? null, rate: 300 },
+        { categoryId: categoryId.get("Groceries") ?? null, rate: 200 },
+      ],
+    });
     // Six months of a typical month, by day of the month, up to today. Pay and rent
     // land on the 1st, so even early in a month the budget and cash flow have something.
     // Everyday spending goes on the rewards card, paid off from checking on the 28th.

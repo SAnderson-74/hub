@@ -37,6 +37,7 @@ import type { LinkRole } from "../../shared/resale";
 import { goalAccounts } from "../goals/schema";
 import { transactionItems } from "../resale/transactionLinks";
 import { checkCardFits, guessCardFor } from "./cards.service";
+import { dropCategoryRates, dropRewards } from "./rewards.service";
 import {
   moneyAccounts,
   moneyBalanceSnapshots,
@@ -249,6 +250,7 @@ export function deleteBook(db: Db, id: number): void {
     if (categoryIds.length > 0) {
       tx.delete(moneyBudgets).where(inArray(moneyBudgets.categoryId, categoryIds)).run();
     }
+    dropCategoryRates(tx, categoryIds);
     tx.delete(moneyCategories).where(eq(moneyCategories.bookId, id)).run();
     tx.delete(moneyBooks).where(eq(moneyBooks.id, id)).run();
   });
@@ -461,6 +463,15 @@ export function deleteAccount(db: Db, id: number): void {
     // Imports whose transactions are all gone (undone) go with it, and so do goal links.
     tx.delete(moneyImports).where(eq(moneyImports.accountId, id)).run();
     tx.delete(goalAccounts).where(eq(goalAccounts.accountId, id)).run();
+    dropRewards(
+      tx,
+      tx
+        .select({ id: moneyCards.id })
+        .from(moneyCards)
+        .where(eq(moneyCards.accountId, id))
+        .all()
+        .map((card) => card.id),
+    );
     tx.delete(moneyCards).where(eq(moneyCards.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
@@ -583,8 +594,9 @@ export function deleteCategory(db: Db, id: number): void {
     if ((rules?.n ?? 0) > 0) {
       throw conflict("A rule uses this category. Delete the rule first, or archive the category.");
     }
-    // An unused category's budgets mean nothing without it.
+    // An unused category's budgets and card bonus rates mean nothing without it.
     tx.delete(moneyBudgets).where(eq(moneyBudgets.categoryId, id)).run();
+    dropCategoryRates(tx, [id]);
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
   });
 }
