@@ -33,7 +33,12 @@ import {
   fillPeopleSchema,
 } from "../../shared/categorize";
 import { netWorthQuerySchema } from "../../shared/netWorth";
-import { rewardsQuerySchema, rewardsSaveSchema } from "../../shared/rewards";
+import {
+  pointBalanceSchema,
+  redemptionSchema,
+  rewardsQuerySchema,
+  rewardsSaveSchema,
+} from "../../shared/rewards";
 import { budgetMonth, setBudget } from "./budget.service";
 import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
@@ -59,7 +64,17 @@ import {
   updateTransaction,
 } from "./money.service";
 import { netWorth } from "./netWorth.service";
-import { deleteRewards, getRewards, rewardsReport, saveRewards } from "./rewards.service";
+import {
+  addRedemption,
+  cardPoints,
+  deletePointBalance,
+  deleteRedemption,
+  deleteRewards,
+  getRewards,
+  rewardsReport,
+  savePointBalance,
+  saveRewards,
+} from "./rewards.service";
 import {
   applyRules,
   createRule,
@@ -155,12 +170,37 @@ export function moneyRoutes({ db }: Deps) {
         deleteRewards(db, c.req.valid("param").id);
         return c.body(null, 204);
       })
+      .get("/cards/:id/points", idParam, (c) => c.json(cardPoints(db, c.req.valid("param").id)))
+      .post(
+        "/cards/:id/point-balances",
+        idParam,
+        zValidator("json", pointBalanceSchema, invalid("That balance isn't valid.")),
+        (c) => c.json(savePointBalance(db, c.req.valid("param").id, c.req.valid("json"))),
+      )
+      .delete("/point-balances/:id", idParam, (c) =>
+        c.json(deletePointBalance(db, c.req.valid("param").id)),
+      )
+      .post(
+        "/cards/:id/redemptions",
+        idParam,
+        zValidator("json", redemptionSchema, invalid("That redemption isn't valid.")),
+        (c) => c.json(addRedemption(db, c.req.valid("param").id, c.req.valid("json")), 201),
+      )
+      .delete("/redemptions/:id", idParam, (c) =>
+        c.json(deleteRedemption(db, c.req.valid("param").id)),
+      )
       .get(
         "/rewards",
-        zValidator("query", rewardsQuerySchema, invalid("Pass the book as bookId and a year.")),
+        zValidator(
+          "query",
+          rewardsQuerySchema,
+          invalid(
+            "Pass the book as bookId, a year, and the flat rate to compare with as baseline.",
+          ),
+        ),
         (c) => {
-          const { bookId, year } = c.req.valid("query");
-          return c.json(rewardsReport(db, bookId, year));
+          const { bookId, year, baseline } = c.req.valid("query");
+          return c.json(rewardsReport(db, bookId, year, baseline));
         },
       )
       .get("/categories", bookQuery, (c) => c.json(listCategories(db, c.req.valid("query").bookId)))

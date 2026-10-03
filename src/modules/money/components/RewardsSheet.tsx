@@ -37,6 +37,7 @@ type Draft = {
   kind: RewardKind;
   baseRate: string;
   pointValue: string;
+  annualFee: string;
   rates: RateDraft[];
 };
 
@@ -48,6 +49,7 @@ function toDraft(entry: CardRewards): Draft {
     kind: program?.kind ?? "cash_back",
     baseRate: program ? rateToInput(program.baseRate) : "1",
     pointValue: program ? rateToInput(program.pointValue) : "1",
+    annualFee: program?.annualFeeCents ? centsToInput(program.annualFeeCents) : "",
     rates: (program?.rates ?? []).map((rate) => ({
       key: nextKey++,
       kind: rate.contains === null ? "category" : "store",
@@ -137,10 +139,12 @@ function RewardsForm({
 
   const baseRate = parseRate(draft.baseRate);
   const pointValue = parseRate(draft.pointValue);
+  const annualFee = draft.annualFee.trim() === "" ? 0 : parseDollars(draft.annualFee);
   const problems = draft.rates.map(rateProblem);
   const blocked =
     baseRate === null ||
     (points && (pointValue === null || pointValue === 0)) ||
+    annualFee === null ||
     problems.some(Boolean);
   const error = save.error ?? remove.error;
 
@@ -169,6 +173,7 @@ function RewardsForm({
           kind: draft.kind,
           baseRate,
           pointValue: points ? (pointValue ?? 100) : 100,
+          annualFeeCents: annualFee ?? 0,
           rates,
         },
       },
@@ -258,6 +263,33 @@ function RewardsForm({
               </p>
             </div>
           ) : null}
+        </div>
+
+        <div>
+          <label htmlFor={`${ids}-fee`} className={labelClass}>
+            Annual fee
+          </label>
+          <input
+            id={`${ids}-fee`}
+            value={draft.annualFee}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, annualFee: event.target.value }))
+            }
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="None"
+            aria-invalid={annualFee === null}
+            aria-describedby={`${ids}-fee-hint`}
+            className={`${inputClass} tabular-nums sm:max-w-48`}
+          />
+          <p
+            id={`${ids}-fee-hint`}
+            className={`mt-1.5 text-sm ${annualFee === null ? "text-danger" : "text-muted"}`}
+          >
+            {annualFee === null
+              ? "Enter a fee like 95, or leave it empty."
+              : "Counted against what the card earns each year."}
+          </p>
         </div>
 
         <section aria-labelledby={`${ids}-rates`} className="space-y-3">

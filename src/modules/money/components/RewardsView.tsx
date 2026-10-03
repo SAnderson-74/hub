@@ -1,24 +1,32 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useId, useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { Stat } from "../../../client/components/Stat";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
   ghostButton,
   iconButton,
+  inputClass,
+  labelClass,
   primaryButton,
   secondaryButton,
 } from "../../../client/components/ui";
 import { cardLabel } from "../../../shared/cards";
 import { formatCents } from "../../../shared/money";
+import { formatSigned } from "../../../shared/profit";
 import {
+  DEFAULT_BASELINE,
   earnedLabel,
+  parseRate,
   pointValueLabel,
   REWARD_KIND_LABELS,
   rateLabel,
+  rateToInput,
 } from "../../../shared/rewards";
-import type { Book, CardRewards, Category } from "../queries";
+import { formatShortDate } from "../../tasks/dates";
+import type { Book, CardRewards, Category, RewardsReport } from "../queries";
 import { useRewards } from "../queries";
+import { PointsSheet } from "./PointsSheet";
 import { RewardsSheet } from "./RewardsSheet";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
@@ -74,9 +82,20 @@ export function RewardsView({
 }) {
   const thisYear = Number(today.slice(0, 4));
   const [year, setYear] = useState(thisYear);
-  const report = useRewards(book.id, year);
+  const [baseline, setBaseline] = useState(storedBaseline);
+  const report = useRewards(book.id, year, baseline);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [pointsId, setPointsId] = useState<number | null>(null);
   const editing = report.data?.cards.find((entry) => entry.card.id === editingId) ?? null;
+  const pointsCard = report.data?.cards.find((entry) => entry.card.id === pointsId) ?? null;
+  const chooseBaseline = (value: number) => {
+    setBaseline(value);
+    try {
+      localStorage.setItem(BASELINE_KEY, String(value));
+    } catch {
+      // Private browsing; the choice still applies to this visit.
+    }
+  };
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -132,24 +151,31 @@ export function RewardsView({
             description="Estimates from each card's rates and its transactions. Your card's statement is the final word."
             className="lg:col-span-12"
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Stat
                 label="Earned"
                 value={formatCents(report.data.totals.valueCents)}
-                note="Cash back, and points at their value"
+                note={`On ${formatCents(report.data.totals.spentCents)} spent, ${effectiveRate(report.data.totals.valueCents, report.data.totals.spentCents)} back`}
               />
               <Stat
-                label="Spent"
-                value={formatCents(report.data.totals.spentCents)}
-                note="On cards with rewards set up"
+                label="Annual fees"
+                value={formatCents(report.data.totals.annualFeeCents)}
+                note="Each card's fee for the year"
               />
               <Stat
-                label="Average back"
-                value={effectiveRate(report.data.totals.valueCents, report.data.totals.spentCents)}
-                note="What you earned for what you spent"
+                label="After fees"
+                value={formatSigned(report.data.totals.netCents)}
+                note="What the cards earned, less their fees"
+              />
+              <Stat
+                label="With the best card"
+                value={`+${formatCents(Math.max(0, report.data.best.bestCents - report.data.best.actualCents))}`}
+                note="More, using the best card for each purchase"
               />
             </div>
+            <BaselineField baseline={baseline} onChange={chooseBaseline} />
           </Panel>
+          {report.data.best.tips.length > 0 ? <BestCardPanel best={report.data.best} /> : null}
           {report.data.cards.some((entry) => entry.program !== null) ? (
             <Panel title="Earned by month" className="lg:col-span-12">
               <Suspense fallback={<LoadingRows rows={3} />}>
@@ -162,13 +188,197 @@ export function RewardsView({
               key={entry.card.id}
               entry={entry}
               year={year}
+              partYear={year === thisYear}
+              baseline={report.data.baseline}
+              today={today}
               onEdit={() => setEditingId(entry.card.id)}
+              onPoints={() => setPointsId(entry.card.id)}
             />
           ))}
         </div>
       )}
 
       <RewardsSheet target={editing} categories={categories} onClose={() => setEditingId(null)} />
+      <PointsSheet target={pointsCard} today={today} onClose={() => setPointsId(null)} />
+    </div>
+  );
+}
+
+const BASELINE_KEY = "hub.money.rewardBaseline";
+
+function storedBaseline(): number {
+  try {
+    const value = parseRate(localStorage.getItem(BASELINE_KEY) ?? "");
+    return value === null ? DEFAULT_BASELINE : value;
+  } catch {
+    return DEFAULT_BASELINE;
+  }
+}
+
+/** The flat-rate card each card is compared with. Kept in this browser. */
+function BaselineField({
+  baseline,
+  onChange,
+}: {
+  baseline: number;
+  onChange: (value: number) => void;
+}) {
+  const [text, setText] = useState(rateToInput(baseline));
+  const ids = useId();
+  const parsed = parseRate(text);
+  return (
+    <div className="mt-4">
+      <label htmlFor={`${ids}-baseline`} className={labelClass}>
+        Compare each card with one earning
+      </label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="relative w-28">
+          <input
+            id={`${ids}-baseline`}
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              const value = parseRate(event.target.value);
+              if (value !== null) onChange(value);
+            }}
+            inputMode="decimal"
+            autoComplete="off"
+            aria-invalid={parsed === null}
+            aria-describedby={`${ids}-baseline-hint`}
+            className={`${inputClass} pr-10 tabular-nums`}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted"
+          >
+            %
+          </span>
+        </div>
+        <p
+          id={`${ids}-baseline-hint`}
+          className={`text-sm ${parsed === null ? "text-danger" : "text-muted"}`}
+        >
+          {parsed === null ? "Enter a rate like 2 or 1.5." : "back on everything, with no fee."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Where using a different card would have earned more, biggest first. */
+function BestCardPanel({ best }: { best: RewardsReport["best"] }) {
+  const more = best.bestCents - best.actualCents;
+  return (
+    <Panel
+      title="Use the best card"
+      description="Ignores spending caps, which depend on what else goes on each card."
+      className="lg:col-span-12"
+    >
+      <p className="text-fg tabular-nums">
+        Putting each purchase on the card that earns the most for it would have earned{" "}
+        {formatCents(best.bestCents)} instead of {formatCents(best.actualCents)},{" "}
+        {formatCents(more)} more.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {best.tips.map((tip) => (
+          <li
+            key={`${tip.label}|${tip.fromCard}|${tip.toCard}`}
+            className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
+          >
+            <span className="min-w-0 break-words text-fg">
+              <span className="font-semibold">{tip.label}:</span> {tip.toCard} instead of{" "}
+              {tip.fromCard}
+            </span>
+            <span className="text-sm text-muted tabular-nums">
+              {formatCents(tip.missedCents)} more on {formatCents(tip.spentCents)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** "Worth it" against the flat-rate card, after the fee, in words with its color. */
+function WorthIt({
+  entry,
+  baseline,
+  partYear,
+}: {
+  entry: CardRewards;
+  baseline: number;
+  partYear: boolean;
+}) {
+  const { annualFeeCents, netCents, flatCents } = entry.worth;
+  const gap = netCents - flatCents;
+  const flat = `a flat ${rateLabel("cash_back", baseline)} card`;
+  return (
+    <div className="mt-4 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+      <dl className="grid grid-cols-3 gap-3 text-sm tabular-nums">
+        <div className="min-w-0">
+          <dt className="text-muted">Annual fee</dt>
+          <dd className="font-semibold text-fg">{formatCents(annualFeeCents)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted">After the fee</dt>
+          <dd className="font-semibold text-fg">{formatSigned(netCents)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted">Flat {rateLabel("cash_back", baseline)} card</dt>
+          <dd className="font-semibold text-fg">{formatCents(flatCents)}</dd>
+        </div>
+      </dl>
+      <p className={`mt-3 text-sm font-semibold ${gap >= 0 ? "text-ok" : "text-warn"}`}>
+        {gap >= 0
+          ? `Worth it: ${formatCents(gap)} more than ${flat} would have earned.`
+          : `Not worth it${partYear ? " so far" : ""}: ${formatCents(-gap)} less than ${flat} would have earned.`}
+      </p>
+      {partYear && annualFeeCents > 0 ? (
+        <p className="mt-1 text-sm text-muted">This year so far, against the whole year's fee.</p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A points card's value per point, latest balance, and the statements against the estimate. */
+function PointsSummary({
+  entry,
+  today,
+  onPoints,
+}: {
+  entry: CardRewards;
+  today: string;
+  onPoints: () => void;
+}) {
+  const points = entry.points;
+  if (!points) return null;
+  const check = points.check;
+  return (
+    <div className="mt-4 space-y-2 text-sm">
+      <p className="text-muted">
+        {entry.pointValueSource === "redemptions"
+          ? `Points count at ${pointValueLabel(entry.pointValue)}, what your redemptions averaged.`
+          : `Points count at the ${pointValueLabel(entry.pointValue)} you set, until you add points you used.`}
+        {points.redeemedPoints > 0
+          ? ` This year you used ${points.redeemedPoints.toLocaleString("en-US")} for ${formatCents(points.redeemedValueCents)}.`
+          : ""}
+      </p>
+      {points.latest ? (
+        <p className="text-fg tabular-nums">
+          Balance {points.latest.points.toLocaleString("en-US")} points on{" "}
+          {formatShortDate(points.latest.date, today)}.
+        </p>
+      ) : null}
+      {check ? (
+        <p className="text-muted tabular-nums">
+          Statements show {check.statementPoints.toLocaleString("en-US")} points earned from{" "}
+          {formatShortDate(check.from, today)} to {formatShortDate(check.to, today)}; Hub estimated{" "}
+          {check.estimatedPoints.toLocaleString("en-US")}.
+        </p>
+      ) : null}
+      <button type="button" className={secondaryButton} onClick={onPoints}>
+        Balances and redemptions
+      </button>
     </div>
   );
 }
@@ -176,11 +386,20 @@ export function RewardsView({
 function CardPanel({
   entry,
   year,
+  partYear,
+  baseline,
+  today,
   onEdit,
+  onPoints,
 }: {
   entry: CardRewards;
   year: number;
+  /** The year isn't over, so the fee is weighed against part of a year. */
+  partYear: boolean;
+  baseline: number;
+  today: string;
   onEdit: () => void;
+  onPoints: () => void;
 }) {
   const { card, program } = entry;
   return (
@@ -189,7 +408,7 @@ function CardPanel({
       description={[
         card.account.name,
         program
-          ? `${REWARD_KIND_LABELS[program.kind]}${program.kind === "points" ? `, ${pointValueLabel(program.pointValue)} a point` : ""}`
+          ? `${REWARD_KIND_LABELS[program.kind]}${program.kind === "points" ? `, ${pointValueLabel(entry.pointValue)} a point` : ""}`
           : "",
         card.archived ? "Archived" : "",
       ]
@@ -211,6 +430,8 @@ function CardPanel({
             On {formatCents(entry.spentCents)} spent in {year},{" "}
             {effectiveRate(entry.valueCents, entry.spentCents)} back.
           </p>
+          <WorthIt entry={entry} baseline={baseline} partYear={partYear} />
+          <PointsSummary entry={entry} today={today} onPoints={onPoints} />
           <table className="mt-4 w-full text-left text-sm tabular-nums">
             <caption className="sr-only">What each rate earned on {card.name}</caption>
             <thead className="text-muted">

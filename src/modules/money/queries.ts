@@ -18,7 +18,7 @@ import type { BudgetSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
-import type { RewardsSave } from "../../shared/rewards";
+import type { PointBalanceSave, RedemptionSave, RewardsSave } from "../../shared/rewards";
 
 async function fetchBooks() {
   const res = await api.money.books.$get();
@@ -274,13 +274,16 @@ export function useDeleteCard() {
 
 // Rewards
 
-/** What a book's cards spent and earned in a year, by month and by rate. */
-export function useRewards(bookId: number, year: number) {
+/**
+ * What a book's cards spent and earned in a year, by month and by rate, against a
+ * flat-rate card earning `baseline` (hundredths of a percent).
+ */
+export function useRewards(bookId: number, year: number, baseline: number) {
   return useQuery({
-    queryKey: ["money", "rewards", bookId, year],
+    queryKey: ["money", "rewards", bookId, year, baseline],
     queryFn: async () => {
       const res = await api.money.rewards.$get({
-        query: { bookId: String(bookId), year: String(year) },
+        query: { bookId: String(bookId), year: String(year), baseline: String(baseline) },
       });
       if (!res.ok) throw await toApiError(res);
       return res.json();
@@ -298,6 +301,57 @@ export function useSaveRewards() {
       param: { id: String(cardId) },
       json,
     });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+/** A points card's statement balances and redemptions. */
+export function useCardPoints(cardId: number | null) {
+  return useQuery({
+    queryKey: ["money", "points", cardId ?? 0],
+    queryFn: async () => {
+      const res = await api.money.cards[":id"].points.$get({ param: { id: String(cardId ?? 0) } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled: cardId !== null,
+  });
+}
+
+export function useSavePointBalance() {
+  return useMoneyMutation(async ({ cardId, json }: { cardId: number; json: PointBalanceSave }) => {
+    const res = await api.money.cards[":id"]["point-balances"].$post({
+      param: { id: String(cardId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeletePointBalance() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money["point-balances"][":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useAddRedemption() {
+  return useMoneyMutation(async ({ cardId, json }: { cardId: number; json: RedemptionSave }) => {
+    const res = await api.money.cards[":id"].redemptions.$post({
+      param: { id: String(cardId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteRedemption() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.redemptions[":id"].$delete({ param: { id: String(id) } });
     if (!res.ok) throw await toApiError(res);
     return res.json();
   });

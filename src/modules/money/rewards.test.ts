@@ -127,7 +127,14 @@ describe("card rewards", () => {
       ["example store, exmpl", 10_000, 500],
       ["Everything else", 4_000, 40],
     ]);
-    expect(report.totals).toEqual({ spentCents: 34_000, valueCents: 1_140 });
+    expect(report.totals).toEqual({
+      spentCents: 34_000,
+      valueCents: 1_140,
+      annualFeeCents: 0,
+      netCents: 1_140,
+    });
+    // Against a 2% card on the same $340: $6.80.
+    expect(entry?.worth).toEqual({ annualFeeCents: 0, netCents: 1_140, flatCents: 680 });
   });
 
   it("value points at the card's point value", async () => {
@@ -208,5 +215,146 @@ describe("card rewards", () => {
     ).toEqual([]);
     expect((await t.api.money.cards[":id"].rewards.$delete(param(card.id))).status).toBe(204);
     expect(await body(await t.api.money.cards[":id"].rewards.$get(param(card.id)))).toBeNull();
+  });
+
+  it("weigh the annual fee against a flat-rate card", async () => {
+    const { book, credit, card, dining } = await setup();
+    await body(
+      await t.api.money.cards[":id"].rewards.$put({
+        ...param(card.id),
+        json: {
+          kind: "cash_back",
+          baseRate: 100,
+          annualFeeCents: 9_500,
+          rates: [{ categoryId: dining, rate: 400 }],
+        },
+      }),
+    );
+    await pay(credit.id, "2030-05-01", -300_000, "Pizza place", dining);
+    const report = await body(
+      await t.api.money.rewards.$get({
+        query: { bookId: String(book.id), year: "2030", baseline: "150" },
+      }),
+    );
+    expect(report.baseline).toBe(150);
+    // $120 earned, less the $95 fee, against $45 from a 1.5% card.
+    expect(report.cards[0]?.worth).toEqual({
+      annualFeeCents: 9_500,
+      netCents: 2_500,
+      flatCents: 4_500,
+    });
+    expect(report.totals.netCents).toBe(2_500);
+  });
+
+  it("track points: real value from redemptions, and statements against the estimate", async () => {
+    const { book, credit, card } = await setup();
+    await body(
+      await t.api.money.cards[":id"].rewards.$put({
+        ...param(card.id),
+        json: { kind: "points", baseRate: 200, pointValue: 100, rates: [] },
+      }),
+    );
+    await body(
+      await t.api.money.cards[":id"]["point-balances"].$post({
+        ...param(card.id),
+        json: { date: "2030-01-31", points: 1_000 },
+      }),
+    );
+    await pay(credit.id, "2030-01-31", -50_000, "Before the statement");
+    await pay(credit.id, "2030-02-10", -100_000, "Corner gas"); // 2,000 points
+    await body(
+      await t.api.money.cards[":id"].redemptions.$post({
+        ...param(card.id),
+        json: { date: "2030-02-20", points: 2_000, valueCents: 3_000, note: "Travel" },
+      }),
+    );
+    const history = await body(
+      await t.api.money.cards[":id"]["point-balances"].$post({
+        ...param(card.id),
+        json: { date: "2030-02-28", points: 1_050 },
+      }),
+    );
+    expect(history.realValue).toBe(150);
+    expect(history.balances.map((balance) => balance.date)).toEqual(["2030-02-28", "2030-01-31"]);
+
+    const [entry] = (await reportOf(book.id, 2030)).cards;
+    expect(entry).toMatchObject({ pointValue: 150, pointValueSource: "redemptions" });
+    // 3,000 points at 1.5¢.
+    expect(entry).toMatchObject({ earned: 3_000, valueCents: 4_500 });
+    expect(entry?.points).toEqual({
+      latest: { date: "2030-02-28", points: 1_050 },
+      // 1,050 - 1,000 + 2,000 used: 2,050 on the statements, 2,000 estimated.
+      check: {
+        from: "2030-01-31",
+        to: "2030-02-28",
+        statementPoints: 2_050,
+        estimatedPoints: 2_000,
+      },
+      redeemedPoints: 2_000,
+      redeemedValueCents: 3_000,
+    });
+
+    // The same day replaces; deleting goes back.
+    const replaced = await body(
+      await t.api.money.cards[":id"]["point-balances"].$post({
+        ...param(card.id),
+        json: { date: "2030-02-28", points: 1_100 },
+      }),
+    );
+    expect(replaced.balances[0]?.points).toBe(1_100);
+    const afterDelete = await body(
+      await t.api.money["point-balances"][":id"].$delete(param(replaced.balances[0]?.id ?? 0)),
+    );
+    expect(afterDelete.balances).toHaveLength(1);
+    const redemptionId = afterDelete.redemptions[0]?.id ?? 0;
+    expect(
+      (await body(await t.api.money.redemptions[":id"].$delete(param(redemptionId)))).realValue,
+    ).toBeNull();
+
+    // A card's points go with it.
+    expect((await t.api.money.cards[":id"].$delete(param(card.id))).status).toBe(204);
+    expect(t.sqlite.prepare("select count(*) as n from money_point_balances").get()).toEqual({
+      n: 0,
+    });
+  });
+
+  it("show what the best card for each purchase would have earned", async () => {
+    const { book, credit, checking, card, dining } = await setup();
+    const debit = (
+      await body(await t.api.money.cards.$post({ json: { accountId: checking.id, name: "Debit" } }))
+    ).card;
+    await body(
+      await t.api.money.cards[":id"].rewards.$put({
+        ...param(card.id),
+        json: { kind: "cash_back", baseRate: 100, rates: [{ categoryId: dining, rate: 300 }] },
+      }),
+    );
+    await pay(credit.id, "2030-03-01", -10_000, "Pizza place", dining);
+    await body(
+      await t.api.money.transactions.$post({
+        json: {
+          accountId: checking.id,
+          date: "2030-03-02",
+          amountCents: -20_000,
+          payee: "Pizza place",
+          categoryId: dining,
+          cardId: debit.id,
+        },
+      }),
+    );
+    const { best } = await reportOf(book.id, 2030);
+    expect(best).toEqual({
+      actualCents: 300,
+      bestCents: 900,
+      tips: [
+        {
+          label: "Dining out",
+          fromCard: "Debit",
+          toCard: "Store card",
+          spentCents: 20_000,
+          missedCents: 600,
+        },
+      ],
+    });
   });
 });
