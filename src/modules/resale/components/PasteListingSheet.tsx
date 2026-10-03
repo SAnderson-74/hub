@@ -7,6 +7,7 @@ import {
   secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { readPaste } from "../../../shared/claudeProject";
 import type { ListingImport, ListingImportResult } from "../../../shared/resaleListing";
 import { useImportListing } from "../queries";
 
@@ -41,19 +42,22 @@ export function PasteListingSheet({
       title="Paste a listing"
       description="A hub-listing/v1 listing. If an unsold item has the same title, the listing is added to it."
     >
-      {open ? <PasteForm onDone={onClose} onOpenItem={onOpenItem} /> : null}
+      {open ? <PasteListingForm onDone={onClose} onOpenItem={onOpenItem} /> : null}
     </Sheet>
   );
 }
 
-function PasteForm({
+/** The paste, check, and add; also used by the one paste box for every import. */
+export function PasteListingForm({
+  initialText = "",
   onDone,
   onOpenItem,
 }: {
+  initialText?: string;
   onDone: () => void;
   onOpenItem: (id: number) => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [parseError, setParseError] = useState("");
   const [preview, setPreview] = useState<{
     data: ListingImport;
@@ -71,15 +75,19 @@ function PasteForm({
   };
 
   const check = () => {
-    let data: ListingImport;
-    try {
-      data = JSON.parse(text) as ListingImport;
-    } catch {
+    // The listing alone, or a Claude Project's answer with it in a code block.
+    const read = readPaste(text);
+    if (!read?.ok) {
+      setParseError(read?.error ?? "Copy the whole listing, from { to }, and paste it again.");
+      return;
+    }
+    if (read.format.format !== "hub-listing/v1") {
       setParseError(
-        "That isn't valid JSON. Copy the whole listing, from { to }, and paste it again.",
+        `That's ${read.format.noun} for ${read.format.into}, not a listing. Paste it there, or in Settings > Imports > Paste from Claude.`,
       );
       return;
     }
+    const data = read.data as ListingImport;
     run.mutate({ data, dryRun: true }, { onSuccess: (result) => setPreview({ data, result }) });
   };
 

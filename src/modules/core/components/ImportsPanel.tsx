@@ -5,6 +5,7 @@ import {
   GraduationCap,
   Landmark,
   ReceiptText,
+  Sparkles,
 } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { useNavigate } from "react-router";
@@ -18,8 +19,9 @@ import { storedBookId } from "../../money/storedBook";
 import { ImportCsvSheet } from "../../resale/components/ImportCsvSheet";
 import { PasteListingSheet } from "../../resale/components/PasteListingSheet";
 import { localDate } from "../../tasks/dates";
+import { PasteSheet } from "./PasteSheet";
 
-type Open = "bank" | "receipts" | "resale" | "listing" | "courses" | null;
+type Open = "claude" | "bank" | "receipts" | "resale" | "listing" | "courses" | null;
 
 /** One import: what it takes and where it goes. Opens the same sheet as on its page. */
 function ImportRow({
@@ -93,6 +95,12 @@ export function ImportsPanel() {
   return (
     <>
       <ul className="space-y-2">
+        <ImportRow
+          icon={<Sparkles className="size-5" />}
+          title="Paste from Claude"
+          detail="Any answer from your Claude Project. Hub finds where it goes."
+          onOpen={() => setOpen("claude")}
+        />
         <ImportRow
           icon={<Landmark className="size-5" />}
           title="Bank or card transactions"
@@ -170,6 +178,7 @@ export function ImportsPanel() {
           onClose={close}
         />
       ) : null}
+      <PasteSheet open={open === "claude"} onClose={close} />
       <ImportCsvSheet open={open === "resale"} onClose={close} />
       <PasteListingSheet
         open={open === "listing"}

@@ -7,6 +7,7 @@ import {
   secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { readPaste } from "../../../shared/claudeProject";
 import type { EducationImport, ImportSummary } from "../../../shared/education";
 import { useImportEducation } from "../queries";
 
@@ -38,13 +39,20 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
       title="Import a study plan"
       description="A hub-education/v1 file. Terms are matched by name and courses by code, so importing again updates them."
     >
-      {open ? <ImportForm onDone={onClose} /> : null}
+      {open ? <StudyPlanForm onDone={onClose} /> : null}
     </Sheet>
   );
 }
 
-function ImportForm({ onDone }: { onDone: () => void }) {
-  const [text, setText] = useState("");
+/** The file or paste, check, and import; also used by the one paste box for every import. */
+export function StudyPlanForm({
+  initialText = "",
+  onDone,
+}: {
+  initialText?: string;
+  onDone: () => void;
+}) {
+  const [text, setText] = useState(initialText);
   const [parseError, setParseError] = useState("");
   const [preview, setPreview] = useState<{ data: EducationImport; summary: ImportSummary } | null>(
     null,
@@ -67,13 +75,19 @@ function ImportForm({ onDone }: { onDone: () => void }) {
   };
 
   const check = () => {
-    let data: EducationImport;
-    try {
-      data = JSON.parse(text) as EducationImport;
-    } catch {
-      setParseError("That isn't valid JSON. Check the file, or paste it again.");
+    // The file alone, or a Claude Project's answer with it in a code block.
+    const read = readPaste(text);
+    if (!read?.ok) {
+      setParseError(read?.error ?? "Check the file, or paste it again.");
       return;
     }
+    if (read.format.format !== "hub-education/v1") {
+      setParseError(
+        `That's ${read.format.noun} for ${read.format.into}, not a study plan. Paste it there, or in Settings > Imports > Paste from Claude.`,
+      );
+      return;
+    }
+    const data = read.data as EducationImport;
     run.mutate({ data, dryRun: true }, { onSuccess: (summary) => setPreview({ data, summary }) });
   };
 

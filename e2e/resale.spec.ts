@@ -231,7 +231,7 @@ test("a pasted listing adds an item, and a Shortcut can add another listing", as
   const sheet = page.getByRole("dialog", { name: "Paste a listing" });
   await sheet.getByLabel("Listing").fill("{ not json");
   await sheet.getByRole("button", { name: "Check listing" }).click();
-  await expect(sheet.getByRole("alert")).toContainText("That isn't valid JSON.");
+  await expect(sheet.getByRole("alert")).toContainText("Copy its whole answer.");
   await sheet.getByLabel("Listing").fill(JSON.stringify(listing));
   await sheet.getByRole("button", { name: "Check listing" }).click();
   await expect(sheet).toContainText(`A new item: ${title}`);
