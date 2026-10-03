@@ -88,15 +88,52 @@ export const rewardsSaveSchema = z
       .min(1, "Give points a value above 0¢.")
       .max(10_000, "Use a value under $1 a point.")
       .default(100),
+    /** What the card costs a year. */
+    annualFeeCents: z
+      .number()
+      .int("Use whole cents.")
+      .min(0, "Fees can't be negative.")
+      .max(10_000_000, "Use a fee under $100,000.")
+      .default(0),
     rates: z.array(rewardRateSchema).max(50, "Keep it to 50 bonus rates."),
   })
   .strict();
 export type RewardsSave = z.input<typeof rewardsSaveSchema>;
 
+/** The flat-rate card each card is compared with: 200 is 2% back on everything. */
+export const DEFAULT_BASELINE = 200;
+
 export const rewardsQuerySchema = z.object({
   bookId: z.coerce.number().int().positive(),
   year: z.coerce.number().int().min(2000).max(2100),
+  baseline: z.coerce.number().int().min(0).max(10_000).default(DEFAULT_BASELINE),
 });
+
+const points = z
+  .number()
+  .int("Use whole points.")
+  .max(1_000_000_000, "Use fewer than a billion points.");
+
+/** A points balance from a statement. */
+export const pointBalanceSchema = z
+  .object({ date, points: points.min(0, "A balance can't be negative.") })
+  .strict();
+export type PointBalanceSave = z.infer<typeof pointBalanceSchema>;
+
+/** Points used, and what they were worth. */
+export const redemptionSchema = z
+  .object({
+    date,
+    points: points.min(1, "Enter how many points were used."),
+    valueCents: z
+      .number()
+      .int("Use whole cents.")
+      .min(0, "The value can't be negative.")
+      .max(10_000_000_000, "Use an amount under $100,000,000."),
+    note: z.string().trim().max(200, "Keep notes under 200 characters.").default(""),
+  })
+  .strict();
+export type RedemptionSave = z.input<typeof redemptionSchema>;
 
 export type RewardRate = {
   id: number;
@@ -227,4 +264,104 @@ export function earnedLabel(kind: RewardKind, earned: number, valueCents: number
   if (kind === "cash_back") return formatCents(valueCents);
   const points = Math.round(earned).toLocaleString("en-US");
   return `${points} ${Math.round(earned) === 1 ? "point" : "points"} (about ${formatCents(valueCents)})`;
+}
+
+/**
+ * What points were really worth when used, in hundredths of a cent per point, or null
+ * without redemptions. 15,000 points for $187.50 is 125 (1.25¢).
+ */
+export function realPointValue(
+  redemptions: ReadonlyArray<{ points: number; valueCents: number }>,
+): number | null {
+  const used = redemptions.reduce((sum, entry) => sum + entry.points, 0);
+  if (used <= 0) return null;
+  const value = redemptions.reduce((sum, entry) => sum + entry.valueCents, 0);
+  return Math.round((value * 100) / used);
+}
+
+/** A card's program, valued per cent: what a dollar spent earns in cents of value. */
+export type ValuedProgram = {
+  cardId: number;
+  name: string;
+  program: RewardProgram;
+  /** Hundredths of a cent per point, for points programs. */
+  pointValue: number;
+};
+
+/** A purchase made with a card, for asking which card would have earned the most. */
+export type CardSpend = Spend & { cardId: number; categoryName: string };
+
+export type BestCardTip = {
+  /** What the purchases were for: a category, or "Uncategorized". */
+  label: string;
+  /** The card that paid, and the one that would have earned the most. */
+  fromCardId: number;
+  toCardId: number;
+  spentCents: number;
+  /** Cents more the best card would have earned. */
+  missedCents: number;
+};
+
+export type BestCard = {
+  /** What the cards that paid earned, in cents of value, without caps. */
+  actualCents: number;
+  /** What the best card for each purchase would have earned, without caps. */
+  bestCents: number;
+  tips: BestCardTip[];
+};
+
+/** What a purchase earns on a program, in cents of value, ignoring caps. */
+function purchaseValue(card: ValuedProgram, spend: Spend): number {
+  const bonus = bonusFor(card.program.rates, spend);
+  const rate = bonus ? bonus.rate : card.program.baseRate;
+  const earned = (-spend.amountCents * rate) / 10_000;
+  return rewardValue(card.program.kind, card.pointValue, earned);
+}
+
+/**
+ * For each card purchase, what the card that paid earned against what the best of
+ * the book's cards with rewards would have, ignoring caps (which depend on what else
+ * went on each card). Tips group what was missed by category and card, biggest first.
+ */
+export function bestCard(
+  cards: readonly ValuedProgram[],
+  spends: readonly CardSpend[],
+  maxTips = 3,
+): BestCard {
+  let actualCents = 0;
+  let bestCents = 0;
+  const tips = new Map<string, BestCardTip>();
+  for (const spend of spends) {
+    if (spend.amountCents >= 0 || cards.length === 0) continue;
+    const paid = cards.find((card) => card.cardId === spend.cardId);
+    const actual = paid ? purchaseValue(paid, spend) : 0;
+    let best = { cardId: spend.cardId, value: actual };
+    for (const card of cards) {
+      const value = purchaseValue(card, spend);
+      if (value > best.value + 1e-9) best = { cardId: card.cardId, value };
+    }
+    actualCents += actual;
+    bestCents += best.value;
+    if (best.cardId === spend.cardId) continue;
+    const key = `${spend.categoryName}|${spend.cardId}|${best.cardId}`;
+    const tip = tips.get(key) ?? {
+      label: spend.categoryName,
+      fromCardId: spend.cardId,
+      toCardId: best.cardId,
+      spentCents: 0,
+      missedCents: 0,
+    };
+    tip.spentCents += -spend.amountCents;
+    tip.missedCents += best.value - actual;
+    tips.set(key, tip);
+  }
+  return {
+    actualCents: Math.round(actualCents),
+    bestCents: Math.round(bestCents),
+    tips: [...tips.values()]
+      .map((tip) => ({ ...tip, missedCents: Math.round(tip.missedCents) }))
+      .filter((tip) => tip.missedCents > 0)
+      .sort((a, b) => b.missedCents - a.missedCents)
+      .slice(0, maxTips),
+  };
 }

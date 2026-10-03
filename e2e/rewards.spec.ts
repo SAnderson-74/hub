@@ -58,6 +58,7 @@ test("a card's rewards count by category and by store", async ({ page }, testInf
 
   const sheet = page.getByRole("dialog", { name: "Card rewards" });
   await sheet.getByLabel("Cash back on everything else").fill("1");
+  await sheet.getByLabel("Annual fee").fill("2");
   await sheet.getByRole("button", { name: "Add category rate" }).click();
   await sheet.getByLabel("On category").selectOption({ label: "Dining out" });
   const rates = sheet.getByRole("textbox", { name: "Rate", exact: true });
@@ -74,5 +75,58 @@ test("a card's rewards count by category and by store", async ({ page }, testInf
   await expect(panel).toContainText("$5.70");
   await expect(panel.getByRole("row", { name: /example store/ })).toContainText("$2.50");
   await expect(page.getByRole("region", { name: "Overview" })).toContainText("$5.70");
+  // $5.70 less the $2 fee, against $3.40 from a 2% card.
+  await expect(panel).toContainText(
+    /Worth it: \$0\.30 more than a flat 2% card would have earned\./,
+  );
+  expect(errors).toEqual([]);
+});
+
+test("points count at what redemptions got for them", async ({ page }, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const post = async (url: string, data: object, method: "post" | "put" = "post") => {
+    const res = await page.request[method](url, { data });
+    expect(res.ok()).toBe(true);
+    return res.json();
+  };
+  const book = await post("/api/money/books", { name: `Points ${id}`, kind: "personal" });
+  const account = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: "Points account",
+    kind: "credit_card",
+  });
+  const { card } = await post("/api/money/cards", { accountId: account.id, name: "Points card" });
+  await post(
+    `/api/money/cards/${card.id}/rewards`,
+    { kind: "points", baseRate: 200, pointValue: 100, rates: [] },
+    "put",
+  );
+  await post("/api/money/transactions", {
+    accountId: account.id,
+    date: `${new Date().getFullYear()}-01-15`,
+    amountCents: -50_000,
+    payee: "Corner gas",
+  });
+
+  await page.addInitScript((value) => {
+    localStorage.setItem("hub.money.book", value);
+    localStorage.setItem("hub.money.view", "rewards");
+  }, String(book.id));
+  await page.goto("/money");
+  const panel = page.getByRole("region", { name: "Points card" });
+  await expect(panel).toContainText("1,000 points (about $10)");
+  await panel.getByRole("button", { name: "Balances and redemptions" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Points" });
+  await sheet.getByLabel("Points used").fill("2,000");
+  await sheet.getByLabel("Worth").fill("30");
+  await sheet.getByRole("button", { name: "Add redemption" }).click();
+  await expect(sheet.getByText("2,000 points for $30 (1.5¢ each)")).toBeVisible();
+  await expect(sheet).toContainText("Your redemptions averaged 1.5¢ a point");
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  await expect(panel).toContainText("1,000 points (about $15)");
+  await expect(panel).toContainText("what your redemptions averaged");
   expect(errors).toEqual([]);
 });

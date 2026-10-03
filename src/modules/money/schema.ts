@@ -232,6 +232,8 @@ export const moneyCardRewards = sqliteTable("money_card_rewards", {
   baseRate: integer("base_rate").notNull().default(0),
   /** Hundredths of a cent per point. */
   pointValue: integer("point_value").notNull().default(100),
+  /** What the card costs a year, for whether it's worth it. */
+  annualFeeCents: integer("annual_fee_cents").notNull().default(0),
   ...timestamps(),
 });
 
@@ -251,4 +253,32 @@ export const moneyRewardRates = sqliteTable(
     ...timestamps(),
   },
   (t) => [index("money_reward_rates_card_idx").on(t.cardId)],
+);
+
+/** A card's points balance on a day, from its statement. One per card per day. */
+export const moneyPointBalances = sqliteTable(
+  "money_point_balances",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id").notNull(),
+    date: text("date").notNull(),
+    points: integer("points").notNull(),
+    ...timestamps(),
+  },
+  (t) => [uniqueIndex("money_point_balances_card_date_unique").on(t.cardId, t.date)],
+);
+
+/** Points used, and what they were worth: a statement credit, a gift card, travel. */
+export const moneyPointRedemptions = sqliteTable(
+  "money_point_redemptions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id").notNull(),
+    date: text("date").notNull(),
+    points: integer("points").notNull(),
+    valueCents: integer("value_cents").notNull(),
+    note: text("note").notNull().default(""),
+    ...timestamps(),
+  },
+  (t) => [index("money_point_redemptions_card_idx").on(t.cardId)],
 );

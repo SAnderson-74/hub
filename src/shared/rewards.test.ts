@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bestCard,
   earnedLabel,
   earnRewards,
   parseRate,
@@ -7,6 +8,7 @@ import {
   type RewardProgram,
   type RewardRate,
   rateLabel,
+  realPointValue,
   rewardsSaveSchema,
   rewardValue,
   type Spend,
@@ -163,6 +165,7 @@ describe("rates in words", () => {
     ).toEqual({
       ...base,
       pointValue: 100,
+      annualFeeCents: 0,
       rates: [
         {
           rate: 300,
@@ -172,6 +175,58 @@ describe("rates in words", () => {
           endsOn: null,
           capCents: null,
         },
+      ],
+    });
+  });
+});
+
+describe("what points are worth, and the best card", () => {
+  it("values points by what redemptions got for them", () => {
+    expect(realPointValue([])).toBeNull();
+    expect(
+      realPointValue([
+        { points: 10_000, valueCents: 10_000 },
+        { points: 5_000, valueCents: 8_750 },
+      ]),
+    ).toBe(125);
+  });
+
+  it("finds what the best card would have earned, and what to move", () => {
+    const flat = {
+      cardId: 1,
+      name: "Flat card",
+      program: program([], 150),
+      pointValue: 100,
+    };
+    const dining = {
+      cardId: 2,
+      name: "Dining card",
+      program: {
+        ...program([rate({ id: 9, categoryId: DINING, rate: 400 })], 100),
+        kind: "points" as const,
+      },
+      // Points at 1.25¢: 4x on dining is worth 5%.
+      pointValue: 125,
+    };
+    const spends = [
+      { ...spend("2030-01-01", -10_000, "Pizza", DINING), cardId: 1, categoryName: "Dining out" },
+      { ...spend("2030-01-02", -10_000, "Pizza", DINING), cardId: 3, categoryName: "Dining out" },
+      {
+        ...spend("2030-01-03", -10_000, "Grocer", GROCERIES),
+        cardId: 1,
+        categoryName: "Groceries",
+      },
+      // Refunds aren't purchases to move.
+      { ...spend("2030-01-04", 2_000, "Refund", DINING), cardId: 1, categoryName: "Dining out" },
+    ];
+    const result = bestCard([flat, dining], spends);
+    // Paid: $1.50 + $0 (a card without rewards) + $1.50. Best: $5 + $5 + $1.50.
+    expect(result).toEqual({
+      actualCents: 300,
+      bestCents: 1_150,
+      tips: [
+        { label: "Dining out", fromCardId: 3, toCardId: 2, spentCents: 10_000, missedCents: 500 },
+        { label: "Dining out", fromCardId: 1, toCardId: 2, spentCents: 10_000, missedCents: 350 },
       ],
     });
   });
