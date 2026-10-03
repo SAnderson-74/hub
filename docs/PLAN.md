@@ -102,7 +102,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 4.3 Reminder scheduler: daily digest, due soon, streak at risk
 - [x] 4.4 Optional token-protected calendar feed (ICS)
 - [x] 4.5 First-run setup (modules, time zone), module on/off setting, demo data with neutral examples
-- [ ] 4.6 Screenshots from demo data, docs polish, v1.0 release
+- [x] 4.6 Screenshots from demo data, docs polish, v1.0 release
 
 ## Import formats
 

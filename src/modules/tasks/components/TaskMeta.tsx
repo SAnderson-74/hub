@@ -22,8 +22,8 @@ export function TaskMeta({
   today: string;
   projectName?: string;
 }) {
-  const due = task.dueDate ? describeDue(task.dueDate, today) : null;
   const done = task.status === "done";
+  const due = task.dueDate ? describeDue(task.dueDate, today, { done }) : null;
   const parts = [
     due ? (
       <span

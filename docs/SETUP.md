@@ -187,7 +187,7 @@ Google Calendar and other web calendars can't subscribe, because their servers c
 1. In the Claude app (or at claude.ai/code), connect GitHub and pick this repository. The default cloud environment works; `CLAUDE.md` and the session hook do the rest.
 2. Describe the change in plain words, or ask for "the next step in docs/PLAN.md". Keep personal details out of prompts; the repository is public.
 3. Claude opens a pull request. When the checks are green, look over **Files changed** (and the screenshots in the `browser-test-results` artifact for UI work), then **Squash and merge**.
-4. Within about 10 minutes the new version appears in Settings > About.
+4. Within about 10 minutes the new version appears in Settings > About, as the release plus a build id (like `1.0.0+a1b2c3d`). The build id is what the **Roll back** workflow asks for.
 
 Optional: to let Claude run the browser tests inside its own sessions, create a cloud environment with **Custom** network access, include the default list, and add `cdn.playwright.dev` and `playwright.download.prss.microsoft.com`.
 
