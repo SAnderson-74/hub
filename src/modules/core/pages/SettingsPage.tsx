@@ -12,6 +12,7 @@ import { applyAccent, previewAccent } from "../../../client/theme";
 import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../../../shared/color";
 import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
 import { streakKey } from "../../education/queries";
+import { CalendarPanel } from "../../integrations/components/CalendarPanel";
 import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
 import { RemindersPanel } from "../../integrations/components/RemindersPanel";
 import { BackupsPanel } from "../components/BackupsPanel";
@@ -281,7 +282,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Appearance, study streak, Home Assistant, reminders, imports, backups, and details about this installation."
+        subtitle="Appearance, study streak, Home Assistant, reminders, calendar, imports, backups, and details about this installation."
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
@@ -344,9 +345,17 @@ export function SettingsPage() {
         </Panel>
 
         <Panel
+          title="Calendar feed"
+          description="Hub's due dates in your phone or computer calendar."
+          className="lg:col-span-7 lg:row-start-5"
+        >
+          <CalendarPanel />
+        </Panel>
+
+        <Panel
           title="Imports"
           description="Bring in files and listings from other apps. Each import is also on its own page."
-          className="lg:col-span-7 lg:row-start-5"
+          className="lg:col-span-7 lg:row-start-6"
         >
           <ImportsPanel />
         </Panel>
@@ -354,7 +363,7 @@ export function SettingsPage() {
         <Panel
           title="Backups"
           description="Hub saves a copy of everything each night and before updates. Restore one to go back to it."
-          className="lg:col-span-7 lg:row-start-6"
+          className="lg:col-span-7 lg:row-start-7"
         >
           <BackupsPanel startedAt={info?.startedAt ?? null} />
         </Panel>

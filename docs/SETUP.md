@@ -172,7 +172,17 @@ Each goes out once a day. If Hub is down or Home Assistant doesn't answer at tha
 
 **Checking it.** Settings > Home Assistant > **See what the summary sends** shows the exact JSON, so you can add more sensors from it. Hub reports what Home Assistant answered; an answer in the 200s means it accepted the request. If Hub says it was sent but nothing changes in Home Assistant, check that the webhook ID matches and look in Home Assistant's logs.
 
-## 7. Changing the app with Claude Code
+## 7. Calendar feed (optional)
+
+Hub can publish its dated things (open tasks, active goals and their milestones, business steps, and lead follow-ups) as a calendar to subscribe to. Each shows as an all-day event, from two months back to a year ahead, and calendars check for changes about once an hour.
+
+1. Settings > **Calendar feed** > **Turn on calendar feed**.
+2. **iPhone:** Settings > Apps > Calendar > Calendar Accounts > Add Account > Other > **Add Subscribed Calendar**, and paste the address. Adding it there keeps it on the phone, which reaches Hub over Tailscale. If asked where to keep it, choose On My iPhone, not iCloud: iCloud's servers can't reach Hub.
+3. **Mac:** Calendar > File > **New Calendar Subscription**, paste the address, and set Location to On My Mac.
+
+Google Calendar and other web calendars can't subscribe, because their servers can't reach Hub over Tailscale. The address works like a password, so keep it private; **Get a new address** stops the old one, and **Turn off** stops the feed.
+
+## 8. Changing the app with Claude Code
 
 1. In the Claude app (or at claude.ai/code), connect GitHub and pick this repository. The default cloud environment works; `CLAUDE.md` and the session hook do the rest.
 2. Describe the change in plain words, or ask for "the next step in docs/PLAN.md". Keep personal details out of prompts; the repository is public.
@@ -181,7 +191,7 @@ Each goes out once a day. If Hub is down or Home Assistant doesn't answer at tha
 
 Optional: to let Claude run the browser tests inside its own sessions, create a cloud environment with **Custom** network access, include the default list, and add `cdn.playwright.dev` and `playwright.download.prss.microsoft.com`.
 
-## 8. When something goes wrong
+## 9. When something goes wrong
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
