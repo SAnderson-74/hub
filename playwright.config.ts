@@ -6,6 +6,8 @@ const PORT = 4173;
 // once at iPhone size in WebKit and once at desktop size in Chromium.
 export default defineConfig({
   testDir: "e2e",
+  // Runs once the server is up: finishes first-run setup for the empty test database.
+  globalSetup: "./e2e/global-setup.ts",
   outputDir: "test-results",
   fullyParallel: false,
   workers: 1,

@@ -101,7 +101,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 4.2 Home Assistant: push a summary (study streak, today's tasks, upcoming dates) and reminders to Home Assistant webhooks
 - [x] 4.3 Reminder scheduler: daily digest, due soon, streak at risk
 - [x] 4.4 Optional token-protected calendar feed (ICS)
-- [ ] 4.5 First-run setup (modules, time zone), module on/off setting, demo data with neutral examples
+- [x] 4.5 First-run setup (modules, time zone), module on/off setting, demo data with neutral examples
 - [ ] 4.6 Screenshots from demo data, docs polish, v1.0 release
 
 ## Import formats
@@ -177,7 +177,7 @@ Money > Import reads a file in the browser and sends clean transactions to `POST
 
 - No personal details anywhere in the repository, commit metadata, or pull requests (see CLAUDE.md).
 - Commit with a GitHub-provided no-reply email.
-- Owner-specific settings (login, time zone, paths, keys) live only in the server's app configuration.
+- Owner-specific settings live in the server's app configuration (login, paths, keys) or in the database through Settings (time zone, modules), never in the repository.
 - Personal data files (imports, exports) never go in the repository; `private/` is ignored as a safety net.
 
 ## Known issues

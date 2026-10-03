@@ -2,6 +2,7 @@ import { z } from "zod";
 import { businessRateSchema, defaultBusinessRate } from "./businessRate";
 import { HEX_COLOR } from "./color";
 import { defaultHomeAssistant, homeAssistantSchema } from "./homeAssistant";
+import { defaultModules, modulesSchema, timeZoneSchema } from "./modules";
 import { defaultReminders, remindersSchema } from "./reminders";
 
 export type AccentPreset = { name: string; hex: string };
@@ -38,6 +39,12 @@ export const settingsSchema = z.object({
   homeAssistant: homeAssistantSchema,
   /** Which reminders go to Home Assistant, and when. */
   reminders: remindersSchema,
+  /** Which modules show. Turning one off hides it and keeps its data. */
+  modules: modulesSchema,
+  /** Hub's time zone, or "" for the one the server was set up with (HUB_TIMEZONE). */
+  timeZone: timeZoneSchema,
+  /** Whether first-run setup is done. */
+  setupDone: z.boolean(),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -51,4 +58,7 @@ export const defaultSettings: Settings = {
   businessRate: defaultBusinessRate,
   homeAssistant: defaultHomeAssistant,
   reminders: defaultReminders,
+  modules: defaultModules,
+  timeZone: "",
+  setupDone: false,
 };

@@ -3,7 +3,7 @@ import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot, toneLabel } from "../../../client/components/StatusDot";
 import { formatLongDate, greetingFor } from "../../../client/lib/format";
-import { useSystem } from "../../../client/lib/queries";
+import { useModules, useSystem } from "../../../client/lib/queries";
 import { useNow } from "../../../client/lib/useNow";
 import { localDate } from "../../tasks/dates";
 import { MilestonesPanel, StreakPanel, TermPanel, TodayPanel } from "../components/HomeWidgets";
@@ -38,6 +38,9 @@ export function DashboardPage() {
   const tone = overallTone(checks);
   const attention = checks.filter((check) => check.tone === "warn" || check.tone === "danger");
   const today = localDate(now);
+  const modules = useModules();
+  const showLeft = modules.tasks || modules.goals;
+  const showRight = modules.courses;
 
   return (
     <>
@@ -46,14 +49,23 @@ export function DashboardPage() {
         subtitle={formatLongDate(now)}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-        <div className="grid grid-cols-1 gap-4 lg:col-span-7 lg:gap-6">
-          <TodayPanel today={today} />
-          <MilestonesPanel today={today} />
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:col-span-5 lg:gap-6">
-          <StreakPanel />
-          <TermPanel today={today} />
-        </div>
+        {/* Widgets for turned-off modules stay out of the way. */}
+        {showLeft ? (
+          <div
+            className={`grid grid-cols-1 gap-4 lg:gap-6 ${showRight ? "lg:col-span-7" : "lg:col-span-12"}`}
+          >
+            {modules.tasks ? <TodayPanel today={today} /> : null}
+            {modules.goals ? <MilestonesPanel today={today} /> : null}
+          </div>
+        ) : null}
+        {showRight ? (
+          <div
+            className={`grid grid-cols-1 gap-4 lg:gap-6 ${showLeft ? "lg:col-span-5" : "lg:col-span-12"}`}
+          >
+            <StreakPanel />
+            <TermPanel today={today} />
+          </div>
+        ) : null}
 
         <Panel
           title="System"

@@ -48,9 +48,9 @@ From an empty GitHub account to the app on your phone's home screen. Placeholder
 2. Apps > Discover Apps > **⋮** > **Install via YAML**. Name the app `hub` and paste [`deploy/truenas/compose.yaml`](../deploy/truenas/compose.yaml) with every placeholder filled in:
    - `<TAILSCALE_AUTH_KEY>`: the key from step 2.3
    - `<YOUR_TAILSCALE_LOGIN>`: the login shown for your account in the Tailscale admin console
-   - `<IANA_TIME_ZONE>`: for example `America/New_York`
+   - `<IANA_TIME_ZONE>`: for example `America/New_York`. It's the default until a time zone is picked in setup or Settings.
    - `<GITHUB_OWNER>/<REPO>`: lowercase
-3. After the app is running, open `https://hub.<your-tailnet>.ts.net` from a device on your tailnet. The home screen should show Sign-in: Tailscale. You can now clear the auth key from the YAML; the login is saved in `tailscale/state`.
+3. After the app is running, open `https://hub.<your-tailnet>.ts.net` from a device on your tailnet. A new install starts with setup: pick the modules you'll use and the time zone, and optionally start with example data (made-up names, removable later). The home screen should then show Sign-in: Tailscale. You can now clear the auth key from the YAML; the login is saved in `tailscale/state`.
 4. System > Advanced Settings > **Cron Jobs** > Add: command `/mnt/<POOL>/apps/hub/bin/update-hub.sh`, run as `root`, schedule every 10 minutes (`*/10 * * * *`), hide standard output. Check its activity with `journalctl -t hub-update`.
 
 Other Docker hosts work the same way: the compose file is standard, minus the TrueNAS paths and the `midclt` call in the update script.

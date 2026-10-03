@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { defaultModules, type ModuleSettings } from "../../shared/modules";
 import type { SettingsPatch } from "../../shared/settings";
+import type { SetupInput } from "../../shared/setup";
 import { api, toApiError } from "./api";
 
 export function useSystem() {
@@ -66,4 +68,46 @@ export function useRestoreBackup() {
       return (await res.json()) as { message: string };
     },
   });
+}
+
+/** Whether first-run setup is needed, the server's time zone, and whether example data is in. */
+export function useSetup() {
+  return useQuery({
+    queryKey: ["setup"],
+    queryFn: async () => {
+      const res = await api.setup.$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+export function useFinishSetup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (json: SetupInput) => {
+      const res = await api.setup.$post({ json });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    // Everything may have changed: settings, the time zone, and example data.
+    onSuccess: () => void queryClient.invalidateQueries(),
+  });
+}
+
+export function useRemoveDemo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (_: undefined) => {
+      const res = await api.setup.demo.remove.$post();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: () => void queryClient.invalidateQueries(),
+  });
+}
+
+/** Which modules are on. All of them until settings load. */
+export function useModules(): ModuleSettings {
+  return useSettings().data?.modules ?? defaultModules;
 }

@@ -213,3 +213,34 @@ describe("reminder routes", () => {
     expect(after.recent.map((entry) => entry.kind)).toEqual(["due_soon"]);
   });
 });
+
+describe("modules that are off", () => {
+  it("stay out of reminders and the calendar", async () => {
+    await configure();
+    await task("Submit the report", { dueDate: DAY });
+    await t.api.business.leads.$post({
+      json: { name: "Example Bakery", nextStep: "Send a quote", nextStepOn: DAY },
+    });
+    expect(dueSoonReminder(t.db, DAY, 1)?.keys).toHaveLength(2);
+    await body(
+      await t.api.settings.$put({
+        json: {
+          modules: {
+            tasks: true,
+            time: true,
+            goals: true,
+            courses: false,
+            resale: true,
+            money: true,
+            taxes: true,
+            business: false,
+          },
+        },
+      }),
+    );
+    expect(dueSoonReminder(t.db, DAY, 1)?.reminder.message).toBe("Submit the report, today.");
+    expect(
+      previewReminders(t.db, UTC, at("20:10")).find((entry) => entry.kind === "streak")?.reminder,
+    ).toBeNull();
+  });
+});

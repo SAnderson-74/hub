@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultBusinessRate } from "../shared/businessRate";
 import { defaultHomeAssistant } from "../shared/homeAssistant";
+import { defaultModules } from "../shared/modules";
 import { defaultReminders } from "../shared/reminders";
 import { createApp } from "./app";
 import { decodeHeaderName } from "./auth";
@@ -96,6 +97,9 @@ describe("settings API", () => {
       businessRate: defaultBusinessRate,
       homeAssistant: defaultHomeAssistant,
       reminders: defaultReminders,
+      modules: defaultModules,
+      timeZone: "",
+      setupDone: false,
     });
 
     const saved = await app.request("/api/settings", {
@@ -110,6 +114,9 @@ describe("settings API", () => {
       businessRate: defaultBusinessRate,
       homeAssistant: defaultHomeAssistant,
       reminders: defaultReminders,
+      modules: defaultModules,
+      timeZone: "",
+      setupDone: false,
     });
 
     const reread = await app.request("/api/settings", { headers: owner });
@@ -119,6 +126,9 @@ describe("settings API", () => {
       businessRate: defaultBusinessRate,
       homeAssistant: defaultHomeAssistant,
       reminders: defaultReminders,
+      modules: defaultModules,
+      timeZone: "",
+      setupDone: false,
     });
 
     const invalid = await app.request("/api/settings", {

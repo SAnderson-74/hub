@@ -4,6 +4,7 @@ import type { Db, Queryable } from "../../server/db/client";
 import { log } from "../../server/log";
 import { OPEN_LEAD_STATUSES } from "../../shared/business";
 import type { Reminder } from "../../shared/homeAssistant";
+import type { ModuleId } from "../../shared/modules";
 import { addDays } from "../../shared/recurrence";
 import { inWindow, type ReminderKind, type ReminderSettings } from "../../shared/reminders";
 import { streakState } from "../../shared/streak";
@@ -12,7 +13,7 @@ import { readSettings } from "../core/settings.service";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
 import { tasks } from "../tasks/schema";
-import { sendReminder, todayTasks, upcomingDates } from "./homeAssistant.service";
+import { sendReminder, todayTasks } from "./homeAssistant.service";
 import { reminderSends } from "./schema";
 
 /** How far ahead the digest's "coming up" line looks. */
@@ -57,6 +58,15 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 // What each reminder says
 
 export type DueItem = { key: string; kind: string; title: string; date: string };
+
+/** Which module each kind of dated thing belongs to. */
+const MODULE_OF: Record<string, ModuleId> = {
+  task: "tasks",
+  goal: "goals",
+  milestone: "goals",
+  "business step": "business",
+  lead: "business",
+};
 
 /** Unfinished things due from today through `days` ahead, soonest first. */
 export function dueItems(db: Queryable, today: string, days: number): DueItem[] {
@@ -156,9 +166,11 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
       });
     }
   }
-  return items.sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : a.title.localeCompare(b.title),
-  );
+  // Only modules that are on: a turned-off module stays out of reminders and the calendar.
+  const modules = readSettings(db).modules;
+  return items
+    .filter((item) => modules[MODULE_OF[item.kind] ?? "tasks"])
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.title.localeCompare(b.title)));
 }
 
 /** The morning digest: today's tasks, what's coming up, and the streak. Null on a quiet day. */
@@ -168,10 +180,12 @@ export function digestReminder(
   now: Date,
 ): Reminder | null {
   const today = localClock(now, config.timeZone).date;
-  const tasksToday = todayTasks(db, today, config.timeZone);
-  const soon = upcomingDates(db, today, DIGEST_AHEAD_DAYS);
-  if (tasksToday.open === 0 && soon.length === 0) return null;
   const settings = readSettings(db);
+  const tasksToday = settings.modules.tasks
+    ? todayTasks(db, today, config.timeZone)
+    : { open: 0, overdue: 0, done: 0, summary: "", titles: [] };
+  const soon = datedItems(db, addDays(today, 1), addDays(today, DIGEST_AHEAD_DAYS));
+  if (tasksToday.open === 0 && soon.length === 0) return null;
   const streak = studyStreak(db, {
     now,
     timeZone: config.timeZone,
@@ -191,7 +205,9 @@ export function digestReminder(
           .map((item) => `${item.title} (${whenLabel(item.date, today)})`)
           .join(", ")}.`
       : "",
-    streak.current > 0 ? `Study streak: ${plural(streak.current, "day")}.` : "",
+    settings.modules.courses && streak.current > 0
+      ? `Study streak: ${plural(streak.current, "day")}.`
+      : "",
   ].filter(Boolean);
   return {
     kind: "digest",
@@ -245,6 +261,7 @@ export function streakReminder(
   now: Date,
 ): Reminder | null {
   const settings = readSettings(db);
+  if (!settings.modules.courses) return null;
   const streak = studyStreak(db, {
     now,
     timeZone: config.timeZone,
