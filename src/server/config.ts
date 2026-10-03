@@ -31,7 +31,13 @@ export type Config = {
   backupDir: string;
   auth: { mode: "tailscale"; ownerLogin: string } | { mode: "dev"; devLogin: string };
   appName: string;
+  /**
+   * Hub's time zone: the one chosen in Settings, or else serverTimeZone. Read it when
+   * it's needed rather than keeping a copy, since Settings can change it.
+   */
   timeZone: string;
+  /** HUB_TIMEZONE, used until a time zone is chosen in Settings. */
+  serverTimeZone: string;
   backupHour: number;
   backupKeepDays: number;
   version: string;
@@ -90,6 +96,7 @@ export function loadConfig(
     auth,
     appName: e.HUB_APP_NAME,
     timeZone: e.HUB_TIMEZONE,
+    serverTimeZone: e.HUB_TIMEZONE,
     backupHour: e.HUB_BACKUP_HOUR,
     backupKeepDays: e.HUB_BACKUP_KEEP_DAYS,
     version: e.HUB_VERSION,

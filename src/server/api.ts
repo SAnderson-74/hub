@@ -4,6 +4,7 @@ import { activityRoutes } from "../modules/core/activity.routes";
 import { backupRoutes } from "../modules/core/backups.routes";
 import { linkRoutes } from "../modules/core/links.routes";
 import { settingsRoutes } from "../modules/core/settings.routes";
+import { setupRoutes } from "../modules/core/setup.routes";
 import { systemRoutes } from "../modules/core/system.routes";
 import { tagRoutes } from "../modules/core/tags.routes";
 import { educationRoutes } from "../modules/education/education.routes";
@@ -27,6 +28,7 @@ export function createApi(deps: Deps) {
     .get("/me", (c) => c.json(c.get("user")))
     .route("/system", systemRoutes(deps))
     .route("/settings", settingsRoutes(deps))
+    .route("/setup", setupRoutes(deps))
     .route("/backups", backupRoutes(deps))
     .route("/projects", projectRoutes(deps))
     .route("/tasks", taskRoutes(deps))

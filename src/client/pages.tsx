@@ -22,6 +22,7 @@ import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
 import { TaxesPage } from "../modules/taxes/pages/TaxesPage";
 import { TimePage } from "../modules/time/pages/TimePage";
+import type { ModuleId } from "../shared/modules";
 
 export type AppPage = {
   id: string;
@@ -31,6 +32,8 @@ export type AppPage = {
   path: string;
   icon: LucideIcon;
   element: ReactElement;
+  /** The module it belongs to, which Settings can turn off. Home and Settings have none. */
+  module?: ModuleId;
 };
 
 /**
@@ -40,21 +43,58 @@ export type AppPage = {
  */
 export const appPages: AppPage[] = [
   { id: "home", label: "Home", path: "/", icon: House, element: <DashboardPage /> },
-  { id: "tasks", label: "Tasks", path: "/tasks", icon: ListTodo, element: <TasksPage /> },
-  { id: "time", label: "Time", path: "/time", icon: Timer, element: <TimePage /> },
-  { id: "goals", label: "Goals", path: "/goals", icon: Target, element: <GoalsPage /> },
+  {
+    id: "tasks",
+    label: "Tasks",
+    path: "/tasks",
+    icon: ListTodo,
+    element: <TasksPage />,
+    module: "tasks",
+  },
+  { id: "time", label: "Time", path: "/time", icon: Timer, element: <TimePage />, module: "time" },
+  {
+    id: "goals",
+    label: "Goals",
+    path: "/goals",
+    icon: Target,
+    element: <GoalsPage />,
+    module: "goals",
+  },
   {
     id: "courses",
+    module: "courses",
     label: "Courses",
     path: "/courses",
     icon: GraduationCap,
     element: <CoursesPage />,
   },
-  { id: "resale", label: "Resale", path: "/resale", icon: Package, element: <ResalePage /> },
-  { id: "money", label: "Money", path: "/money", icon: Wallet, element: <MoneyPage /> },
-  { id: "taxes", label: "Taxes", path: "/taxes", icon: Landmark, element: <TaxesPage /> },
+  {
+    id: "resale",
+    label: "Resale",
+    path: "/resale",
+    icon: Package,
+    element: <ResalePage />,
+    module: "resale",
+  },
+  {
+    id: "money",
+    label: "Money",
+    path: "/money",
+    icon: Wallet,
+    element: <MoneyPage />,
+    module: "money",
+  },
+  {
+    id: "taxes",
+    label: "Taxes",
+    path: "/taxes",
+    icon: Landmark,
+    element: <TaxesPage />,
+    module: "taxes",
+  },
   {
     id: "business",
+    module: "business",
     label: "Business",
     path: "/business",
     icon: Briefcase,

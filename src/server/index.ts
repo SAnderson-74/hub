@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { serve } from "@hono/node-server";
+import { readSettings } from "../modules/core/settings.service";
 import { startHomeAssistantScheduler } from "../modules/integrations/homeAssistant.service";
 import { startReminderScheduler } from "../modules/integrations/reminders.service";
 import { createApp } from "./app";
@@ -10,6 +11,7 @@ import { migrateWithBackup } from "./db/migrate";
 import { makePrivate } from "./db/private";
 import { applyPendingRestore } from "./db/restore";
 import { errorFields, log } from "./log";
+import { applyTimeZone } from "./timeZone";
 
 /**
  * Opens the database (putting a staged restore in place first), migrates it, and
@@ -25,11 +27,12 @@ async function start(config: Config, restart: () => void): Promise<() => Promise
     backupDir: config.backupDir,
   });
   if (migration.applied > 0) log.info("Database migrated", migration);
+  applyTimeZone(config, readSettings(db));
 
   const stopBackups = startBackupScheduler({
     sqlite,
     dir: config.backupDir,
-    timeZone: config.timeZone,
+    timeZone: () => config.timeZone,
     hour: config.backupHour,
     keepDays: config.backupKeepDays,
   });
