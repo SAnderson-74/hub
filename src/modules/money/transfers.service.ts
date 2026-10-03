@@ -3,6 +3,7 @@ import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, conflict } from "../../server/errors";
 import type { TransferCreate } from "../../shared/books";
 import { findTransferPairs, TRANSFER_WINDOW_DAYS } from "../../shared/moneyRules";
+import { dropSplits } from "./lines";
 import {
   oneTransaction,
   requireAccount,
@@ -62,7 +63,8 @@ export function createTransfer(db: Db, input: TransferCreate): TransferJson {
 /**
  * Joins two existing transactions (usually both imported) as the sides of one
  * transfer: the same amount leaving one account and arriving in another. Their
- * categories and cards are cleared, since a transfer is neither spending nor income.
+ * categories, cards, and any split are cleared, since a transfer is neither spending
+ * nor income.
  */
 export function linkTransfer(db: Db, ids: [number, number]): TransferJson {
   return db.transaction((tx) => {
@@ -80,6 +82,7 @@ export function linkTransfer(db: Db, ids: [number, number]): TransferJson {
       throw conflict("One of these is already part of a transfer. Unlink it first.");
     }
     const now = new Date();
+    dropSplits(tx, [a.id, b.id]);
     for (const [row, peer] of [
       [a, b],
       [b, a],

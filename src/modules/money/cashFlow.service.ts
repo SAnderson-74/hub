@@ -7,8 +7,15 @@ import type {
   CashFlowJson,
   CashFlowPeriod,
 } from "../../shared/cashFlow";
+import { lineAmountCents, lineCategoryId, splitJoin } from "./lines";
 import { requireBook } from "./money.service";
-import { moneyAccounts, moneyCards, moneyCategories, moneyTransactions } from "./schema";
+import {
+  moneyAccounts,
+  moneyCards,
+  moneyCategories,
+  moneyTransactionSplits,
+  moneyTransactions,
+} from "./schema";
 
 type Row = {
   categoryId: number | null;
@@ -43,10 +50,11 @@ export function cashFlow(
   requireBook(db, bookId);
   const from = monthBounds(shiftMonth(month, -(months - 1))).from;
   const to = monthBounds(month).to;
-  const amount = moneyTransactions.amountCents;
+  // Split transactions count in each part's category.
+  const amount = lineAmountCents;
   const rows: Row[] = db
     .select({
-      categoryId: moneyTransactions.categoryId,
+      categoryId: lineCategoryId,
       accountId: moneyTransactions.accountId,
       cardId: moneyTransactions.cardId,
       inCents: sql<number>`coalesce(sum(case when ${amount} > 0 then ${amount} else 0 end), 0)`,
@@ -54,6 +62,7 @@ export function cashFlow(
     })
     .from(moneyTransactions)
     .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
+    .leftJoin(moneyTransactionSplits, splitJoin)
     .where(
       and(
         eq(moneyAccounts.bookId, bookId),
@@ -62,7 +71,7 @@ export function cashFlow(
         lte(moneyTransactions.date, to),
       ),
     )
-    .groupBy(moneyTransactions.categoryId, moneyTransactions.accountId, moneyTransactions.cardId)
+    .groupBy(lineCategoryId, moneyTransactions.accountId, moneyTransactions.cardId)
     .all();
   const names = new Map(
     db

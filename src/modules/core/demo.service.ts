@@ -410,6 +410,27 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
         );
       }
     }
+    // One store run that was partly groceries and partly household things.
+    const groceries = categoryId.get("Groceries");
+    const shopping = categoryId.get("Shopping");
+    if (groceries && shopping) {
+      note(
+        "transaction",
+        createTransaction(
+          db,
+          transactionCreateSchema.parse({
+            accountId: rewards.id,
+            date: today,
+            amountCents: -6_480,
+            payee: "Example Store",
+            splits: [
+              { categoryId: groceries, amountCents: -4_130 },
+              { categoryId: shopping, amountCents: -2_350, memo: "Paper towels and soap" },
+            ],
+          }),
+        ),
+      );
+    }
     // Budgets from the first of those months on; dining out runs over in some months.
     for (const [category, amountCents] of [
       ["Housing", 145_000],
