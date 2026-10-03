@@ -1,51 +1,62 @@
-# The Claude Project for Hub
+import type { ModuleId } from "./modules";
 
-One Claude Project turns photos, screenshots, documents, and notes into text Hub can import. You give it a receipt or a course list; it answers with a small block of JSON in a format Hub knows; you paste that into Hub, which shows what it will do before anything changes.
+// One Claude Project reads photos, screenshots, and documents for Hub and answers in
+// Hub's import formats. Its instructions live here, so Settings can show and copy
+// them, and docs/CLAUDE_PROJECT.md carries the same text (a test keeps them equal).
+// Adding a format means a section here, an entry in PROJECT_FORMATS, and a form in
+// the paste sheet. Pasted answers are untrusted: each format's own schema checks them.
 
-Claude can't reach Hub, and Hub never reaches Claude. Hub stays on your tailnet, and nothing in this setup needs a key, a token, or a public address. The copy and paste in between is the whole connection.
+/** Raised when the instructions change, so an older copy in the Project is easy to spot. */
+export const PROJECT_INSTRUCTIONS_VERSION = 2;
 
-Today the Project writes:
+/** The formats the Project writes, where each goes, and the module it needs. */
+export const PROJECT_FORMATS = [
+  {
+    format: "hub-receipt/v1",
+    label: "Receipts",
+    kind: "receipts",
+    noun: "receipts",
+    into: "Money",
+    module: "money",
+  },
+  {
+    format: "hub-listing/v1",
+    label: "Resale listing",
+    kind: "resale listings",
+    noun: "a resale listing",
+    into: "Resale",
+    module: "resale",
+  },
+  {
+    format: "hub-education/v1",
+    label: "Study plan",
+    kind: "study plans",
+    noun: "a study plan",
+    into: "Courses",
+    module: "courses",
+  },
+] as const satisfies ReadonlyArray<{
+  format: string;
+  label: string;
+  /** What it holds, for sentences: "receipts". */
+  kind: string;
+  /** One answer in it, for sentences: "a study plan". */
+  noun: string;
+  into: string;
+  module: ModuleId;
+}>;
 
-| What | Format | Goes into |
-| --- | --- | --- |
-| Receipts | `hub-receipt/v1` | Money |
-| A resale listing | `hub-listing/v1` | Resale |
-| A study plan | `hub-education/v1` | Courses |
+/** "receipts, resale listings, and study plans". */
+export const PROJECT_KINDS = (() => {
+  const kinds = PROJECT_FORMATS.map((entry) => entry.kind);
+  return kinds.length > 1
+    ? `${kinds.slice(0, -1).join(", ")}, and ${kinds[kinds.length - 1]}`
+    : (kinds[0] ?? "");
+})();
 
-The same Project learns more as Hub adds formats (see [the plan](PLAN.md)): bank statements and transactions, items to sell, and tasks and goals. Each adds a section to its instructions, and the instructions' version goes up.
+export type ProjectFormat = (typeof PROJECT_FORMATS)[number];
 
-## Set it up
-
-1. In Hub, open **Settings > Claude Project** and press **Copy instructions**. (They're also [below](#project-instructions).)
-2. In the Claude app, make a new Project called "Hub imports", open its instructions, and paste.
-3. Leave the Project unshared. Receipts show where and when you shop.
-
-When Hub updates, compare the version at the top of the Project's instructions with the one in Settings. If Settings shows a higher one, copy them again and replace the old ones.
-
-## Use it
-
-1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
-2. Copy Claude's whole answer.
-3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Resale > Paste listing**, and **Courses > Import a plan**.
-4. Check the preview, then add it.
-
-For receipts, each one says whether it goes on a transaction already in Hub, adds a new one, or needs something first: an account for receipts without a known card, or one of your categories for each name the book doesn't have. Hub splits a receipt by category when its lines are in more than one, sharing tax and discounts out in proportion. When the bank's file arrives later, the purchase isn't added twice: the import finds the receipt's transaction and fills in the bank's details instead. Opening a transaction shows its receipt and a way to remove it.
-
-## What keeps this safe
-
-- **The Project is told to leave things out.** Full card and account numbers, loyalty and member numbers, names, addresses, phone numbers, emails, barcodes, and serial numbers stay off its answer. A card's last 4 digits are the most it gives, and only so Hub can tell your cards apart.
-- **Hub checks anyway.** Each format has its own checks and size limits, and unknown fields are ignored. Receipts with a run of 9 or more digits in their store, lines, or note, or card digits that aren't exactly 4, are refused. Hub keeps the fields it imports, never the pasted text as a whole.
-- **Text in a photo is data, not instructions.** A receipt or document could carry words meant to steer Claude. The instructions tell it to ignore them, and Hub only takes the fields of a format it knows, so a pasted answer can only do what that import does.
-- **Nothing changes until you say so.** Pasting only previews. Imports can be undone: a receipt removed, a listing or item deleted, a plan imported again.
-- **Copying is one way.** Hub writes the instructions to your clipboard when you press Copy; it never reads the clipboard.
-- **Photos go to Claude.** If a receipt shows a full card number, cover or crop it before adding the photo.
-
-## Project instructions
-
-Copy everything in this box.
-
-````text
-Hub import instructions, version 2.
+export const PROJECT_INSTRUCTIONS = `Hub import instructions, version ${PROJECT_INSTRUCTIONS_VERSION}.
 
 You turn photos, screenshots, documents, and notes into JSON for Hub, a private finance and planning app. The person pastes your answer into Hub, which checks it and shows a preview before anything is saved.
 
@@ -137,9 +148,78 @@ Use this when given a degree plan, a course list, or a term schedule.
 - Terms are matched by name and courses by code, so sending a term again updates it. Keep names and codes the same as before.
 - status: "not_started", "in_progress", "passed", or "transferred".
 - assessments: kind is "exam", "project", or "other"; label is a short name.
-- Leave out the school's name, student numbers, and grades.
-````
+- Leave out the school's name, student numbers, and grades.`;
 
-## Formats
+const MAX_PASTE = 1024 * 1024;
 
-The fields are described in the instructions above, and in more detail under [Import formats](PLAN.md#import-formats) in the plan. Hub ignores fields it doesn't know, so an answer from an older or newer version of the instructions still pastes.
+/** A ```json fenced block, as chat answers wrap their code. */
+const FENCE = /```[a-z]*[ \t]*\r?\n?([\s\S]*?)```/gi;
+
+export type PasteRead =
+  | { ok: true; format: ProjectFormat; data: Record<string, unknown>; json: string }
+  | { ok: false; error: string };
+
+/**
+ * Reads a pasted Claude Project answer: the JSON in it, with or without the code fence
+ * and any words around it, and which of Hub's formats it is. Says what's wrong in
+ * words when it can't. Null for an empty paste. Each format's own import checks the
+ * fields; this only finds where it goes.
+ */
+export function readPaste(text: string): PasteRead | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_PASTE) {
+    return {
+      ok: false,
+      error: "That's too long for one paste. Ask the Project for fewer at a time.",
+    };
+  }
+  const blocks = [...trimmed.matchAll(FENCE)]
+    .map((match) => (match[1] ?? "").trim())
+    .filter((block) => block.startsWith("{"));
+  if (blocks.length > 1) {
+    return { ok: false, error: "This has more than one answer in it. Paste one at a time." };
+  }
+  const body = blocks[0] ?? trimmed;
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start === -1 || end <= start) {
+    return {
+      ok: false,
+      error: "That doesn't look like what the Claude Project gives. Copy its whole answer.",
+    };
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(body.slice(start, end + 1));
+  } catch {
+    return {
+      ok: false,
+      error: "Part of it is missing or changed. Copy the Claude Project's whole answer again.",
+    };
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return {
+      ok: false,
+      error: "That doesn't look like what the Claude Project gives. Copy its whole answer.",
+    };
+  }
+  const record = data as Record<string, unknown>;
+  const name = record.format;
+  if (typeof name !== "string" || name.trim() === "") {
+    return {
+      ok: false,
+      error:
+        'This doesn\'t say what it is. Its first line should be a "format", like "hub-receipt/v1". Ask the Project again.',
+    };
+  }
+  const format = PROJECT_FORMATS.find((entry) => entry.format === name);
+  if (!format) {
+    const shown = name.length > 40 ? `${name.slice(0, 40)}…` : name;
+    return {
+      ok: false,
+      error: `Hub doesn't take "${shown}" yet. It takes ${PROJECT_KINDS}. Check that the Project has Hub's latest instructions.`,
+    };
+  }
+  return { ok: true, format, data: record, json: JSON.stringify(record, null, 2) };
+}

@@ -104,7 +104,7 @@ If `apps/hub` was created without encryption (Datasets shows no lock icon on it 
    3. **Get Dictionary Value**: `message` from Contents of URL, then **Show Notification** with it. If something's wrong, Hub answers with `error` instead, so show that when `message` is empty.
 
    The same listing can also be pasted on the Resale page with **Paste listing**, which shows what will happen before it's added.
-4. Optional: a Claude Project that reads receipt photos for Money. [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has the setup and the instructions to paste in.
+4. Optional: a Claude Project that reads receipts, listings, and study plans for Hub. Copy its instructions from **Settings > Claude Project**; [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has the rest.
 
 ## 6. Home Assistant (optional)
 

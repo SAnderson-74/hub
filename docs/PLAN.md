@@ -112,7 +112,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.4 Points and "worth it": point balances and redemptions for a real value per point, annual fees, and a comparison with a flat-rate card and with using the best card for each purchase
 - [x] 5.5 Split transactions: one charge in several categories, counted that way in budgets, cash flow, and rewards
 - [x] 5.6 Receipts: a `hub-receipt/v1` format from a Claude Project (see [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)), pasted into Hub, split by category, matched to the bank's transaction, and kept from counting twice when the bank file arrives
-- [ ] 5.7 One Claude Project for every import: one paste box in Hub that knows each format, and the Project's instructions in the app with a Copy button, kept current as formats are added
+- [x] 5.7 One Claude Project for every import: one paste box in Hub (Paste from Claude) that sends each format to its import, and the Project's instructions in Settings with a Copy button and a version, kept equal to [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) by a test
 - [ ] 5.8 Bank statements and transactions from the Claude Project: statement balances and transactions read from screenshots or documents, with the same duplicate checks as bank files
 - [ ] 5.9 Items to sell from the Claude Project: several items (like devices) at once into Resale inventory
 - [ ] 5.10 Tasks and goals from the Claude Project: tasks, projects, and goals read from notes or lists
@@ -153,7 +153,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 ### `hub-listing/v1`
 
-Produced by a writing assistant at the end of a listing, pasted into the app (or sent by a Shortcut).
+Produced by the Claude Project ([CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)) or another writing assistant at the end of a listing, pasted into the app (or sent by a Shortcut).
 
 ```json
 {

@@ -9,6 +9,7 @@ import {
   textareaClass,
 } from "../../../client/components/ui";
 import { cardLabel } from "../../../shared/cards";
+import { readPaste } from "../../../shared/claudeProject";
 import { formatCents } from "../../../shared/money";
 import type { ReceiptDocument } from "../../../shared/receipts";
 import { formatShortDate } from "../../tasks/dates";
@@ -20,38 +21,17 @@ import {
   useImportReceipts,
 } from "../queries";
 
-/**
- * Reads what was pasted: the JSON a Claude Project gives, with or without the code
- * fence around it. Says what's wrong in words when it can't.
- */
+/** Reads what was pasted: a Claude Project answer, which has to be receipts. */
 export function readPasted(text: string): { document: ReceiptDocument } | { error: string } | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start === -1 || end <= start) {
+  const read = readPaste(text);
+  if (!read) return null;
+  if (!read.ok) return { error: read.error };
+  if (read.format.format !== "hub-receipt/v1") {
     return {
-      error: "That doesn't look like what the Claude Project gives. Copy its whole answer.",
+      error: `That's ${read.format.noun} for ${read.format.into}, not receipts. Paste it there, or in Settings > Imports > Paste from Claude.`,
     };
   }
-  let data: unknown;
-  try {
-    data = JSON.parse(trimmed.slice(start, end + 1));
-  } catch {
-    return {
-      error: "Part of it is missing or changed. Copy the Claude Project's whole answer again.",
-    };
-  }
-  const format = (data as { format?: unknown }).format;
-  if (format !== "hub-receipt/v1") {
-    return {
-      error:
-        typeof format === "string"
-          ? `This is ${format}, not receipts. Paste it where that kind of import goes.`
-          : 'This isn\'t a receipts document. It should have "format": "hub-receipt/v1".',
-    };
-  }
-  return { document: data as ReceiptDocument };
+  return { document: read.data as ReceiptDocument };
 }
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -92,21 +72,24 @@ export function ReceiptsSheet({
   );
 }
 
-function ReceiptsForm({
+/** The paste, preview, and choices; also used by the one paste box for every import. */
+export function ReceiptsForm({
   book,
   accounts,
   categories,
   today,
+  initialText = "",
   onDone,
 }: {
   book: Book;
   accounts: Account[];
   categories: Category[];
   today: string;
+  initialText?: string;
   onDone: () => void;
 }) {
   const ids = useId();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [accountId, setAccountId] = useState<number | null>(null);
   const [categoryMap, setCategoryMap] = useState<Record<string, number>>({});
   const [skip, setSkip] = useState<number[]>([]);
