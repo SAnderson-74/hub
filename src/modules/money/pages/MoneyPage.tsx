@@ -23,6 +23,7 @@ import {
 } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { ACCOUNT_KIND_LABELS, CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
+import { cardLabel } from "../../../shared/cards";
 import { formatCents } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
 import { formatShortDate, localDate } from "../../tasks/dates";
@@ -39,11 +40,13 @@ import { TransfersSheet } from "../components/TransfersSheet";
 import {
   type Account,
   type Book,
+  type Card,
   type Category,
   type Transaction,
   type TransactionFilters,
   useAccounts,
   useBooks,
+  useCards,
   useCategories,
   useCategorize,
   useRules,
@@ -142,6 +145,7 @@ function BookView({
   const today = localDate(useNow());
   const accounts = useAccounts(book.id);
   const categories = useCategories(book.id);
+  const cards = useCards(book.id);
   const [accountTarget, setAccountTarget] = useState<AccountTarget>(null);
   const [transactionTarget, setTransactionTarget] = useState<TransactionTarget>(null);
   const [managingCategories, setManagingCategories] = useState(false);
@@ -296,6 +300,7 @@ function BookView({
           <TransactionsPanel
             book={book}
             accounts={allAccounts}
+            cards={cards.data ?? []}
             categories={categories.data ?? []}
             today={today}
             accountFilter={accountFilter}
@@ -319,6 +324,7 @@ function BookView({
       <TransactionSheet
         target={transactionTarget}
         accounts={allAccounts}
+        cards={cards.data ?? []}
         categories={categories.data ?? []}
         rules={rules.data ?? []}
         defaultAccountId={defaultAccountId}
@@ -465,6 +471,7 @@ function sortLine(toSort: {
 function TransactionsPanel({
   book,
   accounts,
+  cards,
   categories,
   today,
   accountFilter,
@@ -478,6 +485,7 @@ function TransactionsPanel({
 }: {
   book: Book;
   accounts: Account[];
+  cards: Card[];
   categories: Category[];
   today: string;
   accountFilter: number | undefined;
@@ -496,21 +504,27 @@ function TransactionsPanel({
   onSort: () => void;
 }) {
   const [categoryFilter, setCategoryFilter] = useState<TransactionFilters["categoryId"]>(undefined);
+  const [cardFilter, setCardFilter] = useState<TransactionFilters["cardId"]>(undefined);
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
   // "Show more" grows the page; a new filter starts from the first page again.
-  const filterKey = JSON.stringify([accountFilter, categoryFilter, q]);
+  const filterKey = JSON.stringify([accountFilter, cardFilter, categoryFilter, q]);
   const [paging, setPaging] = useState({ key: filterKey, limit: PAGE_SIZE });
   const limit = paging.key === filterKey ? paging.limit : PAGE_SIZE;
   const filters: TransactionFilters = {
     accountId: accountFilter,
+    cardId: cardFilter,
     categoryId: categoryFilter,
     q: q || undefined,
     limit,
   };
   const transactions = useTransactions(book.id, filters);
   const ids = useId();
-  const filtered = accountFilter !== undefined || categoryFilter !== undefined || q !== "";
+  const filtered =
+    accountFilter !== undefined ||
+    cardFilter !== undefined ||
+    categoryFilter !== undefined ||
+    q !== "";
 
   const page = transactions.data;
   const count = (n: number) => `${n} ${n === 1 ? "transaction" : "transactions"}`;
@@ -520,22 +534,53 @@ function TransactionsPanel({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="min-w-0">
           <label htmlFor={`${ids}-account`} className={labelClass}>
-            Account
+            {cards.length > 0 ? "Account or card" : "Account"}
           </label>
           <select
             id={`${ids}-account`}
-            value={accountFilter ?? ""}
-            onChange={(event) =>
-              onAccountFilter(event.target.value === "" ? undefined : Number(event.target.value))
+            value={
+              cardFilter !== undefined
+                ? `card:${cardFilter}`
+                : accountFilter === undefined
+                  ? ""
+                  : `account:${accountFilter}`
             }
+            onChange={(event) => {
+              // "account:3", "card:5", or "card:none"; one replaces the other.
+              const [kind, value = ""] = event.target.value.split(":");
+              onAccountFilter(kind === "account" ? Number(value) : undefined);
+              setCardFilter(
+                kind === "card" ? (value === "none" ? "none" : Number(value)) : undefined,
+              );
+            }}
             className={inputClass}
           >
             <option value="">All accounts</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.archived ? `${account.name} (archived)` : account.name}
-              </option>
-            ))}
+            {cards.length > 0 ? (
+              <optgroup label="Accounts">
+                {accounts.map((account) => (
+                  <option key={account.id} value={`account:${account.id}`}>
+                    {account.archived ? `${account.name} (archived)` : account.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : (
+              accounts.map((account) => (
+                <option key={account.id} value={`account:${account.id}`}>
+                  {account.archived ? `${account.name} (archived)` : account.name}
+                </option>
+              ))
+            )}
+            {cards.length > 0 ? (
+              <optgroup label="Cards">
+                {cards.map((card) => (
+                  <option key={card.id} value={`card:${card.id}`}>
+                    {card.archived ? `${cardLabel(card)} (archived)` : cardLabel(card)}
+                  </option>
+                ))}
+                <option value="card:none">No card</option>
+              </optgroup>
+            ) : null}
           </select>
         </div>
         <div className="min-w-0">
@@ -669,7 +714,11 @@ function TransactionsPanel({
                           transaction.transfer
                             ? transferLabel(transaction)
                             : (transaction.category?.name ?? "Uncategorized"),
-                          accountFilter === undefined ? transaction.account.name : "",
+                          transaction.card
+                            ? transaction.card.name
+                            : accountFilter === undefined
+                              ? transaction.account.name
+                              : "",
                           resaleLabel(transaction),
                         ]
                           .filter(Boolean)

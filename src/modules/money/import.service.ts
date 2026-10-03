@@ -7,8 +7,10 @@ import type {
   BankTransaction,
   StatementBalance,
 } from "../../shared/bankImport";
+import { guessCard } from "../../shared/cards";
 import { matchRule } from "../../shared/moneyRules";
 import { findPerson, memoWithPerson } from "../../shared/payees";
+import { cardsOfAccount } from "./cards.service";
 import { requireAccount } from "./money.service";
 import { rulesForBook } from "./rules.service";
 import {
@@ -129,6 +131,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     );
     const unknownCategories = new Map<string, string>();
     const rules = rulesForBook(tx, account.bookId);
+    const cards = cardsOfAccount(tx, account.id);
     let categorizedByRules = 0;
 
     const rows: BankImportResult["rows"] = [];
@@ -175,6 +178,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         externalId: row.externalId ?? null,
         bankPayee: row.payee.trim(),
         counterparty: person?.name ?? null,
+        cardId: guessCard(account.kind, cards, row),
       });
     });
 

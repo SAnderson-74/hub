@@ -45,6 +45,25 @@ export const moneyAccounts = sqliteTable(
   (t) => [index("money_accounts_book_idx").on(t.bookId)],
 );
 
+/**
+ * A payment card on the account it spends from: a credit card on its credit card
+ * account, a debit card on checking. Only the last 4 digits are kept.
+ */
+export const moneyCards = sqliteTable(
+  "money_cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => moneyAccounts.id),
+    name: text("name").notNull(),
+    last4: text("last4"),
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    ...timestamps(),
+  },
+  (t) => [index("money_cards_account_idx").on(t.accountId)],
+);
+
 /** What money was for, per book. Income and spending are kept apart for budgets. */
 export const moneyCategories = sqliteTable(
   "money_categories",
@@ -90,6 +109,8 @@ export const moneyTransactions = sqliteTable(
     bankPayee: text("bank_payee"),
     /** Who was paid or paid, for payment apps like Venmo: "John Smith". */
     counterparty: text("counterparty"),
+    /** The card it was paid with (or refunded to), when known. */
+    cardId: integer("card_id").references(() => moneyCards.id, { onDelete: "set null" }),
     ...timestamps(),
   },
   (t) => [
@@ -99,6 +120,7 @@ export const moneyTransactions = sqliteTable(
     index("money_transactions_import_idx").on(t.importId),
     index("money_transactions_external_idx").on(t.accountId, t.externalId),
     index("money_transactions_transfer_idx").on(t.transferPeerId),
+    index("money_transactions_card_idx").on(t.cardId),
   ],
 );
 

@@ -25,6 +25,7 @@ import {
   transferLinkSchema,
 } from "../../shared/books";
 import { budgetQuerySchema, budgetSetSchema } from "../../shared/budget";
+import { cardCreateSchema, cardUpdateSchema } from "../../shared/cards";
 import { cashFlowQuerySchema } from "../../shared/cashFlow";
 import {
   categorizeApplySchema,
@@ -33,6 +34,7 @@ import {
 } from "../../shared/categorize";
 import { netWorthQuerySchema } from "../../shared/netWorth";
 import { budgetMonth, setBudget } from "./budget.service";
+import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
 import { applyCategory, categorizeOverview, fillPeople } from "./categorize.service";
 import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
@@ -76,7 +78,7 @@ import {
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
-/** Books, their accounts and categories, transactions, transfers, rules, sorting, budgets, cash flow, net worth, and imports. */
+/** Books, their accounts, cards, and categories, transactions, transfers, rules, sorting, budgets, cash flow, net worth, and imports. */
 export function moneyRoutes({ db }: Deps) {
   return (
     new Hono<AppEnv>()
@@ -122,6 +124,22 @@ export function moneyRoutes({ db }: Deps) {
       )
       .delete("/accounts/:id", idParam, (c) => {
         deleteAccount(db, c.req.valid("param").id);
+        return c.body(null, 204);
+      })
+      .get("/cards", bookQuery, (c) => c.json(listCards(db, c.req.valid("query").bookId)))
+      .post(
+        "/cards",
+        zValidator("json", cardCreateSchema, invalid("That card isn't valid.")),
+        (c) => c.json(createCard(db, c.req.valid("json")), 201),
+      )
+      .patch(
+        "/cards/:id",
+        idParam,
+        zValidator("json", cardUpdateSchema, invalid("Those card changes aren't valid.")),
+        (c) => c.json(updateCard(db, c.req.valid("param").id, c.req.valid("json"))),
+      )
+      .delete("/cards/:id", idParam, (c) => {
+        deleteCard(db, c.req.valid("param").id);
         return c.body(null, 204);
       })
       .get("/categories", bookQuery, (c) => c.json(listCategories(db, c.req.valid("query").bookId)))

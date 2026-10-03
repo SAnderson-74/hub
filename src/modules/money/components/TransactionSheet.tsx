@@ -12,12 +12,14 @@ import {
   textareaClass,
 } from "../../../client/components/ui";
 import { CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
+import { cardLabel, guessCard } from "../../../shared/cards";
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { matchRule } from "../../../shared/moneyRules";
 import { formatSigned } from "../../../shared/profit";
 import { formatShortDate } from "../../tasks/dates";
 import {
   type Account,
+  type Card,
   type Category,
   type Rule,
   type Transaction,
@@ -48,6 +50,8 @@ type Draft = {
   memo: string;
   /** Who a payment-app transaction was with. */
   counterparty: string;
+  /** The card it was paid with, or "" for none. */
+  cardId: string;
 };
 
 function toDraft(transaction: Transaction | null, accountId: number | null, today: string): Draft {
@@ -61,12 +65,14 @@ function toDraft(transaction: Transaction | null, accountId: number | null, toda
     categoryId: transaction?.category ? String(transaction.category.id) : "",
     memo: transaction?.memo ?? "",
     counterparty: transaction?.counterparty ?? "",
+    cardId: transaction?.card ? String(transaction.card.id) : "",
   };
 }
 
 export function TransactionSheet({
   target,
   accounts,
+  cards,
   categories,
   rules,
   defaultAccountId,
@@ -75,6 +81,8 @@ export function TransactionSheet({
 }: {
   target: TransactionTarget;
   accounts: Account[];
+  /** The book's cards, for picking which one paid. */
+  cards: Card[];
   categories: Category[];
   /** The book's rules, for suggesting a category from the payee. */
   rules: Rule[];
@@ -95,6 +103,7 @@ export function TransactionSheet({
           key={transaction?.id ?? "new"}
           transaction={transaction}
           accounts={accounts}
+          cards={cards}
           categories={categories}
           rules={rules}
           defaultAccountId={defaultAccountId}
@@ -109,6 +118,7 @@ export function TransactionSheet({
 function TransactionForm({
   transaction,
   accounts,
+  cards,
   categories,
   rules,
   defaultAccountId,
@@ -117,19 +127,35 @@ function TransactionForm({
 }: {
   transaction: Transaction | null;
   accounts: Account[];
+  cards: Card[];
   categories: Category[];
   rules: Rule[];
   defaultAccountId: number | null;
   today: string;
   onDone: () => void;
 }) {
-  const [draft, setDraft] = useState(() => toDraft(transaction, defaultAccountId, today));
+  const [draft, setDraft] = useState(() => {
+    const initial = toDraft(transaction, defaultAccountId, today);
+    if (transaction) return initial;
+    // A new one starts with the account's card when that's clear, like a credit card's.
+    const account = accounts.find((item) => String(item.id) === initial.accountId);
+    const guess = account
+      ? guessCard(
+          account.kind,
+          cards.filter((card) => card.account.id === account.id),
+          { payee: "", memo: "", amountCents: -1 },
+        )
+      : null;
+    return { ...initial, cardId: guess === null ? "" : String(guess) };
+  });
   const [message, setMessage] = useState("");
   const [tried, setTried] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // A category picked by hand isn't replaced by a rule's suggestion.
   const [categoryTouched, setCategoryTouched] = useState(transaction?.category != null);
   const [suggested, setSuggested] = useState(false);
+  // Likewise a card: a new transaction's card follows the account and payee until picked.
+  const [cardTouched, setCardTouched] = useState(transaction !== null);
   const create = useCreateTransaction();
   const createTransfer = useCreateTransfer();
   const update = useUpdateTransaction();
@@ -158,10 +184,39 @@ function TransactionForm({
   const categoryChoices = categories.filter(
     (category) => !category.archived || String(category.id) === draft.categoryId,
   );
+  const cardsOf = (accountId: string) =>
+    cards.filter((card) => String(card.account.id) === accountId);
+  const cardChoices = cardsOf(draft.accountId).filter(
+    (card) => !card.archived || String(card.id) === draft.cardId,
+  );
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
+  };
+
+  /**
+   * The card a new transaction was likely paid with, the way imports guess it, unless
+   * one was picked by hand. A picked card that isn't the account's is dropped.
+   */
+  const followCard = (next: Pick<Draft, "accountId" | "payee" | "memo" | "kind">) => {
+    const choices = cardsOf(next.accountId);
+    if (cardTouched) {
+      if (draft.cardId && !choices.some((card) => String(card.id) === draft.cardId)) {
+        setDraft((current) => ({ ...current, cardId: "" }));
+      }
+      return;
+    }
+    const account = accounts.find((item) => String(item.id) === next.accountId);
+    const guess =
+      account && next.kind !== "transfer"
+        ? guessCard(account.kind, choices, {
+            payee: next.payee,
+            memo: next.memo,
+            amountCents: next.kind === "in" ? 1 : -1,
+          })
+        : null;
+    setDraft((current) => ({ ...current, cardId: guess === null ? "" : String(guess) }));
   };
 
   /** Fills in the category a rule gives this payee, unless one was picked by hand. */
@@ -201,6 +256,7 @@ function TransactionForm({
       categoryId: isTransferSide || !draft.categoryId ? null : Number(draft.categoryId),
       memo: draft.memo,
       counterparty: isTransferSide ? null : draft.counterparty.trim() || null,
+      ...(isTransferSide ? {} : { cardId: draft.cardId ? Number(draft.cardId) : null }),
     };
     if (!transaction) {
       create.mutate(fields, { onSuccess: onDone });
@@ -242,6 +298,7 @@ function TransactionForm({
                     onChange={() => {
                       set("kind", value);
                       suggest(draft.payee, value);
+                      followCard({ ...draft, kind: value });
                     }}
                     className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
                   />
@@ -408,6 +465,7 @@ function TransactionForm({
                 onChange={(event) => {
                   set("payee", event.target.value);
                   suggest(event.target.value, draft.kind);
+                  followCard({ ...draft, payee: event.target.value });
                 }}
                 maxLength={200}
                 placeholder={draft.kind === "in" ? "Employer or customer" : "Store or person"}
@@ -450,7 +508,10 @@ function TransactionForm({
                   <select
                     id={`${ids}-account`}
                     value={draft.accountId}
-                    onChange={(event) => set("accountId", event.target.value)}
+                    onChange={(event) => {
+                      set("accountId", event.target.value);
+                      followCard({ ...draft, accountId: event.target.value });
+                    }}
                     aria-invalid={tried && accountMissing}
                     className={inputClass}
                   >
@@ -502,6 +563,29 @@ function TransactionForm({
                     </p>
                   ) : null}
                 </div>
+                {cardChoices.length > 0 ? (
+                  <div className="min-w-0">
+                    <label htmlFor={`${ids}-card`} className={labelClass}>
+                      Card
+                    </label>
+                    <select
+                      id={`${ids}-card`}
+                      value={draft.cardId}
+                      onChange={(event) => {
+                        set("cardId", event.target.value);
+                        setCardTouched(true);
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">No card</option>
+                      {cardChoices.map((card) => (
+                        <option key={card.id} value={card.id}>
+                          {cardLabel(card)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
             )}
           </>
