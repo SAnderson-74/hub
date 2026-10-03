@@ -111,7 +111,11 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.3 Rewards estimates: each card's earn rates (cash back or points) by category and by store, with optional dates and caps, and what it earned per month and year
 - [x] 5.4 Points and "worth it": point balances and redemptions for a real value per point, annual fees, and a comparison with a flat-rate card and with using the best card for each purchase
 - [x] 5.5 Split transactions: one charge in several categories, counted that way in budgets, cash flow, and rewards
-- [ ] 5.6 Receipts: a `hub-receipt/v1` format from a Claude Project, pasted into Hub (or sent by a Shortcut), matched to the bank's transaction, and kept from counting twice when the bank file arrives
+- [x] 5.6 Receipts: a `hub-receipt/v1` format from a Claude Project (see [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)), pasted into Hub, split by category, matched to the bank's transaction, and kept from counting twice when the bank file arrives
+- [ ] 5.7 One Claude Project for every import: one paste box in Hub that knows each format, and the Project's instructions in the app with a Copy button, kept current as formats are added
+- [ ] 5.8 Bank statements and transactions from the Claude Project: statement balances and transactions read from screenshots or documents, with the same duplicate checks as bank files
+- [ ] 5.9 Items to sell from the Claude Project: several items (like devices) at once into Resale inventory
+- [ ] 5.10 Tasks and goals from the Claude Project: tasks, projects, and goals read from notes or lists
 
 ## Import formats
 
@@ -164,6 +168,34 @@ Prices are in dollars in this format and stored as cents. Missing fields are all
 
 It's sent to `POST /api/resale/listing-import` (add `?dryRun=true` to preview). If exactly one unsold item has the same title, ignoring case, the listing is added to it; otherwise a new item is made. The answer includes a `message` sentence for a Shortcut to show.
 
+### `hub-receipt/v1`
+
+Produced by the Claude Project ([CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has its instructions) from receipt photos, and pasted into Money > Paste receipts.
+
+```json
+{
+  "format": "hub-receipt/v1",
+  "receipts": [
+    {
+      "store": "Example Store",
+      "date": "2030-03-10",
+      "total": 22.79,
+      "type": "purchase",
+      "cardLast4": "1234",
+      "items": [
+        { "name": "Bananas", "amount": 1.30, "category": "Groceries" },
+        { "name": "Paper towels", "amount": 20.00, "category": "Shopping" }
+      ],
+      "note": ""
+    }
+  ]
+}
+```
+
+Up to 50 receipts of up to 300 lines each. Amounts are dollars (numbers, or text like `"$12.50"`); a line's amount is negative for a coupon. `type` is `purchase` or `return`. `category` on the receipt is for one without lines. Unknown fields are ignored, and nothing is stored as pasted. A receipt is refused when `cardLast4` isn't exactly 4 digits, or its store, lines, or note have a run of 9 or more digits (the shape of a card or account number).
+
+It's sent to `POST /api/money/receipts` with the book, an account for receipts without a known card, a category for each name the book doesn't have, and receipts to leave out (add `?dryRun=true` to preview).
+
 ### Bank and card files
 
 Money > Import reads a file in the browser and sends clean transactions to `POST /api/money/imports` (add `?dryRun=true` to preview).
@@ -177,6 +209,7 @@ Money > Import reads a file in the browser and sends clean transactions to `POST
 - **Cards:** a card belongs to the account it spends from (a credit card to its credit card account, a debit card to checking), and only its last 4 digits are kept. Imports pick a transaction's card from card digits in the bank's text ("x1234", "card ending in 1234"), or, when the account has one card, from the account itself (credit cards, except payments) or from card words like "debit card" and "POS" (checking). Adding a card or its digits matches past transactions the same way. Transfers never have a card. Cash flow can show money out by payment method: the card that paid, or the account when no card did, with refunds coming off the card or account they went back to, so the total matches the category view.
 - **Rewards:** a card's program is cash back (a percent) or points (per dollar, with a value per point), a base rate, and bonus rates. A bonus rate is for a store (text found in the payee or the bank's text, ignoring case and punctuation; commas separate spellings) or a spending category, and can have dates (a rotating quarterly bonus) and a cap (only the first so much spent, in its dates or each calendar year; past it, the base rate). Store rates are tried before category rates. Purchases earn and refunds take back; transfers and money in to income categories (like a statement credit) don't count. These are estimates from the card's transactions; the statement is the final word. Each card's annual fee is weighed against what it earned, and against a flat-rate card (2% unless changed) on the same spending. For points, statement balances and redemptions (points used and what they were worth) give the real value per point, which replaces the set value once there are any; between the last two statement balances, the change plus points used is checked against Hub's estimate. "Use the best card" compares each card purchase with the book's card that would have earned the most on it, ignoring caps.
 - **Splits:** one charge in several categories, like a store run that was partly groceries and partly household things. The parts each have a spending or income category and add up to the transaction, which shows its largest part's category (so lists, rules, and an older build after a rollback still see a sensible one). Budgets, cash flow, rewards, and the category filter count each part in its own category. Changing the amount means changing the parts with it; picking one category, or linking the transaction as a transfer, takes the split away.
+- **Receipts:** a receipt goes on the card with its last 4 digits (or the chosen account), and on a transaction there with the same amount dated from 2 days before to 7 days after it, closest first, that isn't a transfer and has no receipt. It adds the store's name (unless the payee was renamed), a memo listing the lines, the card, and the split by category (tax and discounts shared out in proportion). Without a match it adds a new transaction, which a bank file later fills in (the bank's date, id, and text) instead of adding again. The same store, date, and total twice in a book is a duplicate. Removing a receipt puts its transaction back how it was, or deletes the one it added unless a bank file has found it since.
 - **Transfers:** two linked transactions (money leaving one account, arriving in another) with no category, left out of money in and out. Hub suggests pairs from imports: the same amount out of one account and into another within four days, both uncategorized.
 
 ## Integrations

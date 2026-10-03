@@ -184,6 +184,12 @@ function ImportForm({
             {count(done.duplicates, "was", "were")} already in the account and skipped.
           </p>
         ) : null}
+        {done.matchedReceipts > 0 ? (
+          <p className="text-fg">
+            {count(done.matchedReceipts, "was a purchase", "were purchases")} already added from a
+            receipt, now with the bank's details.
+          </p>
+        ) : null}
         {done.balanceCheck ? (
           <BalanceCheck
             check={done.balanceCheck}
@@ -371,6 +377,12 @@ function ImportForm({
                 {count(preview.duplicates, "is", "are")} already in the account and will be skipped
               </li>
             ) : null}
+            {preview.matchedReceipts > 0 ? (
+              <li>
+                {count(preview.matchedReceipts, "is a purchase", "are purchases")} already added
+                from a receipt, and will get the bank's details instead of being added again
+              </li>
+            ) : null}
             {read.problems.length > 0 ? (
               <li>
                 {count(read.problems.length, "row", "rows")} couldn't be read and will be left out
@@ -414,12 +426,14 @@ function ImportForm({
             <button
               type="button"
               className={primaryButton}
-              disabled={run.isPending || preview.created === 0}
+              disabled={run.isPending || (preview.created === 0 && preview.matchedReceipts === 0)}
               onClick={confirm}
             >
-              {preview.created === 0
-                ? "Nothing to import"
-                : `Import ${count(preview.created, "transaction", "transactions")}`}
+              {preview.created > 0
+                ? `Import ${count(preview.created, "transaction", "transactions")}`
+                : preview.matchedReceipts > 0
+                  ? "Match receipts"
+                  : "Nothing to import"}
             </button>
             {loaded?.kind === "csv" ? (
               <button type="button" className={ghostButton} onClick={clearCheck}>

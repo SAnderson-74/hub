@@ -18,6 +18,7 @@ import type { BudgetSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
+import type { ReceiptImportInput } from "../../shared/receipts";
 import type { PointBalanceSave, RedemptionSave, RewardsSave } from "../../shared/rewards";
 
 async function fetchBooks() {
@@ -361,6 +362,36 @@ export function useDeleteRewards() {
   return useMoneyMutation(async (cardId: number) => {
     const res = await api.money.cards[":id"].rewards.$delete({ param: { id: String(cardId) } });
     if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Receipts
+
+/** Previews (dryRun) or adds pasted receipts. A preview changes nothing, so it refreshes nothing. */
+export function useImportReceipts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ json, dryRun }: { json: ReceiptImportInput; dryRun: boolean }) => {
+      const res = await api.money.receipts.$post({
+        query: dryRun ? { dryRun: "true" } : {},
+        json,
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (_result, { dryRun }) => {
+      if (!dryRun) refreshMoney(queryClient);
+    },
+  });
+}
+
+export type ReceiptImport = NonNullable<ReturnType<typeof useImportReceipts>["data"]>;
+
+export function useRemoveReceipt() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.receipts[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }
 

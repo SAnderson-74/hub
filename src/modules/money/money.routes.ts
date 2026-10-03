@@ -33,6 +33,7 @@ import {
   fillPeopleSchema,
 } from "../../shared/categorize";
 import { netWorthQuerySchema } from "../../shared/netWorth";
+import { receiptImportSchema } from "../../shared/receipts";
 import {
   pointBalanceSchema,
   redemptionSchema,
@@ -64,6 +65,7 @@ import {
   updateTransaction,
 } from "./money.service";
 import { netWorth } from "./netWorth.service";
+import { importReceipts, removeReceipt } from "./receipts.service";
 import {
   addRedemption,
   cardPoints,
@@ -257,6 +259,28 @@ export function moneyRoutes({ db }: Deps) {
           return c.json(importBankFile(db, c.req.valid("json"), dryRun), dryRun ? 200 : 201);
         },
       )
+      // Receipts pasted from a Claude Project (hub-receipt/v1). Like every route, behind
+      // Tailscale sign-in; the pasted text is checked field by field and never stored as is.
+      .post(
+        "/receipts",
+        zValidator(
+          "query",
+          z.object({ dryRun: z.enum(["true", "false"]).optional() }),
+          invalid("Use dryRun=true to preview, or leave it out to add the receipts."),
+        ),
+        zValidator(
+          "json",
+          receiptImportSchema,
+          invalid(
+            "Those receipts don't fit the hub-receipt/v1 format. Copy the Claude Project's whole answer again.",
+          ),
+        ),
+        (c) => {
+          const dryRun = c.req.valid("query").dryRun === "true";
+          return c.json(importReceipts(db, c.req.valid("json"), dryRun), dryRun ? 200 : 201);
+        },
+      )
+      .delete("/receipts/:id", idParam, (c) => c.json(removeReceipt(db, c.req.valid("param").id)))
       .post("/imports/:id/undo", idParam, (c) => c.json(undoImport(db, c.req.valid("param").id)))
       .get("/import-layouts", (c) => c.json(listLayouts(db)))
       .get("/rules", bookQuery, (c) => c.json(listRules(db, c.req.valid("query").bookId)))
