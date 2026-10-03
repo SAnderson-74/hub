@@ -2,6 +2,15 @@
 
 Hub's releases. Every merge to `main` also ships as a build, shown in Settings > About as the version plus its build id (like `1.0.0+a1b2c3d`).
 
+## 1.1.0 (2026-10-03)
+
+Cards, rewards, and one Claude Project for imports: phase 5 of [the plan](docs/PLAN.md).
+
+- **Cards and rewards:** credit and debit cards on their accounts, each transaction's card filled in where it's clear, cash flow by payment method, cash back and points estimates by category and by store, points balances and redemptions, annual fees, and a "worth it" comparison with a flat-rate card.
+- **Split transactions:** one charge across several categories, counted that way in budgets, cash flow, and rewards.
+- **One Claude Project for imports:** its instructions in Settings with a Copy button and a version, and Paste from Claude, which opens the matching import with a preview. It reads receipts (matched to the bank's transaction and split by category), statements and app screenshots (imported like a bank file), items to sell, tasks, projects, and goals, resale listings, and study plans. See [CLAUDE_PROJECT.md](docs/CLAUDE_PROJECT.md).
+- **Privacy:** imports keep only the fields they need, and long account-style numbers are hidden or flagged.
+
 ## 1.0.0 (2026-10-03)
 
 The first full release: everything in [the plan](docs/PLAN.md), phases 0 through 4.

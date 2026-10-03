@@ -2,7 +2,7 @@
 
 A private, self-hosted personal hub: tasks and goals, courses, resale tracking, budgets, and small-business prep in one app that works on a phone and a desktop. It runs as a single container and is reachable only through [Tailscale](https://tailscale.com), with no passwords and no public exposure.
 
-> Status: 1.0. Every module in [the plan](docs/PLAN.md) is built. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+> Status: 1.1. Every module in [the plan](docs/PLAN.md) is built. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 <p align="center">
   <img src="docs/screenshots/home-desktop.png" alt="The home screen on a desktop: today's tasks, study streak, next milestones, and term progress" width="100%">
