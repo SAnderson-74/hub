@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
 import { defaultModules } from "../../shared/modules";
+import { budgetMonth } from "../money/budget.service";
+import { seedDemo } from "./demo.service";
 import { isEmpty } from "./setup.service";
 
 let t: TestApp;
@@ -73,6 +75,18 @@ describe("example data", () => {
     });
     expect(isEmpty(t.db)).toBe(true);
     expect((await status()).demo).toBe(false);
+  });
+
+  it("has a budget and spending this month, even on the 1st", async () => {
+    seedDemo(t.db, "tester", "2030-03-01", new Date("2030-03-01T20:00:00Z"));
+    const [book] = await body(await t.api.money.books.$get());
+    const march = budgetMonth(t.db, book?.id ?? 0, "2030-03");
+    expect(march.totals).toMatchObject({ incomeCents: 420_000, spentBudgetedCents: 145_000 });
+    expect(march.totals.budgetedCents).toBeGreaterThan(0);
+    expect(march.history).toHaveLength(6);
+    for (const month of march.history) expect(month.spentCents).toBeGreaterThan(0);
+    const [term] = await body(await t.api.education.terms.$get());
+    for (const course of term?.courses ?? []) expect(course.plannedStart).not.toBeNull();
   });
 
   it("keeps what was added to it since", async () => {

@@ -19,6 +19,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 | `npm run test:e2e` | Playwright at iPhone and desktop sizes (needs `npm run build`; runs in CI) |
 | `npm run db:generate -- --name <what_changed>` | Creates a migration from schema changes |
 | `npm run format` | Formats and fixes lint issues |
+| `npm run screenshots` | Retakes `docs/screenshots/` from the example data (needs Chromium) |
 
 ## Layout
 

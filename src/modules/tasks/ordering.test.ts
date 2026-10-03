@@ -56,6 +56,14 @@ describe("due dates", () => {
     expect(describeDue("2031-01-05", today).label).toBe("Due Jan 5, 2031");
   });
 
+  it("doesn't call finished things overdue", () => {
+    expect(describeDue("2030-03-10", "2030-03-13", { done: true })).toEqual({
+      label: "Was due Mar 10",
+      tone: "muted",
+    });
+    expect(describeDue("2030-03-13", "2030-03-13", { done: true }).label).toBe("Due today");
+  });
+
   it("counts days across daylight saving changes", () => {
     expect(describeDue("2030-03-11", "2030-03-09").label).toBe("Due Monday");
   });

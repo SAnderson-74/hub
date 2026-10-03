@@ -42,6 +42,7 @@ import {
   listTerms,
 } from "../education/education.service";
 import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service";
+import { setBudget } from "../money/budget.service";
 import {
   createAccount,
   createBook,
@@ -115,6 +116,11 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
     return made;
   };
   const day = (offset: number) => addDays(today, offset);
+  /** The first of the month `offset` months from this one. */
+  const monthStart = (offset: number) => {
+    const [year = 0, month = 1] = today.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 10);
+  };
 
   // Recorded even if something fails partway, so whatever was made can be removed.
   try {
@@ -188,13 +194,21 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
     ).find((entry) => entry.name === termName);
     if (!term) throw new Error("Expected the example term");
     note("term", term);
-    for (const [code, title, status] of [
-      ["ABC101", "Introduction to Networks", "in_progress"],
-      ["ABC102", "Database Basics", "not_started"],
+    for (const [code, title, status, plannedStart, plannedEnd] of [
+      ["ABC101", "Introduction to Networks", "in_progress", day(-30), day(35)],
+      ["ABC102", "Database Basics", "not_started", day(30), day(90)],
     ] as const) {
       createCourse(
         db,
-        courseCreateSchema.parse({ termId: term.id, code, title, credits: 3, status }),
+        courseCreateSchema.parse({
+          termId: term.id,
+          code,
+          title,
+          credits: 3,
+          status,
+          plannedStart,
+          plannedEnd,
+        }),
         actor,
         today,
       );
@@ -304,36 +318,56 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
     const categoryId = new Map(
       listCategories(db, book.id).map((category) => [category.name, category.id]),
     );
-    const transactions: Array<[number, number, string, string]> = [
-      [-58, 320_000, "Example Employer payroll", "Paycheck"],
-      [-56, -145_000, "Example Property Management", "Housing"],
-      [-52, -8_640, "Corner Grocery", "Groceries"],
-      [-45, -4_210, "Luigi's Pizza", "Dining out"],
-      [-40, -11_800, "City Power and Water", "Utilities"],
-      [-35, -1_599, "StreamCo", "Subscriptions"],
-      [-28, 320_000, "Example Employer payroll", "Paycheck"],
-      [-26, -145_000, "Example Property Management", "Housing"],
-      [-22, -9_315, "Corner Grocery", "Groceries"],
-      [-18, -2_400, "Venmo to Jane Doe", "Dining out"],
-      [-12, -6_400, "Shell", "Transportation"],
-      [-6, -1_599, "StreamCo", "Subscriptions"],
-      [-3, -7_120, "Corner Grocery", "Groceries"],
+    // Six months of a typical month, by day of the month, up to today. Pay and rent
+    // land on the 1st, so even early in a month the budget and cash flow have something.
+    const month: Array<[number, number, string, string]> = [
+      [1, 420_000, "Example Employer payroll", "Paycheck"],
+      [1, -145_000, "Example Property Management", "Housing"],
+      [2, -8_640, "Corner Grocery", "Groceries"],
+      [6, -4_210, "Pizza Place", "Dining out"],
+      [9, -2_400, "Venmo to Jane Doe", "Dining out"],
+      [11, -11_800, "City Power and Water", "Utilities"],
+      [13, -1_599, "StreamCo", "Subscriptions"],
+      [15, -9_315, "Corner Grocery", "Groceries"],
+      [19, -6_400, "Corner Gas", "Transportation"],
+      [23, -7_120, "Corner Grocery", "Groceries"],
+      [27, -3_150, "Pizza Place", "Dining out"],
     ];
-    for (const [offset, amountCents, payee, category] of transactions) {
-      note(
-        "transaction",
-        createTransaction(
-          db,
-          transactionCreateSchema.parse({
-            accountId: checking.id,
-            date: day(offset),
-            amountCents,
-            payee,
-            categoryId: categoryId.get(category) ?? null,
-            ...(payee.startsWith("Venmo") ? { counterparty: "Jane Doe" } : {}),
-          }),
-        ),
-      );
+    const fixed = new Set(["Paycheck", "Housing", "Subscriptions"]);
+    // Oldest month first; everyday spending moves a little from month to month.
+    const swings = [1.06, 0.94, 1.1, 0.97, 1.03, 1];
+    for (const [index, swing] of swings.entries()) {
+      const start = monthStart(index - swings.length + 1);
+      for (const [dayOfMonth, cents, payee, category] of month) {
+        const date = addDays(start, dayOfMonth - 1);
+        if (date > today) continue;
+        note(
+          "transaction",
+          createTransaction(
+            db,
+            transactionCreateSchema.parse({
+              accountId: checking.id,
+              date,
+              amountCents: fixed.has(category) ? cents : Math.round(cents * swing),
+              payee,
+              categoryId: categoryId.get(category) ?? null,
+              ...(payee.startsWith("Venmo") ? { counterparty: "Jane Doe" } : {}),
+            }),
+          ),
+        );
+      }
+    }
+    // Budgets from the first of those months on; dining out runs over in some months.
+    for (const [category, amountCents] of [
+      ["Housing", 145_000],
+      ["Groceries", 30_000],
+      ["Dining out", 10_000],
+      ["Utilities", 13_000],
+      ["Transportation", 8_000],
+      ["Subscriptions", 2_000],
+    ] as const) {
+      const id = categoryId.get(category);
+      if (id) setBudget(db, { categoryId: id, month: monthStart(-5).slice(0, 7), amountCents });
     }
 
     // Business

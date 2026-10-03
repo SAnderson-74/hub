@@ -1,6 +1,6 @@
 {
   "name": "hub",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "A private, self-hosted personal operations hub: tasks and goals, finances, resale tracking, and small-business prep.",
   "license": "MIT",
@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "screenshots": "npm run build && playwright test -c playwright.screenshots.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "node scripts/check-migrations.mjs",
     "check": "npm run lint && npm run typecheck && npm run db:check && npm run test"
