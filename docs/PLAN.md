@@ -114,7 +114,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.6 Receipts: a `hub-receipt/v1` format from a Claude Project (see [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)), pasted into Hub, split by category, matched to the bank's transaction, and kept from counting twice when the bank file arrives
 - [x] 5.7 One Claude Project for every import: one paste box in Hub (Paste from Claude) that sends each format to its import, and the Project's instructions in Settings with a Copy button and a version, kept equal to [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) by a test
 - [x] 5.8 Bank statements and transactions from the Claude Project: a `hub-statement/v1` format read from statements or app screenshots, imported like a bank file (duplicates by day and amount, receipt matching, the closing balance checked, undo), with long numbers hidden down to their last 4 digits
-- [ ] 5.9 Items to sell from the Claude Project: several items (like devices) at once into Resale inventory
+- [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
 - [ ] 5.10 Tasks and goals from the Claude Project: tasks, projects, and goals read from notes or lists
 
 ## Import formats
@@ -150,6 +150,30 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 ```
 
 `status` is one of `not_started`, `in_progress`, `passed`, `transferred`. `kind` is `exam`, `project`, or `other`; `label` is free text.
+
+### `hub-inventory/v1`
+
+Produced by the Claude Project from photos or a list of things to sell, and pasted into Resale > Paste items (or Settings > Imports > Paste from Claude).
+
+```json
+{
+  "format": "hub-inventory/v1",
+  "items": [
+    {
+      "title": "Phone, 128 GB, blue",
+      "brand": "Example",
+      "model": "X1",
+      "condition": "used, small scratch on the back",
+      "category": "Phones",
+      "status": "acquired",
+      "purchase": { "price": 40, "date": "2030-01-10", "from": "Garage sale" },
+      "notes": "Charger included."
+    }
+  ]
+}
+```
+
+Up to 100 items. Only `title` is required; `status` is `acquired` (the default) or `repairing`. The browser turns each item into a row for `POST /api/resale/import` (brand and model go into the notes), so the server checks them like a spreadsheet's rows: an item with the same title, purchase date, and price as one in Hub is skipped, and one without a price paid or purchase date is flagged to review. Labeled serial, IMEI, and MEID numbers are removed from every field, and other runs of 9 or more digits are hidden down to their last 4.
 
 ### `hub-listing/v1`
 

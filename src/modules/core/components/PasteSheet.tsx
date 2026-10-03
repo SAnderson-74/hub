@@ -18,6 +18,7 @@ import {
   useCategories,
 } from "../../money/queries";
 import { storedBookId } from "../../money/storedBook";
+import { PasteItemsForm } from "../../resale/components/PasteItemsSheet";
 import { PasteListingForm } from "../../resale/components/PasteListingSheet";
 import { localDate } from "../../tasks/dates";
 
@@ -102,6 +103,8 @@ function PasteFlow({ onDone }: { onDone: () => void }) {
               );
             }}
           </BookTarget>
+        ) : format.format === "hub-inventory/v1" ? (
+          <PasteItemsForm initialText={chosen.json} onDone={onDone} />
         ) : format.format === "hub-listing/v1" ? (
           <PasteListingForm
             initialText={chosen.json}
