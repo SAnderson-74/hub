@@ -1,10 +1,13 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { z } from "zod";
 import { localDateParts } from "../../server/db/backup";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
 import { taskCreateSchema, taskListQuerySchema, taskUpdateSchema } from "../../shared/tasks";
+import { tasksImportSchema } from "../../shared/tasksImport";
+import { importTasks } from "./import.service";
 import { createTask, deleteTask, getTask, listTasks, updateTask } from "./tasks.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric task id."));
@@ -12,33 +15,57 @@ const idParam = zValidator("param", idParamSchema, invalid("Use a numeric task i
 export function taskRoutes({ db, config }: Deps) {
   // "Today" for repeating tasks, in the owner's time zone.
   const today = () => localDateParts(new Date(), config.timeZone).date;
-  return new Hono<AppEnv>()
-    .get(
-      "/",
-      zValidator("query", taskListQuerySchema, invalid("Those filters aren't valid.")),
-      (c) => c.json(listTasks(db, c.req.valid("query"))),
-    )
-    .post("/", zValidator("json", taskCreateSchema, invalid("That task isn't valid.")), (c) =>
-      c.json(createTask(db, c.req.valid("json"), c.get("user").login), 201),
-    )
-    .get("/:id", idParam, (c) => c.json(getTask(db, c.req.valid("param").id)))
-    .patch(
-      "/:id",
-      idParam,
-      zValidator("json", taskUpdateSchema, invalid("Those task changes aren't valid.")),
-      (c) =>
-        c.json(
-          updateTask(
-            db,
-            c.req.valid("param").id,
-            c.req.valid("json"),
-            c.get("user").login,
-            today(),
+  return (
+    new Hono<AppEnv>()
+      .get(
+        "/",
+        zValidator("query", taskListQuerySchema, invalid("Those filters aren't valid.")),
+        (c) => c.json(listTasks(db, c.req.valid("query"))),
+      )
+      .post("/", zValidator("json", taskCreateSchema, invalid("That task isn't valid.")), (c) =>
+        c.json(createTask(db, c.req.valid("json"), c.get("user").login), 201),
+      )
+      // Projects, tasks, and goals pasted from a Claude Project (hub-tasks/v1). Like every
+      // route, behind Tailscale sign-in; the pasted text is checked field by field.
+      .post(
+        "/import",
+        zValidator(
+          "query",
+          z.object({ dryRun: z.enum(["true", "false"]).optional() }),
+          invalid("Use dryRun=true to preview, or leave it out to add them."),
+        ),
+        zValidator(
+          "json",
+          tasksImportSchema,
+          invalid(
+            "Those tasks don't fit the hub-tasks/v1 format. Copy the Claude Project's whole answer again.",
           ),
         ),
-    )
-    .delete("/:id", idParam, (c) => {
-      deleteTask(db, c.req.valid("param").id, c.get("user").login);
-      return c.body(null, 204);
-    });
+        (c) => {
+          const dryRun = c.req.valid("query").dryRun === "true";
+          const result = importTasks(db, c.req.valid("json"), c.get("user").login, dryRun);
+          return c.json(result, dryRun ? 200 : 201);
+        },
+      )
+      .get("/:id", idParam, (c) => c.json(getTask(db, c.req.valid("param").id)))
+      .patch(
+        "/:id",
+        idParam,
+        zValidator("json", taskUpdateSchema, invalid("Those task changes aren't valid.")),
+        (c) =>
+          c.json(
+            updateTask(
+              db,
+              c.req.valid("param").id,
+              c.req.valid("json"),
+              c.get("user").login,
+              today(),
+            ),
+          ),
+      )
+      .delete("/:id", idParam, (c) => {
+        deleteTask(db, c.req.valid("param").id, c.get("user").login);
+        return c.body(null, 204);
+      })
+  );
 }

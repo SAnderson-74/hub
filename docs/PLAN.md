@@ -115,9 +115,39 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.7 One Claude Project for every import: one paste box in Hub (Paste from Claude) that sends each format to its import, and the Project's instructions in Settings with a Copy button and a version, kept equal to [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) by a test
 - [x] 5.8 Bank statements and transactions from the Claude Project: a `hub-statement/v1` format read from statements or app screenshots, imported like a bank file (duplicates by day and amount, receipt matching, the closing balance checked, undo), with long numbers hidden down to their last 4 digits
 - [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
-- [ ] 5.10 Tasks and goals from the Claude Project: tasks, projects, and goals read from notes or lists
+- [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
 
 ## Import formats
+
+### `hub-tasks/v1`
+
+Produced by the Claude Project from notes, a to-do list, or a plan, and pasted into Tasks (the paste button) or Settings > Imports > Paste from Claude.
+
+```json
+{
+  "format": "hub-tasks/v1",
+  "projects": [{ "name": "Garage cleanup", "notes": "Before winter." }],
+  "tasks": [
+    {
+      "title": "Sort the shelves",
+      "project": "Garage cleanup",
+      "due": "2030-04-01",
+      "priority": "high",
+      "status": "todo",
+      "subtasks": ["Empty the top shelf", "Label the bins"]
+    }
+  ],
+  "goals": [
+    {
+      "title": "Run a 10K",
+      "targetDate": "2030-09-01",
+      "milestones": [{ "title": "Run 5K without stopping", "targetDate": "2030-05-01" }]
+    }
+  ]
+}
+```
+
+Up to 20 projects, 200 tasks (20 subtasks each), and 20 goals (20 milestones each). `priority` is `none`, `low`, `medium`, or `high`; `status` is `backlog`, `todo` (the default), or `doing`. A task's `project` is found by name (ignoring case) among projects that aren't archived, or made; left out, the task goes to the inbox. It's sent to `POST /api/tasks/import` (add `?dryRun=true` to preview), which adds everything in one transaction through the same services as adding by hand. An open task with the same title in the same project (or the inbox) and an active goal with the same title are skipped. Unreadable dates are left off, and text with a run of 9 or more digits is flagged in the preview but not changed.
 
 ### `hub-education/v1`
 

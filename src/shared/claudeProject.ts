@@ -7,7 +7,7 @@ import type { ModuleId } from "./modules";
 // the paste sheet. Pasted answers are untrusted: each format's own schema checks them.
 
 /** Raised when the instructions change, so an older copy in the Project is easy to spot. */
-export const PROJECT_INSTRUCTIONS_VERSION = 4;
+export const PROJECT_INSTRUCTIONS_VERSION = 5;
 
 /** The formats the Project writes, where each goes, and the module it needs. */
 export const PROJECT_FORMATS = [
@@ -42,6 +42,14 @@ export const PROJECT_FORMATS = [
     noun: "a resale listing",
     into: "Resale",
     module: "resale",
+  },
+  {
+    format: "hub-tasks/v1",
+    label: "Tasks and goals",
+    kind: "tasks and goals",
+    noun: "tasks and goals",
+    into: "Tasks",
+    module: "tasks",
   },
   {
     format: "hub-education/v1",
@@ -185,6 +193,40 @@ Use this when asked to write a listing for something to sell, or to record one. 
 - listing: where it's listed, the asking price, and the listing's own title and description. Leave listing out to record the item alone.
 - purchase: what the person paid, when, and where, only when they say.
 - Keep serial numbers, IMEIs, and the person's contact details out of every field, the description included.
+
+TASKS AND GOALS (format "hub-tasks/v1")
+
+Use this when given notes, a to-do list, a plan, or a screenshot of one, to add projects, tasks, and goals. Up to 20 projects, 200 tasks, and 20 goals per answer.
+
+{
+  "format": "hub-tasks/v1",
+  "projects": [{ "name": "Garage cleanup", "notes": "Before winter." }],
+  "tasks": [
+    {
+      "title": "Sort the shelves",
+      "project": "Garage cleanup",
+      "due": "2030-04-01",
+      "priority": "high",
+      "status": "todo",
+      "notes": "Keep the paint cans.",
+      "subtasks": ["Empty the top shelf", "Label the bins"]
+    }
+  ],
+  "goals": [
+    {
+      "title": "Run a 10K",
+      "targetDate": "2030-09-01",
+      "milestones": [{ "title": "Run 5K without stopping", "targetDate": "2030-05-01" }]
+    }
+  ]
+}
+
+- projects: new groups of related tasks the person names, or that clearly belong together. A task's project can also be one already in Hub; use the name as the person writes it. Leave project out for a task on its own.
+- tasks: one per thing to do, starting with a verb ("Call", "Buy", "Sort"). Leave out ones already done.
+- due: only when a date is given or clear from one. priority: "none", "low", "medium", or "high", only when it's said or obvious. status: "todo", "backlog" for someday ideas, or "doing" for ones underway.
+- subtasks: short steps for a bigger task, up to 20.
+- goals: outcomes that take a while, with a target date when there is one and milestones along the way.
+- Keep notes short. Leave out passwords, PINs, door or alarm codes, and account, card, or ID numbers.
 
 STUDY PLAN (format "hub-education/v1")
 

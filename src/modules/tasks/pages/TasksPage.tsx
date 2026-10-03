@@ -1,4 +1,4 @@
-import { FolderPlus, List, Pencil, Plus, SquareKanban } from "lucide-react";
+import { ClipboardPaste, FolderPlus, List, Pencil, Plus, SquareKanban } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -6,6 +6,7 @@ import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { iconButton, inputClass, primaryButton } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { MoveSheet } from "../components/MoveSheet";
+import { PasteTasksSheet } from "../components/PasteTasksSheet";
 import { ProjectSheet } from "../components/ProjectSheet";
 import { TaskBoard, type TaskMove } from "../components/TaskBoard";
 import { TaskList } from "../components/TaskList";
@@ -84,6 +85,7 @@ export function TasksPage() {
   const [announcement, setAnnouncement] = useState("");
   const [moving, setMoving] = useState<TaskItem | null>(null);
   const [projectSheet, setProjectSheet] = useState<"new" | ProjectItem | null>(null);
+  const [pastingTasks, setPastingTasks] = useState(false);
 
   const selectProject = (value: ProjectFilter) => {
     setRequested(value);
@@ -224,6 +226,14 @@ export function TasksPage() {
           >
             <FolderPlus aria-hidden="true" className="size-5" />
           </button>
+          <button
+            type="button"
+            className={iconButton}
+            aria-label="Paste tasks from Claude"
+            onClick={() => setPastingTasks(true)}
+          >
+            <ClipboardPaste aria-hidden="true" className="size-5" />
+          </button>
         </div>
 
         <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
@@ -323,6 +333,7 @@ export function TasksPage() {
         onOpenTask={openTask}
         onClose={closeTask}
       />
+      <PasteTasksSheet open={pastingTasks} onClose={() => setPastingTasks(false)} />
       <MoveSheet task={moving} tasks={taskList} onMove={move} onClose={() => setMoving(null)} />
       <ProjectSheet
         target={projectSheet}

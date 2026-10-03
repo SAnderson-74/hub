@@ -6,6 +6,7 @@ import { inventoryDocumentSchema } from "./inventory";
 import { hasLongNumber, receiptDocumentSchema } from "./receipts";
 import { listingImportSchema } from "./resaleListing";
 import { statementDocumentSchema } from "./statement";
+import { tasksDocumentSchema } from "./tasksImport";
 
 const receipts = {
   format: "hub-receipt/v1",
@@ -44,7 +45,7 @@ describe("reading a pasted answer", () => {
     );
     expect(error('{ "receipts": [] }')).toContain("doesn't say what it is");
     expect(error('{ "format": "hub-example/v9" }')).toBe(
-      "Hub doesn't take \"hub-example/v9\" yet. It takes receipts, bank statements, items to sell, resale listings, and study plans. Check that the Project has Hub's latest instructions.",
+      "Hub doesn't take \"hub-example/v9\" yet. It takes receipts, bank statements, items to sell, resale listings, tasks and goals, and study plans. Check that the Project has Hub's latest instructions.",
     );
     const one = `\`\`\`json\n${JSON.stringify(receipts)}\n\`\`\``;
     expect(error(`${one}\n${one}`)).toBe(
@@ -70,6 +71,7 @@ describe("the Project's instructions", () => {
       "hub-statement/v1": statementDocumentSchema,
       "hub-inventory/v1": inventoryDocumentSchema,
       "hub-listing/v1": listingImportSchema,
+      "hub-tasks/v1": tasksDocumentSchema,
       "hub-education/v1": educationImportSchema,
     };
     for (const example of examples) {
