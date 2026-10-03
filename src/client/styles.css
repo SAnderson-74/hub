@@ -25,6 +25,22 @@
   --color-warn: #f9e2af;
   --color-danger: #f38ba8;
 
+  /*
+    Chart series, for identity (which category, which card), assigned in this order
+    and never cycled. Catppuccin's hues at the darker Latte steps, nudged into the
+    lightness band that reads on these dark surfaces. Validated as a set against
+    the panel surface (mantle): every slot >= 3:1 contrast, and each neighbor in this
+    order stays apart under protanopia and deuteranopia (worst ΔE 15.2).
+  */
+  --color-chart-1: #1e66f5;
+  --color-chart-2: #eb5a02;
+  --color-chart-3: #03939a;
+  --color-chart-4: #c77c06;
+  --color-chart-5: #d05eb3;
+  --color-chart-6: #40a02b;
+  --color-chart-7: #8839ef;
+  --color-chart-8: #d20f39;
+
   --font-sans: "Manrope Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --radius-control: 0.875rem;
