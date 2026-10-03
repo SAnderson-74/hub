@@ -1,22 +1,45 @@
-import { type PointerEvent, useEffect, useRef, useState } from "react";
-import type { CashFlowJson, FlowColumns, FlowNode, FlowRole } from "../../../shared/cashFlow";
+import { type PointerEvent, useEffect, useId, useRef, useState } from "react";
+import type { CashFlowJson, FlowColumns, FlowNode } from "../../../shared/cashFlow";
 import { formatCents } from "../../../shared/money";
 import { type Band, fitLabel, layoutFlow, NODE_WIDTH, type PlacedNode } from "../cashFlowLayout";
 
-// Money in uses the accent; money out a neutral gray, so the two sides read apart even
-// before their labels. What came from account balances is a darker gray.
-const NODE_CLASS: Record<FlowRole, string> = {
-  in: "fill-accent-text",
-  left: "fill-accent-text",
-  out: "fill-faint",
-  drawn: "fill-surface-2",
-};
-const BAND_CLASS: Record<FlowRole, string> = {
-  in: "fill-accent-text",
-  left: "fill-accent-text",
-  out: "fill-faint",
-  drawn: "fill-surface-2",
-};
+/** A node's color: a fill class for its bar, and the CSS color its band fades from. */
+type Paint = { fill: string; color: string };
+
+// The chart series in their validated order (styles.css), as whole class names so
+// Tailwind sees them.
+const SERIES: Paint[] = [
+  { fill: "fill-chart-1", color: "var(--color-chart-1)" },
+  { fill: "fill-chart-2", color: "var(--color-chart-2)" },
+  { fill: "fill-chart-3", color: "var(--color-chart-3)" },
+  { fill: "fill-chart-4", color: "var(--color-chart-4)" },
+  { fill: "fill-chart-5", color: "var(--color-chart-5)" },
+  { fill: "fill-chart-6", color: "var(--color-chart-6)" },
+  { fill: "fill-chart-7", color: "var(--color-chart-7)" },
+  { fill: "fill-chart-8", color: "var(--color-chart-8)" },
+];
+const ACCENT: Paint = { fill: "fill-accent-text", color: "var(--accent-text)" };
+const OTHER: Paint = { fill: "fill-faint", color: "var(--color-faint)" };
+const DRAWN: Paint = { fill: "fill-surface-2", color: "var(--color-surface-2)" };
+
+/**
+ * Money in, and what's left of it, wear the accent: it's your money either way.
+ * Each place money went gets its own series color, top to bottom in the validated
+ * order, so neighbors always stay apart; "Other" is gray, and what came from
+ * account balances a darker gray. Every node is labeled, so color is never the only
+ * way to tell them apart.
+ */
+function paints(columns: FlowColumns): Map<string, Paint> {
+  const map = new Map<string, Paint>();
+  for (const node of columns.sources) map.set(node.key, node.role === "drawn" ? DRAWN : ACCENT);
+  let slot = 0;
+  for (const node of columns.sinks) {
+    if (node.role === "left") map.set(node.key, ACCENT);
+    else if (node.key === "other-out") map.set(node.key, OTHER);
+    else map.set(node.key, SERIES[slot++] ?? OTHER);
+  }
+  return map;
+}
 
 /** The width of an element, kept up to date as it resizes. */
 function useWidth<T extends HTMLElement>() {
@@ -94,6 +117,10 @@ export function CashFlowChart({
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<string | null>(null);
+  // useId's colons don't belong in a url(#...) reference.
+  const gradientId = `flow${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const colors = paints(columns);
+  const paint = (key: string) => colors.get(key) ?? OTHER;
   const column = width < 520 ? 220 : 280;
   const layout = width > 0 ? layoutFlow(columns, width, column) : null;
   const nodes = layout ? [...layout.sources, ...layout.sinks] : [];
@@ -116,19 +143,6 @@ export function CashFlowChart({
       <figcaption className="mb-3 text-sm text-muted">{summary}</figcaption>
       {empty ? null : (
         <>
-          <ul
-            className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted"
-            aria-label="Legend"
-          >
-            <li className="flex items-center gap-2">
-              <span aria-hidden="true" className="size-3 rounded-sm bg-accent-text" />
-              Money in
-            </li>
-            <li className="flex items-center gap-2">
-              <span aria-hidden="true" className="size-3 rounded-sm bg-faint" />
-              Money out
-            </li>
-          </ul>
           <div ref={ref} aria-hidden="true" className="relative w-full">
             {layout ? (
               <svg
@@ -157,12 +171,40 @@ export function CashFlowChart({
                 >
                   {formatCents(columns.totalCents)}
                 </text>
+                <defs>
+                  {layout.bands.map((band: Band) => {
+                    // Strongest at its own node, fading toward the total in the middle.
+                    const left = band.role === "in" || band.role === "drawn";
+                    const color = paint(band.key).color;
+                    return (
+                      <linearGradient
+                        key={band.key}
+                        id={`${gradientId}-${band.key}`}
+                        gradientUnits="userSpaceOnUse"
+                        x1={left ? NODE_WIDTH : layout.middle.x + NODE_WIDTH}
+                        x2={left ? layout.middle.x : width - NODE_WIDTH}
+                        y1={0}
+                        y2={0}
+                      >
+                        <stop
+                          offset="0"
+                          style={{ stopColor: color, stopOpacity: left ? 0.55 : 0.2 }}
+                        />
+                        <stop
+                          offset="1"
+                          style={{ stopColor: color, stopOpacity: left ? 0.2 : 0.55 }}
+                        />
+                      </linearGradient>
+                    );
+                  })}
+                </defs>
                 {layout.bands.map((band: Band) => (
                   <path
                     key={band.key}
                     d={band.path}
-                    className={`${BAND_CLASS[band.role]} cursor-pointer transition-opacity`}
-                    fillOpacity={active === null ? 0.3 : active === band.key ? 0.6 : 0.15}
+                    fill={`url(#${gradientId}-${band.key})`}
+                    className="cursor-pointer transition-opacity"
+                    fillOpacity={active === null || active === band.key ? 1 : 0.35}
                     {...hover(band.key)}
                   />
                 ))}
@@ -182,7 +224,7 @@ export function CashFlowChart({
                     width={NODE_WIDTH}
                     height={node.height}
                     rx={Math.min(4, node.height / 2)}
-                    className={`${NODE_CLASS[node.role]} cursor-pointer`}
+                    className={`${paint(node.key).fill} cursor-pointer`}
                     {...hover(node.key)}
                   />
                 ))}

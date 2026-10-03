@@ -4,7 +4,7 @@ import { fitLabel, layoutFlow, NODE_WIDTH } from "./cashFlowLayout";
 
 const item = (name: string, cents: number) => ({ key: name, name, cents });
 const flow = (incoming: CashFlowJson["incoming"], outgoing: CashFlowJson["outgoing"]) =>
-  flowColumns({ from: "2030-03-01", to: "2030-03-31", incoming, outgoing });
+  flowColumns({ from: "2030-03-01", to: "2030-03-31", by: "category", incoming, outgoing });
 
 describe("layoutFlow", () => {
   it("sizes nodes and bands by amount, meeting in the middle", () => {

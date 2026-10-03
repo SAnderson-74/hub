@@ -704,6 +704,11 @@ test("cash flow shows where money came from and went", async ({ page }, testInfo
   await panel.locator("svg path").nth(2).dispatchEvent("pointerdown");
   await expect(panel).toContainText("$400 · 21% of money out");
 
+  // By payment method, the same money out is by the account that paid.
+  await panel.getByRole("radio", { name: "Payment method" }).check();
+  await expect(panel).toContainText("The most went through Checking, $1,900.");
+  await panel.getByRole("radio", { name: "Category" }).check();
+
   await panel.getByRole("radio", { name: "12 months" }).check();
   await expect(panel).toContainText("In the 12 months to");
   await panel.getByText("Show the numbers").click();

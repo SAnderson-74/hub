@@ -10,6 +10,10 @@ import { formatCents } from "./money";
 export const CASH_FLOW_PERIODS = [1, 3, 12] as const;
 export type CashFlowPeriod = (typeof CASH_FLOW_PERIODS)[number];
 
+/** Money out by what it was for, or by the card or account that paid it. */
+export const CASH_FLOW_GROUPS = ["category", "method"] as const;
+export type CashFlowGroup = (typeof CASH_FLOW_GROUPS)[number];
+
 export const cashFlowQuerySchema = z.object({
   bookId: z.coerce.number().int().positive(),
   month: monthSchema,
@@ -17,6 +21,7 @@ export const cashFlowQuerySchema = z.object({
     .number()
     .pipe(z.union([z.literal(1), z.literal(3), z.literal(12)]))
     .default(1),
+  by: z.enum(CASH_FLOW_GROUPS).default("category"),
 });
 
 /** A category's net, or uncategorized money in or out. `cents` is always positive. */
@@ -26,6 +31,8 @@ export type CashFlowJson = {
   /** First and last dates covered. */
   from: string;
   to: string;
+  /** How money out is grouped. Money in is always by category. */
+  by: CashFlowGroup;
   /** Biggest first. */
   incoming: CashFlowItem[];
   outgoing: CashFlowItem[];
@@ -42,6 +49,7 @@ export type FlowColumns = {
   totalCents: number;
   inCents: number;
   outCents: number;
+  by: CashFlowGroup;
 };
 
 /** Keeps the biggest items and folds the rest into one, so labels stay readable. */
@@ -65,9 +73,11 @@ export function flowColumns(flow: CashFlowJson, maxIn = 5, maxOut = 8): FlowColu
   const sources: FlowNode[] = fold(flow.incoming, maxIn, "other-in", "Other money in").map(
     (item) => ({ ...item, role: "in" }),
   );
-  const sinks: FlowNode[] = fold(flow.outgoing, maxOut, "other-out", "Other spending").map(
-    (item) => ({ ...item, role: "out" }),
-  );
+  const otherOut = flow.by === "method" ? "Other cards and accounts" : "Other spending";
+  const sinks: FlowNode[] = fold(flow.outgoing, maxOut, "other-out", otherOut).map((item) => ({
+    ...item,
+    role: "out",
+  }));
   if (outCents > inCents) {
     sources.push({
       key: "drawn",
@@ -78,12 +88,19 @@ export function flowColumns(flow: CashFlowJson, maxIn = 5, maxOut = 8): FlowColu
   } else if (inCents > outCents) {
     sinks.push({ key: "left", name: "Left over", cents: inCents - outCents, role: "left" });
   }
-  return { sources, sinks, totalCents: Math.max(inCents, outCents), inCents, outCents };
+  return {
+    sources,
+    sinks,
+    totalCents: Math.max(inCents, outCents),
+    inCents,
+    outCents,
+    by: flow.by,
+  };
 }
 
 /** The chart's one-line summary. */
 export function flowSummary(columns: FlowColumns, period: string): string {
-  const { inCents, outCents, sinks } = columns;
+  const { inCents, outCents, sinks, by } = columns;
   if (inCents === 0 && outCents === 0) return `No money came in or went out in ${period}.`;
   const balance =
     inCents > outCents
@@ -93,7 +110,9 @@ export function flowSummary(columns: FlowColumns, period: string): string {
         : "";
   const biggest = sinks.find((node) => node.role === "out" && node.key !== "other-out");
   return `In ${period}, ${formatCents(inCents)} came in and ${formatCents(outCents)} went out${balance}.${
-    biggest ? ` The most went to ${biggest.name}, ${formatCents(biggest.cents)}.` : ""
+    biggest
+      ? ` The most went ${by === "method" ? "through" : "to"} ${biggest.name}, ${formatCents(biggest.cents)}.`
+      : ""
   }`;
 }
 

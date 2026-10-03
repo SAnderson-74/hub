@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
+import { settle } from "./cashFlow.service";
 
 let t: TestApp;
 beforeEach(() => {
@@ -37,10 +38,20 @@ const add = async (
       json: { accountId, date, amountCents, categoryId, payee: "x" },
     }),
   );
-const flowOf = async (bookId: number, month: string, months?: "1" | "3" | "12") =>
+const flowOf = async (
+  bookId: number,
+  month: string,
+  months?: "1" | "3" | "12",
+  by?: "category" | "method",
+) =>
   body(
     await t.api.money["cash-flow"].$get({
-      query: { bookId: String(bookId), month, ...(months ? { months } : {}) },
+      query: {
+        bookId: String(bookId),
+        month,
+        ...(months ? { months } : {}),
+        ...(by ? { by } : {}),
+      },
     }),
   );
 
@@ -71,6 +82,7 @@ describe("cash flow", () => {
     expect(await flowOf(book.id, "2030-03")).toEqual({
       from: "2030-03-01",
       to: "2030-03-31",
+      by: "category",
       incoming: [
         { key: `category-${paycheck.id}`, name: "Paycheck", cents: 300_000 },
         { key: `category-${gifts.id}`, name: "Gifts", cents: 3_000 },
@@ -82,6 +94,78 @@ describe("cash flow", () => {
         { key: "uncategorized-out", name: "Uncategorized", cents: 3_000 },
       ],
     });
+  });
+
+  it("splits money out by the card or account that paid, with the same total", async () => {
+    const { book, checking, groceries, rent, gifts, paycheck } = await setup();
+    const credit = await body(
+      await t.api.money.accounts.$post({
+        json: { bookId: book.id, name: "Rewards account", kind: "credit_card" },
+      }),
+    );
+    const card = (
+      await body(
+        await t.api.money.cards.$post({ json: { accountId: credit.id, name: "Rewards card" } }),
+      )
+    ).card;
+    const debit = (
+      await body(
+        await t.api.money.cards.$post({ json: { accountId: checking.id, name: "Everyday debit" } }),
+      )
+    ).card;
+    const pay = async (
+      accountId: number,
+      amountCents: number,
+      categoryId: number | null,
+      cardId: number | null,
+    ) =>
+      body(
+        await t.api.money.transactions.$post({
+          json: { accountId, date: "2030-03-10", amountCents, categoryId, cardId, payee: "x" },
+        }),
+      );
+    await pay(checking.id, 300_000, paycheck.id, null);
+    await pay(checking.id, -150_000, rent.id, null); // a bank payment, no card
+    await pay(credit.id, -12_000, groceries.id, card.id);
+    await pay(credit.id, 2_000, groceries.id, card.id); // a refund to the card
+    await pay(checking.id, -4_000, groceries.id, debit.id);
+    await pay(credit.id, -1_500, null, card.id);
+    await pay(checking.id, 5_000, gifts.id, null); // money in only: not spending
+
+    const byCategory = await flowOf(book.id, "2030-03");
+    const byMethod = await flowOf(book.id, "2030-03", "1", "method");
+    expect(byMethod.by).toBe("method");
+    expect(byMethod.incoming).toEqual(byCategory.incoming);
+    expect(byMethod.outgoing).toEqual([
+      { key: `account-${checking.id}`, name: "Checking (no card)", cents: 150_000 },
+      { key: `card-${card.id}`, name: "Rewards card", cents: 11_500 },
+      { key: `card-${debit.id}`, name: "Everyday debit", cents: 4_000 },
+    ]);
+    const total = (items: Array<{ cents: number }>) =>
+      items.reduce((sum, item) => sum + item.cents, 0);
+    expect(total(byMethod.outgoing)).toBe(total(byCategory.outgoing));
+  });
+
+  it("keeps the total when a refund goes back to a different card", () => {
+    // $100 on card A, $30 refunded to card B, $50 on account C: $120 out in all.
+    const settled = settle(
+      new Map([
+        ["A", 10_000],
+        ["B", -3_000],
+        ["C", 5_000],
+      ]),
+    );
+    expect([...settled.keys()]).toEqual(["A", "C"]);
+    expect([...settled.values()].reduce((sum, cents) => sum + cents, 0)).toBe(12_000);
+    expect(settled.get("A")).toBe(8_000);
+    expect(
+      settle(
+        new Map([
+          ["A", 1_000],
+          ["B", -1_000],
+        ]),
+      ),
+    ).toEqual(new Map());
   });
 
   it("covers the months up to the chosen one", async () => {

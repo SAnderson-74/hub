@@ -16,7 +16,7 @@ import type {
 } from "../../shared/books";
 import type { BudgetSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
-import type { CashFlowPeriod } from "../../shared/cashFlow";
+import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
 
 async function fetchBooks() {
@@ -480,12 +480,17 @@ export function useBudget(bookId: number, month: string) {
 
 export type BudgetMonth = NonNullable<ReturnType<typeof useBudget>["data"]>;
 
-export function useCashFlow(bookId: number, month: string, months: CashFlowPeriod) {
+export function useCashFlow(
+  bookId: number,
+  month: string,
+  months: CashFlowPeriod,
+  by: CashFlowGroup = "category",
+) {
   return useQuery({
-    queryKey: ["money", "cash-flow", bookId, month, months],
+    queryKey: ["money", "cash-flow", bookId, month, months, by],
     queryFn: async () => {
       const res = await api.money["cash-flow"].$get({
-        query: { bookId: String(bookId), month, months: String(months) },
+        query: { bookId: String(bookId), month, months: String(months), by },
       });
       if (!res.ok) throw await toApiError(res);
       return res.json();
