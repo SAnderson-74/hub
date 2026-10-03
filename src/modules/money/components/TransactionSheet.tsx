@@ -31,6 +31,7 @@ import {
   useUnlinkTransfer,
   useUpdateTransaction,
 } from "../queries";
+import { ReceiptBox } from "./ReceiptBox";
 import { newPart, type PartDraft, partsOf, SplitEditor, splitProblem } from "./SplitEditor";
 
 /** "new" adds a transaction; a transaction edits it; null is closed. */
@@ -690,6 +691,9 @@ function TransactionForm({
         ) : null}
       </form>
 
+      {transaction?.receipt ? (
+        <ReceiptBox receipt={transaction.receipt} today={today} onRemoved={onDone} />
+      ) : null}
       {transaction && isTransferSide ? (
         <div className="space-y-2">
           <button

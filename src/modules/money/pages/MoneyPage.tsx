@@ -6,6 +6,7 @@ import {
   List,
   PiggyBank,
   Plus,
+  ReceiptText,
   Sparkles,
   Tags,
   TrendingUp,
@@ -34,6 +35,7 @@ import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
 import { ImportSheet } from "../components/ImportSheet";
 import { NetWorthView } from "../components/NetWorthView";
+import { ReceiptsSheet } from "../components/ReceiptsSheet";
 import { RewardsView } from "../components/RewardsView";
 import { RulesSheet } from "../components/RulesSheet";
 import { SortSheet } from "../components/SortSheet";
@@ -152,6 +154,7 @@ function BookView({
   const [transactionTarget, setTransactionTarget] = useState<TransactionTarget>(null);
   const [managingCategories, setManagingCategories] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [pastingReceipts, setPastingReceipts] = useState(false);
   const [managingRules, setManagingRules] = useState(false);
   const [reviewingTransfers, setReviewingTransfers] = useState(false);
   const rules = useRules(book.id);
@@ -248,6 +251,15 @@ function BookView({
         >
           <FileUp aria-hidden="true" className="size-4" />
           Import
+        </button>
+        <button
+          type="button"
+          className={secondaryButton}
+          disabled={openAccounts.length === 0}
+          onClick={() => setPastingReceipts(true)}
+        >
+          <ReceiptText aria-hidden="true" className="size-4" />
+          Paste receipts
         </button>
         <button type="button" className={secondaryButton} onClick={() => setAccountTarget("new")}>
           <WalletCards aria-hidden="true" className="size-4" />
@@ -368,6 +380,14 @@ function BookView({
         today={today}
         open={importing}
         onClose={() => setImporting(false)}
+      />
+      <ReceiptsSheet
+        book={book}
+        accounts={allAccounts}
+        categories={categories.data ?? []}
+        today={today}
+        open={pastingReceipts}
+        onClose={() => setPastingReceipts(false)}
       />
       <CategoriesSheet
         book={book}
@@ -742,6 +762,7 @@ function TransactionsPanel({
                               ? transaction.account.name
                               : "",
                           resaleLabel(transaction),
+                          transaction.receipt ? "Receipt" : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")}

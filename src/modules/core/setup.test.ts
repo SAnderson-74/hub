@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
 import { defaultModules } from "../../shared/modules";
 import { budgetMonth } from "../money/budget.service";
+import { moneyReceipts } from "../money/schema";
 import { seedDemo } from "./demo.service";
 import { isEmpty } from "./setup.service";
 
@@ -68,12 +69,20 @@ describe("example data", () => {
     expect(term?.courses.map((course) => course.code)).toEqual(["ABC101", "ABC102"]);
     const [book] = await body(await t.api.money.books.$get());
     expect(book?.name).toBe("Example book");
+    const { transactions } = await body(
+      await t.api.money.transactions.$get({ query: { bookId: String(book?.id) } }),
+    );
+    expect(transactions.find((row) => row.payee === "Example Store")?.receipt).toMatchObject({
+      store: "Example Store",
+      totalCents: 6_480,
+    });
 
     expect(await body(await t.api.setup.demo.remove.$post())).toEqual({
       removed: expect.any(Number),
       kept: 0,
     });
     expect(isEmpty(t.db)).toBe(true);
+    expect(t.db.select().from(moneyReceipts).all()).toEqual([]);
     expect((await status()).demo).toBe(false);
   });
 

@@ -306,3 +306,45 @@ export const moneyPointRedemptions = sqliteTable(
   },
   (t) => [index("money_point_redemptions_card_idx").on(t.cardId)],
 );
+
+/** What a transaction looked like before a receipt changed it, so removing the receipt puts it back. */
+export type ReceiptBefore = {
+  payee: string;
+  memo: string;
+  categoryId: number | null;
+  cardId: number | null;
+  splits: Array<{ categoryId: number; amountCents: number; memo: string }>;
+};
+
+/**
+ * A receipt, attached to the transaction it's for: the store, the lines, and how it
+ * got there. `createdTransaction` is set when the receipt came before the bank's
+ * record and Hub added the transaction; `bankMatched` once a bank file found it, so
+ * the file doesn't add it again. No foreign key, like the other newer tables.
+ */
+export const moneyReceipts = sqliteTable(
+  "money_receipts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    store: text("store").notNull(),
+    date: text("date").notNull(),
+    /** Positive: what was charged, or for a return, what came back. */
+    totalCents: integer("total_cents").notNull(),
+    type: text("type", { enum: ["purchase", "return"] })
+      .notNull()
+      .default("purchase"),
+    items: text("items", { mode: "json" })
+      .$type<Array<{ name: string; amountCents: number; category: string }>>()
+      .notNull(),
+    note: text("note").notNull().default(""),
+    createdTransaction: integer("created_transaction", { mode: "boolean" }).notNull(),
+    bankMatched: integer("bank_matched", { mode: "boolean" }).notNull().default(false),
+    before: text("before", { mode: "json" }).$type<ReceiptBefore>(),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_receipts_transaction_idx").on(t.transactionId),
+    index("money_receipts_date_idx").on(t.date),
+  ],
+);

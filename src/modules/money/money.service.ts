@@ -39,6 +39,7 @@ import { goalAccounts } from "../goals/schema";
 import { transactionItems } from "../resale/transactionLinks";
 import { checkCardFits, guessCardFor } from "./cards.service";
 import { dropSplits, primaryCategory, splitsOf } from "./lines";
+import { dropReceipts, type ReceiptJson, receiptsOf } from "./receiptLinks";
 import { dropCategoryRates, dropRewards } from "./rewards.service";
 import {
   moneyAccounts,
@@ -123,6 +124,8 @@ export type TransactionJson = {
     amountCents: number;
     memo: string;
   }>;
+  /** The receipt for it, with its lines, when one was added. */
+  receipt: ReceiptJson | null;
   /** The other side when this is a transfer between accounts. Transfers have no category. */
   transfer: { transactionId: number; account: { id: number; name: string } } | null;
   /** Resale items this paid for or came from. */
@@ -649,6 +652,10 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     db,
     rows.map((row) => row.id),
   );
+  const receipts = receiptsOf(
+    db,
+    rows.map((row) => row.id),
+  );
   const categoryIds = [
     ...new Set([
       ...rows.flatMap((row) => (row.categoryId === null ? [] : [row.categoryId])),
@@ -718,6 +725,7 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
       amountCents: part.amountCents,
       memo: part.memo,
     })),
+    receipt: receipts.get(row.id) ?? null,
     transfer: transferJson(row.transferPeerId, peers, accounts),
     resaleItems: items.get(row.id) ?? [],
     createdAt: row.createdAt.toISOString(),
@@ -859,7 +867,7 @@ function saveSplits(
   return primaryCategory(parts);
 }
 
-export function createTransaction(db: Db, input: TransactionCreate): TransactionJson {
+export function createTransaction(db: Queryable, input: TransactionCreate): TransactionJson {
   return db.transaction((tx) => {
     const account = requireAccount(tx, input.accountId, "body");
     checkCategoryFits(tx, account, input.categoryId ?? null);
@@ -901,7 +909,11 @@ export function createTransaction(db: Db, input: TransactionCreate): Transaction
   });
 }
 
-export function updateTransaction(db: Db, id: number, patch: TransactionUpdate): TransactionJson {
+export function updateTransaction(
+  db: Queryable,
+  id: number,
+  patch: TransactionUpdate,
+): TransactionJson {
   return db.transaction((tx) => {
     const current = requireTransaction(tx, id);
     if (
@@ -954,11 +966,12 @@ export function updateTransaction(db: Db, id: number, patch: TransactionUpdate):
 }
 
 /** Deletes a transaction. A transfer is one movement of money, so both sides go. */
-export function deleteTransaction(db: Db, id: number): void {
+export function deleteTransaction(db: Queryable, id: number): void {
   db.transaction((tx) => {
     const row = requireTransaction(tx, id);
     const ids = row.transferPeerId === null ? [id] : [id, row.transferPeerId];
     dropSplits(tx, ids);
+    dropReceipts(tx, ids);
     tx.delete(moneyTransactions).where(inArray(moneyTransactions.id, ids)).run();
   });
 }

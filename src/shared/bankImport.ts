@@ -413,6 +413,11 @@ export type BankImportResult = {
   importId: number | null;
   created: number;
   duplicates: number;
+  /**
+   * Rows that turned out to be purchases already added from a receipt: they fill in
+   * the bank's details on that transaction instead of adding another.
+   */
+  matchedReceipts: number;
   /** Category names in the file that aren't in the book; those rows stay uncategorized. */
   unknownCategories: string[];
   /** New transactions given a category (and maybe a cleaner payee) by the book's rules. */
@@ -423,7 +428,7 @@ export type BankImportResult = {
     date: string;
     amountCents: number;
     payee: string;
-    outcome: "create" | "duplicate";
+    outcome: "create" | "duplicate" | "receipt";
   }>;
   /**
    * The file's own balance next to Hub's for the end of that day, counting this

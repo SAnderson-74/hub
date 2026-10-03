@@ -53,6 +53,7 @@ import {
   deleteTransaction,
   listCategories,
 } from "../money/money.service";
+import { importReceipts } from "../money/receipts.service";
 import { saveRewards } from "../money/rewards.service";
 import { createTransfer } from "../money/transfers.service";
 import { createItem, createPlatform, deleteItem, deletePlatform } from "../resale/resale.service";
@@ -429,6 +430,37 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
             ],
           }),
         ),
+      );
+      // Its receipt, the way the Claude Project reads one, goes on it.
+      const line = (name: string, amount: number, category: string) => ({ name, amount, category });
+      importReceipts(
+        db,
+        {
+          bookId: book.id,
+          document: {
+            format: "hub-receipt/v1",
+            receipts: [
+              {
+                store: "Example Store",
+                date: today,
+                total: 64.8,
+                cardLast4: "4321",
+                items: [
+                  line("Bananas", 1.3, "Groceries"),
+                  line("Milk", 4.5, "Groceries"),
+                  line("Bread", 3.5, "Groceries"),
+                  line("Chicken", 12, "Groceries"),
+                  line("Rice", 8, "Groceries"),
+                  line("Apples", 5, "Groceries"),
+                  line("Eggs", 7, "Groceries"),
+                  line("Paper towels", 14.5, "Shopping"),
+                  line("Soap", 9, "Shopping"),
+                ],
+              },
+            ],
+          },
+        },
+        false,
       );
     }
     // Budgets from the first of those months on; dining out runs over in some months.

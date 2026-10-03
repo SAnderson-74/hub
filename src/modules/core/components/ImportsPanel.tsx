@@ -1,17 +1,25 @@
-import { ChevronRight, ClipboardPaste, FileUp, GraduationCap, Landmark } from "lucide-react";
+import {
+  ChevronRight,
+  ClipboardPaste,
+  FileUp,
+  GraduationCap,
+  Landmark,
+  ReceiptText,
+} from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { useNavigate } from "react-router";
 import { inputClass } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { ImportSheet as CoursesImportSheet } from "../../education/components/ImportSheet";
 import { ImportSheet as BankImportSheet } from "../../money/components/ImportSheet";
-import { useAccounts, useBooks } from "../../money/queries";
+import { ReceiptsSheet } from "../../money/components/ReceiptsSheet";
+import { useAccounts, useBooks, useCategories } from "../../money/queries";
 import { storedBookId } from "../../money/storedBook";
 import { ImportCsvSheet } from "../../resale/components/ImportCsvSheet";
 import { PasteListingSheet } from "../../resale/components/PasteListingSheet";
 import { localDate } from "../../tasks/dates";
 
-type Open = "bank" | "resale" | "listing" | "courses" | null;
+type Open = "bank" | "receipts" | "resale" | "listing" | "courses" | null;
 
 /** One import: what it takes and where it goes. Opens the same sheet as on its page. */
 function ImportRow({
@@ -65,6 +73,7 @@ export function ImportsPanel() {
   const [chosenId, setChosenId] = useState<number | null>(storedBookId);
   const book = active.find((item) => item.id === chosenId) ?? active[0] ?? null;
   const accounts = useAccounts(book?.id ?? null);
+  const categories = useCategories(book?.id ?? null);
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
   const close = () => setOpen(null);
@@ -76,6 +85,10 @@ export function ImportsPanel() {
       : accounts.isSuccess && openAccounts.length === 0
         ? `Add an account to ${book.name} in Money first.`
         : `CSV, OFX, or QFX from your bank or card, into ${book.name}.`;
+  const receiptsDetail =
+    book === null || (accounts.isSuccess && openAccounts.length === 0)
+      ? "Paste receipts from your Claude Project once Money has an account."
+      : `Paste receipts from your Claude Project, into ${book?.name ?? "Money"}.`;
 
   return (
     <>
@@ -111,6 +124,13 @@ export function ImportsPanel() {
           ) : null}
         </ImportRow>
         <ImportRow
+          icon={<ReceiptText className="size-5" />}
+          title="Receipts"
+          detail={receiptsDetail}
+          disabled={book === null || openAccounts.length === 0}
+          onOpen={() => setOpen("receipts")}
+        />
+        <ImportRow
           icon={<FileUp className="size-5" />}
           title="Resale items"
           detail="A CSV spreadsheet of items, into Resale."
@@ -137,6 +157,16 @@ export function ImportsPanel() {
           defaultAccountId={openAccounts[0]?.id ?? null}
           today={today}
           open={open === "bank"}
+          onClose={close}
+        />
+      ) : null}
+      {book ? (
+        <ReceiptsSheet
+          book={book}
+          accounts={allAccounts}
+          categories={categories.data ?? []}
+          today={today}
+          open={open === "receipts"}
           onClose={close}
         />
       ) : null}

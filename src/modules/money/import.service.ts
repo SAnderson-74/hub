@@ -13,6 +13,7 @@ import { findPerson, memoWithPerson } from "../../shared/payees";
 import { cardsOfAccount } from "./cards.service";
 import { dropSplits } from "./lines";
 import { requireAccount } from "./money.service";
+import { dropReceipts, fitsReceipt, waitingReceipts } from "./receiptLinks";
 import { rulesForBook } from "./rules.service";
 import {
   moneyAccounts,
@@ -20,6 +21,7 @@ import {
   moneyCategories,
   moneyImportLayouts,
   moneyImports,
+  moneyReceipts,
   moneyTransactions,
 } from "./schema";
 
@@ -135,6 +137,17 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     const cards = cardsOfAccount(tx, account.id);
     let categorizedByRules = 0;
 
+    // Transactions added from receipts before the bank had them: a row that fits one is
+    // the same purchase, so it fills in the bank's details instead of adding another.
+    const waiting = waitingReceipts(tx, account.id);
+    const receiptMatches: Array<{
+      receiptId: number;
+      transactionId: number;
+      date: string;
+      externalId: string | null;
+      bankPayee: string;
+    }> = [];
+
     const rows: BankImportResult["rows"] = [];
     const toCreate: Array<typeof moneyTransactions.$inferInsert> = [];
     input.transactions.forEach((row, index) => {
@@ -155,14 +168,31 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       // The file's own category wins; rules fill in the rest.
       const byRule = fileCategory === null && rule !== null && !duplicate;
       const payee = (byRule && rule?.renameTo ? rule.renameTo : row.payee).trim();
+      const receipt = duplicate
+        ? undefined
+        : waiting.find(
+            (entry) =>
+              fitsReceipt(row, entry) &&
+              !receiptMatches.some((match) => match.receiptId === entry.receiptId),
+          );
       rows.push({
         row: index + 1,
         date: row.date,
         amountCents: row.amountCents,
         payee,
-        outcome: duplicate ? "duplicate" : "create",
+        outcome: duplicate ? "duplicate" : receipt ? "receipt" : "create",
       });
       if (duplicate) return;
+      if (receipt) {
+        receiptMatches.push({
+          receiptId: receipt.receiptId,
+          transactionId: receipt.transactionId,
+          date: row.date,
+          externalId: row.externalId ?? null,
+          bankPayee: row.payee.trim(),
+        });
+        return;
+      }
 
       if (categoryName && fileCategory === null) {
         unknownCategories.set(categoryName.toLowerCase(), categoryName);
@@ -187,7 +217,8 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     const result: BankImportResult = {
       importId: null,
       created: toCreate.length,
-      duplicates: rows.length - toCreate.length,
+      duplicates: rows.filter((row) => row.outcome === "duplicate").length,
+      matchedReceipts: receiptMatches.length,
       unknownCategories: [...unknownCategories.values()].sort(),
       categorizedByRules,
       rows,
@@ -212,6 +243,23 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       })
       .returning()
       .get();
+    for (const match of receiptMatches) {
+      tx.update(moneyTransactions)
+        // The bank's date and text, as if this file had added it, so the same file
+        // again finds it as a duplicate. The receipt keeps the day of the purchase.
+        .set({
+          date: match.date,
+          externalId: match.externalId,
+          bankPayee: match.bankPayee,
+          updatedAt: new Date(),
+        })
+        .where(eq(moneyTransactions.id, match.transactionId))
+        .run();
+      tx.update(moneyReceipts)
+        .set({ bankMatched: true, updatedAt: new Date() })
+        .where(eq(moneyReceipts.id, match.receiptId))
+        .run();
+    }
     // In batches, to stay under SQLite's limit on values in one statement.
     for (let start = 0; start < toCreate.length; start += 500) {
       tx.insert(moneyTransactions)
@@ -335,6 +383,7 @@ export function undoImport(db: Db, id: number): ImportJson {
         .run();
     }
     dropSplits(tx, removing);
+    dropReceipts(tx, removing);
     tx.delete(moneyTransactions).where(eq(moneyTransactions.importId, id)).run();
     const undone = tx
       .update(moneyImports)
