@@ -385,7 +385,8 @@ export type BankLayout = { headerKey: string; columns: BankColumns; options: Ban
 export const bankImportSchema = z
   .object({
     accountId: z.number().int().positive(),
-    source: z.enum(["csv", "ofx"]),
+    /** "statement": pasted from the Claude Project (hub-statement/v1). */
+    source: z.enum(["csv", "ofx", "statement"]),
     fileName: z.string().trim().max(200).default(""),
     transactions: z
       .array(bankTransactionSchema)

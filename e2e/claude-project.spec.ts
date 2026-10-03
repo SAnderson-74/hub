@@ -56,8 +56,8 @@ test("one Claude Project: copy its instructions, then paste any answer", async (
   await imports.getByRole("button", { name: /Paste from Claude/ }).click();
   let sheet = page.getByRole("dialog", { name: "Paste from Claude" });
   const paste = sheet.getByLabel("Claude Project answer");
-  await paste.fill('```json\n{ "format": "hub-statement/v1" }\n```');
-  await expect(sheet.getByText('Hub doesn\'t take "hub-statement/v1" yet.')).toBeVisible();
+  await paste.fill('```json\n{ "format": "hub-inventory/v1" }\n```');
+  await expect(sheet.getByText('Hub doesn\'t take "hub-inventory/v1" yet.')).toBeVisible();
 
   const date = new Date().toISOString().slice(0, 10);
   const receipts = {

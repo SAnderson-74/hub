@@ -317,3 +317,105 @@ describe("undoing an import", () => {
     ).toEqual([]);
   });
 });
+
+describe("statements pasted from the Claude Project", () => {
+  it("skip what a bank file already added on the same day for the same amount", async () => {
+    const { account } = await setup();
+    await run({
+      accountId: account.id,
+      source: "csv",
+      fileName: "march.csv",
+      transactions: [
+        tx("2030-03-02", -6_480, "EXMPL STORE #12"),
+        tx("2030-03-02", -6_480, "EXMPL STORE #12"),
+      ],
+    });
+    const statement: BankImport = {
+      accountId: account.id,
+      source: "statement",
+      fileName: "Statement to 2030-03-31",
+      transactions: [
+        // Worded differently, but the same two purchases, plus a third that's new.
+        tx("2030-03-02", -6_480, "Example Store"),
+        tx("2030-03-02", -6_480, "Example Store"),
+        tx("2030-03-02", -6_480, "Example Store"),
+        tx("2030-03-03", -6_480, "Example Store"),
+      ],
+      statementBalance: { date: "2030-03-31", balanceCents: -15_920 },
+    };
+    const preview = await run(statement, true);
+    expect(preview.rows.map((row) => row.outcome)).toEqual([
+      "duplicate",
+      "duplicate",
+      "create",
+      "create",
+    ]);
+    expect(preview.balanceCheck).toEqual({
+      date: "2030-03-31",
+      bankCents: -15_920,
+      hubCents: 10_000 - 4 * 6_480,
+    });
+    expect(await run(statement)).toMatchObject({ created: 2, duplicates: 2 });
+    const imports = await body(
+      await t.api.money.imports.$get({ query: { bookId: String(account.bookId) } }),
+    );
+    expect(imports[0]).toMatchObject({ source: "statement", fileName: "Statement to 2030-03-31" });
+  });
+
+  it("hide long numbers even when the browser didn't", async () => {
+    const { book, account } = await setup();
+    await run({
+      accountId: account.id,
+      source: "statement",
+      fileName: "",
+      transactions: [
+        tx("2030-03-02", -1_000, "Transfer to 000123456789", { memo: "Ref 9876 5432 10" }),
+      ],
+    });
+    const { transactions } = await body(
+      await t.api.money.transactions.$get({ query: { bookId: String(book.id) } }),
+    );
+    expect(transactions[0]).toMatchObject({
+      payee: "Transfer to ••6789",
+      memo: "Ref ••3210",
+      bankPayee: "Transfer to ••6789",
+    });
+  });
+
+  it("fill in a purchase added from a receipt instead of skipping it", async () => {
+    const { book, account, groceries } = await setup();
+    await body(
+      await t.api.money.receipts.$post({
+        query: {},
+        json: {
+          bookId: book.id,
+          accountId: account.id,
+          document: {
+            format: "hub-receipt/v1",
+            receipts: [
+              { store: "Example Store", date: "2030-03-02", total: 64.8, category: "Groceries" },
+            ],
+          },
+        },
+      }),
+    );
+    const statement: BankImport = {
+      accountId: account.id,
+      source: "statement",
+      fileName: "",
+      transactions: [tx("2030-03-02", -6_480, "EXAMPLE STORE 12")],
+    };
+    expect(await run(statement)).toMatchObject({ created: 0, duplicates: 0, matchedReceipts: 1 });
+    const { transactions } = await body(
+      await t.api.money.transactions.$get({ query: { bookId: String(book.id) } }),
+    );
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({
+      payee: "Example Store",
+      bankPayee: "EXAMPLE STORE 12",
+      category: { id: groceries.id },
+    });
+    // Pasted again, it's now a duplicate.
+    expect(await run(statement, true)).toMatchObject({ created: 0, duplicates: 1 });
+  });
+});

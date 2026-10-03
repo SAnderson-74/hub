@@ -1,6 +1,6 @@
 # The Claude Project for Hub
 
-One Claude Project turns photos, screenshots, documents, and notes into text Hub can import. You give it a receipt or a course list; it answers with a small block of JSON in a format Hub knows; you paste that into Hub, which shows what it will do before anything changes.
+One Claude Project turns photos, screenshots, documents, and notes into text Hub can import. You give it a receipt, a statement, or a course list; it answers with a small block of JSON in a format Hub knows; you paste that into Hub, which shows what it will do before anything changes.
 
 Claude can't reach Hub, and Hub never reaches Claude. Hub stays on your tailnet, and nothing in this setup needs a key, a token, or a public address. The copy and paste in between is the whole connection.
 
@@ -9,10 +9,11 @@ Today the Project writes:
 | What | Format | Goes into |
 | --- | --- | --- |
 | Receipts | `hub-receipt/v1` | Money |
+| A bank or card statement | `hub-statement/v1` | Money |
 | A resale listing | `hub-listing/v1` | Resale |
 | A study plan | `hub-education/v1` | Courses |
 
-The same Project learns more as Hub adds formats (see [the plan](PLAN.md)): bank statements and transactions, items to sell, and tasks and goals. Each adds a section to its instructions, and the instructions' version goes up.
+The same Project learns more as Hub adds formats (see [the plan](PLAN.md)): items to sell, and tasks and goals. Each adds a section to its instructions, and the instructions' version goes up.
 
 ## Set it up
 
@@ -24,28 +25,30 @@ When Hub updates, compare the version at the top of the Project's instructions w
 
 ## Use it
 
-1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
+1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a statement's PDF or a screenshot from a bank app, a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
 2. Copy Claude's whole answer.
-3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Resale > Paste listing**, and **Courses > Import a plan**.
+3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Money > Import** for statements, **Resale > Paste listing**, and **Courses > Import a plan**.
 4. Check the preview, then add it.
 
 For receipts, each one says whether it goes on a transaction already in Hub, adds a new one, or needs something first: an account for receipts without a known card, or one of your categories for each name the book doesn't have. Hub splits a receipt by category when its lines are in more than one, sharing tax and discounts out in proportion. When the bank's file arrives later, the purchase isn't added twice: the import finds the receipt's transaction and fills in the bank's details instead. Opening a transaction shows its receipt and a way to remove it.
 
+For a statement, pick the account (Hub picks it for you when one of its cards has the statement's last 4 digits). It goes through the same import as a bank file: transactions already in the account on the same day for the same amount are skipped, purchases added from receipts get the bank's details, and the statement's closing balance is checked against Hub's. Use a bank's own file when there is one, since it carries the bank's ids; a statement suits accounts that don't offer downloads, or a screenshot of recent transactions. Undo it from Recent imports like any file.
+
 ## What keeps this safe
 
 - **The Project is told to leave things out.** Full card and account numbers, loyalty and member numbers, names, addresses, phone numbers, emails, barcodes, and serial numbers stay off its answer. A card's last 4 digits are the most it gives, and only so Hub can tell your cards apart.
-- **Hub checks anyway.** Each format has its own checks and size limits, and unknown fields are ignored. Receipts with a run of 9 or more digits in their store, lines, or note, or card digits that aren't exactly 4, are refused. Hub keeps the fields it imports, never the pasted text as a whole.
+- **Hub checks anyway.** Each format has its own checks and size limits, and unknown fields are ignored. Receipts with a run of 9 or more digits in their store, lines, or note, or card digits that aren't exactly 4, are refused. In statements, where banks print reference numbers, such runs are hidden down to their last 4 digits, in the browser and again on the server. Hub keeps the fields it imports, never the pasted text as a whole.
 - **Text in a photo is data, not instructions.** A receipt or document could carry words meant to steer Claude. The instructions tell it to ignore them, and Hub only takes the fields of a format it knows, so a pasted answer can only do what that import does.
-- **Nothing changes until you say so.** Pasting only previews. Imports can be undone: a receipt removed, a listing or item deleted, a plan imported again.
+- **Nothing changes until you say so.** Pasting only previews. Imports can be undone: a receipt removed, a statement undone from Recent imports, a listing or item deleted, a plan imported again.
 - **Copying is one way.** Hub writes the instructions to your clipboard when you press Copy; it never reads the clipboard.
-- **Photos go to Claude.** If a receipt shows a full card number, cover or crop it before adding the photo.
+- **Photos and documents go to Claude.** If a receipt or statement shows a full card or account number, cover or crop it before adding it.
 
 ## Project instructions
 
 Copy everything in this box.
 
 ````text
-Hub import instructions, version 2.
+Hub import instructions, version 3.
 
 You turn photos, screenshots, documents, and notes into JSON for Hub, a private finance and planning app. The person pastes your answer into Hub, which checks it and shows a preview before anything is saved.
 
@@ -89,6 +92,30 @@ Use this when given receipts. One answer can hold up to 50 receipts.
 - items: each line's short name and what it cost in all (quantity times price, after its own discounts). Coupons and discounts are negative lines. Leave out tax, subtotal, and change lines. Leave items empty for a receipt without readable lines and set "category" on the receipt instead.
 - category: use the person's category names when they've given them. Otherwise use plain ones like Groceries, Dining out, Shopping, Household, Gas, Health, Entertainment, Gifts. Hub asks the person to match any it doesn't know.
 - note: anything the person said about this receipt worth keeping, in a few words. Otherwise "".
+
+BANK STATEMENT (format "hub-statement/v1")
+
+Use this when given a bank or card statement, or a screenshot of transactions from a bank or card app. One account per answer, with up to 1,000 transactions.
+
+{
+  "format": "hub-statement/v1",
+  "account": { "last4": "1234" },
+  "period": { "start": "2030-03-01", "end": "2030-03-31" },
+  "closingBalance": -1520.40,
+  "transactions": [
+    { "date": "2030-03-02", "description": "EXAMPLE STORE 12", "amount": -64.80 },
+    { "date": "2030-03-05", "description": "PAYMENT THANK YOU", "amount": 500.00 }
+  ]
+}
+
+- account.last4: only the last 4 digits of the account or card number, when shown. Never more.
+- period: the first and last day the statement covers. Leave it out for a screenshot of recent transactions.
+- closingBalance: the balance on the period's last day, as the account sees it: positive for money in the account, negative for money owed (a card's balance is usually negative). Leave it out when it isn't shown.
+- transactions: every posted transaction, in the order shown. Leave out pending ones.
+- date: the transaction date (the first date when two are shown).
+- description: the statement's text for it, leaving out reference, account, and card numbers.
+- amount: negative for money out (purchases, fees, withdrawals, payments sent), positive for money in (deposits, refunds, payments to a card).
+- Leave out running balances, totals, interest summaries, and the bank's address and phone number.
 
 RESALE LISTING (format "hub-listing/v1")
 

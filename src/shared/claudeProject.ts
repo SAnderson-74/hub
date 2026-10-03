@@ -7,7 +7,7 @@ import type { ModuleId } from "./modules";
 // the paste sheet. Pasted answers are untrusted: each format's own schema checks them.
 
 /** Raised when the instructions change, so an older copy in the Project is easy to spot. */
-export const PROJECT_INSTRUCTIONS_VERSION = 2;
+export const PROJECT_INSTRUCTIONS_VERSION = 3;
 
 /** The formats the Project writes, where each goes, and the module it needs. */
 export const PROJECT_FORMATS = [
@@ -16,6 +16,14 @@ export const PROJECT_FORMATS = [
     label: "Receipts",
     kind: "receipts",
     noun: "receipts",
+    into: "Money",
+    module: "money",
+  },
+  {
+    format: "hub-statement/v1",
+    label: "Bank statement",
+    kind: "bank statements",
+    noun: "a bank statement",
     into: "Money",
     module: "money",
   },
@@ -100,6 +108,30 @@ Use this when given receipts. One answer can hold up to 50 receipts.
 - items: each line's short name and what it cost in all (quantity times price, after its own discounts). Coupons and discounts are negative lines. Leave out tax, subtotal, and change lines. Leave items empty for a receipt without readable lines and set "category" on the receipt instead.
 - category: use the person's category names when they've given them. Otherwise use plain ones like Groceries, Dining out, Shopping, Household, Gas, Health, Entertainment, Gifts. Hub asks the person to match any it doesn't know.
 - note: anything the person said about this receipt worth keeping, in a few words. Otherwise "".
+
+BANK STATEMENT (format "hub-statement/v1")
+
+Use this when given a bank or card statement, or a screenshot of transactions from a bank or card app. One account per answer, with up to 1,000 transactions.
+
+{
+  "format": "hub-statement/v1",
+  "account": { "last4": "1234" },
+  "period": { "start": "2030-03-01", "end": "2030-03-31" },
+  "closingBalance": -1520.40,
+  "transactions": [
+    { "date": "2030-03-02", "description": "EXAMPLE STORE 12", "amount": -64.80 },
+    { "date": "2030-03-05", "description": "PAYMENT THANK YOU", "amount": 500.00 }
+  ]
+}
+
+- account.last4: only the last 4 digits of the account or card number, when shown. Never more.
+- period: the first and last day the statement covers. Leave it out for a screenshot of recent transactions.
+- closingBalance: the balance on the period's last day, as the account sees it: positive for money in the account, negative for money owed (a card's balance is usually negative). Leave it out when it isn't shown.
+- transactions: every posted transaction, in the order shown. Leave out pending ones.
+- date: the transaction date (the first date when two are shown).
+- description: the statement's text for it, leaving out reference, account, and card numbers.
+- amount: negative for money out (purchases, fees, withdrawals, payments sent), positive for money in (deposits, refunds, payments to a card).
+- Leave out running balances, totals, interest summaries, and the bank's address and phone number.
 
 RESALE LISTING (format "hub-listing/v1")
 
