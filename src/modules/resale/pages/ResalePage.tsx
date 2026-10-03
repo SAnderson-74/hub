@@ -4,6 +4,7 @@ import {
   ClipboardPaste,
   FileUp,
   Package,
+  PackagePlus,
   Plus,
   Store,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { formatShortDate, localDate } from "../../tasks/dates";
 import { BuyCalculator } from "../components/BuyCalculator";
 import { ImportCsvSheet } from "../components/ImportCsvSheet";
 import { ItemSheet } from "../components/ItemSheet";
+import { PasteItemsSheet } from "../components/PasteItemsSheet";
 import { PasteListingSheet } from "../components/PasteListingSheet";
 import { PlatformsSheet } from "../components/PlatformsSheet";
 import { ProfitView } from "../components/ProfitView";
@@ -57,6 +59,7 @@ export function ResalePage() {
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const [pastingItems, setPastingItems] = useState(false);
   const openItemId = Number(params.get("item")) || null;
 
   const all = items.data ?? [];
@@ -141,6 +144,10 @@ export function ResalePage() {
           <ClipboardPaste aria-hidden="true" className="size-4" />
           Paste listing
         </button>
+        <button type="button" className={secondaryButton} onClick={() => setPastingItems(true)}>
+          <PackagePlus aria-hidden="true" className="size-4" />
+          Paste items
+        </button>
       </div>
 
       {view === "calculator" ? (
@@ -167,6 +174,10 @@ export function ResalePage() {
             <button type="button" className={secondaryButton} onClick={() => setImporting(true)}>
               <FileUp aria-hidden="true" className="size-4" />
               Import a spreadsheet
+            </button>
+            <button type="button" className={secondaryButton} onClick={() => setPastingItems(true)}>
+              <PackagePlus aria-hidden="true" className="size-4" />
+              Paste items from Claude
             </button>
           </div>
         </Panel>
@@ -201,6 +212,7 @@ export function ResalePage() {
       />
       <PlatformsSheet open={managing} onClose={() => setManaging(false)} />
       <ImportCsvSheet open={importing} onClose={() => setImporting(false)} />
+      <PasteItemsSheet open={pastingItems} onClose={() => setPastingItems(false)} />
       <PasteListingSheet
         open={pasting}
         onClose={() => setPasting(false)}

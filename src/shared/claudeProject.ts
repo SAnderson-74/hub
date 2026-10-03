@@ -7,7 +7,7 @@ import type { ModuleId } from "./modules";
 // the paste sheet. Pasted answers are untrusted: each format's own schema checks them.
 
 /** Raised when the instructions change, so an older copy in the Project is easy to spot. */
-export const PROJECT_INSTRUCTIONS_VERSION = 3;
+export const PROJECT_INSTRUCTIONS_VERSION = 4;
 
 /** The formats the Project writes, where each goes, and the module it needs. */
 export const PROJECT_FORMATS = [
@@ -26,6 +26,14 @@ export const PROJECT_FORMATS = [
     noun: "a bank statement",
     into: "Money",
     module: "money",
+  },
+  {
+    format: "hub-inventory/v1",
+    label: "Items to sell",
+    kind: "items to sell",
+    noun: "items to sell",
+    into: "Resale",
+    module: "resale",
   },
   {
     format: "hub-listing/v1",
@@ -132,6 +140,34 @@ Use this when given a bank or card statement, or a screenshot of transactions fr
 - description: the statement's text for it, leaving out reference, account, and card numbers.
 - amount: negative for money out (purchases, fees, withdrawals, payments sent), positive for money in (deposits, refunds, payments to a card).
 - Leave out running balances, totals, interest summaries, and the bank's address and phone number.
+
+ITEMS TO SELL (format "hub-inventory/v1")
+
+Use this when given photos or a list of things to sell, to add them to Hub's inventory at once. Up to 100 items per answer. For one item with a listing written for it, use RESALE LISTING instead.
+
+{
+  "format": "hub-inventory/v1",
+  "items": [
+    {
+      "title": "Phone, 128 GB, blue",
+      "brand": "Example",
+      "model": "X1",
+      "condition": "used, small scratch on the back",
+      "category": "Phones",
+      "status": "acquired",
+      "purchase": { "price": 40, "date": "2030-01-10", "from": "Garage sale" },
+      "notes": "Charger included. Battery holds a charge."
+    }
+  ]
+}
+
+- title: a short name with what sets the item apart (size, color, storage). Give each item its own title; number ones that are alike ("Laptop 1", "Laptop 2"), since Hub skips an item whose title, price, and date it already has.
+- brand, model, category: when known. The model is the product's model name or number, never a serial number.
+- condition: new, like new, used, or for parts, with a few words on wear or faults.
+- status: "acquired" when it's ready to sell, "repairing" when it needs work first.
+- purchase: what the person paid, when, and where, only when they say. Otherwise leave it out, and Hub flags the item to fill in later.
+- notes: what's included and anything a buyer should know, in a sentence or two.
+- Never include serial numbers, IMEI or MEID numbers, activation or lock details, passwords, or anything personal seen on a screen or label. Hub takes out any serial or IMEI numbers it finds.
 
 RESALE LISTING (format "hub-listing/v1")
 
