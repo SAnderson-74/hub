@@ -157,7 +157,7 @@ export const moneyImports = sqliteTable(
     accountId: integer("account_id")
       .notNull()
       .references(() => moneyAccounts.id),
-    source: text("source", { enum: ["csv", "ofx"] }).notNull(),
+    source: text("source", { enum: ["csv", "ofx", "statement"] }).notNull(),
     fileName: text("file_name").notNull().default(""),
     created: integer("created").notNull().default(0),
     duplicates: integer("duplicates").notNull().default(0),

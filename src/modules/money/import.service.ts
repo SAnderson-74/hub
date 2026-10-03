@@ -10,6 +10,7 @@ import type {
 import { guessCard } from "../../shared/cards";
 import { matchRule } from "../../shared/moneyRules";
 import { findPerson, memoWithPerson } from "../../shared/payees";
+import { maskLongNumbers } from "../../shared/statement";
 import { cardsOfAccount } from "./cards.service";
 import { dropSplits } from "./lines";
 import { requireAccount } from "./money.service";
@@ -30,7 +31,7 @@ type ImportRow = typeof moneyImports.$inferSelect;
 export type ImportJson = {
   id: number;
   account: { id: number; name: string };
-  source: "csv" | "ofx";
+  source: "csv" | "ofx" | "statement";
   fileName: string;
   created: number;
   duplicates: number;
@@ -44,7 +45,7 @@ export type LayoutJson = BankLayout & { accountId: number | null };
 
 export type ImportInput = {
   accountId: number;
-  source: "csv" | "ofx";
+  source: "csv" | "ofx" | "statement";
   fileName: string;
   transactions: BankTransaction[];
   layout?: BankLayout;
@@ -54,6 +55,12 @@ export type ImportInput = {
 /** Same day, same amount, and the same payee ignoring case and spacing. */
 const matchKey = (row: { date: string; amountCents: number; payee: string }) =>
   `${row.date}|${row.amountCents}|${row.payee.trim().toLowerCase().replace(/\s+/g, " ")}`;
+
+/**
+ * Same day and amount. A statement read by the Claude Project words payees its own way,
+ * so they can't be compared with a bank file's.
+ */
+const looseKey = (row: { date: string; amountCents: number }) => `${row.date}|${row.amountCents}`;
 
 const take = (counts: Map<string, number>, key: string): boolean => {
   const left = counts.get(key) ?? 0;
@@ -81,14 +88,34 @@ const idKey = (externalId: string, amountCents: number) => `${externalId}|${amou
  * different transactions the same id, so an id alone never makes a duplicate. A dry
  * run says what would happen and changes nothing.
  */
-export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): BankImportResult {
+export function importBankFile(db: Db, given: ImportInput, dryRun: boolean): BankImportResult {
+  const pasted = given.source === "statement";
+  // Pasted text gets the same masking the browser gives it, in case it was skipped.
+  const input = pasted
+    ? {
+        ...given,
+        transactions: given.transactions.map((row) => ({
+          ...row,
+          payee: maskLongNumbers(row.payee),
+          memo: maskLongNumbers(row.memo),
+        })),
+      }
+    : given;
+  const keyOf = (row: { date: string; amountCents: number; payee: string }) =>
+    pasted ? looseKey(row) : matchKey(row);
   return db.transaction((tx) => {
     const account = requireAccount(tx, input.accountId, "body");
     const dates = input.transactions.map((row) => row.date).sort();
     const first = dates[0] ?? "";
     const last = dates.at(-1) ?? "";
+    // Transactions added from receipts before the bank had them: a row that fits one is
+    // the same purchase, so it fills in the bank's details instead of adding another.
+    // They're found that way rather than as duplicates.
+    const waiting = waitingReceipts(tx, account.id);
+    const fromReceipts = new Set(waiting.map((entry) => entry.transactionId));
     const nearby = tx
       .select({
+        id: moneyTransactions.id,
         date: moneyTransactions.date,
         amountCents: moneyTransactions.amountCents,
         payee: moneyTransactions.payee,
@@ -103,7 +130,8 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
           lte(moneyTransactions.date, last),
         ),
       )
-      .all();
+      .all()
+      .filter((row) => !fromReceipts.has(row.id));
     const knownIds = tally(
       tx
         .select({
@@ -120,7 +148,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     // A stored transaction matches by the bank's own payee when it has one, so renaming
     // it since doesn't make the same row import again.
     const storedKey = (row: (typeof nearby)[number]) =>
-      matchKey({ ...row, payee: row.bankPayee ?? row.payee });
+      keyOf({ ...row, payee: row.bankPayee ?? row.payee });
     const anyMatch = tally(nearby.map(storedKey));
     const matchWithoutId = tally(nearby.filter((row) => row.externalId === null).map(storedKey));
 
@@ -137,9 +165,6 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     const cards = cardsOfAccount(tx, account.id);
     let categorizedByRules = 0;
 
-    // Transactions added from receipts before the bank had them: a row that fits one is
-    // the same purchase, so it fills in the bank's details instead of adding another.
-    const waiting = waitingReceipts(tx, account.id);
     const receiptMatches: Array<{
       receiptId: number;
       transactionId: number;
@@ -155,8 +180,8 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       const person = findPerson(row.payee, row.memo, row.amountCents);
       const rule = matchRule(rules, { ...row, counterparty: person?.name ?? null });
       // An earlier import may have stored the rule's cleaner payee, so match either.
-      const keys = [matchKey(row)];
-      if (rule?.renameTo) keys.push(matchKey({ ...row, payee: rule.renameTo }));
+      const keys = [keyOf(row)];
+      if (rule?.renameTo) keys.push(keyOf({ ...row, payee: rule.renameTo }));
       const duplicate = row.externalId
         ? take(knownIds, idKey(row.externalId, row.amountCents)) ||
           keys.some((key) => take(matchWithoutId, key))

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { useNavigate } from "react-router";
 import { Sheet } from "../../../client/components/Sheet";
 import { LoadingRows } from "../../../client/components/States";
@@ -7,8 +7,16 @@ import { useModules } from "../../../client/lib/queries";
 import { useNow } from "../../../client/lib/useNow";
 import { type PasteRead, PROJECT_KINDS, readPaste } from "../../../shared/claudeProject";
 import { StudyPlanForm } from "../../education/components/ImportSheet";
+import { ImportForm } from "../../money/components/ImportSheet";
 import { ReceiptsForm } from "../../money/components/ReceiptsSheet";
-import { useAccounts, useBooks, useCategories } from "../../money/queries";
+import {
+  type Account,
+  type Book,
+  type Category,
+  useAccounts,
+  useBooks,
+  useCategories,
+} from "../../money/queries";
 import { storedBookId } from "../../money/storedBook";
 import { PasteListingForm } from "../../resale/components/PasteListingSheet";
 import { localDate } from "../../tasks/dates";
@@ -65,7 +73,35 @@ function PasteFlow({ onDone }: { onDone: () => void }) {
             {format.into} is turned off. Turn it on under Modules and time zone, then paste again.
           </p>
         ) : format.format === "hub-receipt/v1" ? (
-          <ReceiptsTarget json={chosen.json} onDone={onDone} />
+          <BookTarget>
+            {(book, accounts, categories, today) => (
+              <ReceiptsForm
+                key={book.id}
+                book={book}
+                accounts={accounts}
+                categories={categories}
+                today={today}
+                initialText={chosen.json}
+                onDone={onDone}
+              />
+            )}
+          </BookTarget>
+        ) : format.format === "hub-statement/v1" ? (
+          <BookTarget>
+            {(book, accounts) => {
+              const open = accounts.filter((account) => !account.archived);
+              return (
+                <ImportForm
+                  key={book.id}
+                  book={book}
+                  accounts={open}
+                  defaultAccountId={open[0]?.id ?? null}
+                  initialText={chosen.json}
+                  onDone={onDone}
+                />
+              );
+            }}
+          </BookTarget>
         ) : format.format === "hub-listing/v1" ? (
           <PasteListingForm
             initialText={chosen.json}
@@ -112,8 +148,12 @@ function PasteFlow({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** Receipts go into a book; the one Money last showed, unless another is picked. */
-function ReceiptsTarget({ json, onDone }: { json: string; onDone: () => void }) {
+/** Money imports go into a book: the one Money last showed, unless another is picked. */
+function BookTarget({
+  children,
+}: {
+  children: (book: Book, accounts: Account[], categories: Category[], today: string) => ReactNode;
+}) {
   const ids = useId();
   const today = localDate(useNow());
   const books = useBooks();
@@ -157,15 +197,7 @@ function ReceiptsTarget({ json, onDone }: { json: string; onDone: () => void }) 
           </select>
         </div>
       ) : null}
-      <ReceiptsForm
-        key={book.id}
-        book={book}
-        accounts={accounts.data ?? []}
-        categories={categories.data ?? []}
-        today={today}
-        initialText={json}
-        onDone={onDone}
-      />
+      {children(book, accounts.data ?? [], categories.data ?? [], today)}
     </div>
   );
 }

@@ -113,7 +113,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.5 Split transactions: one charge in several categories, counted that way in budgets, cash flow, and rewards
 - [x] 5.6 Receipts: a `hub-receipt/v1` format from a Claude Project (see [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)), pasted into Hub, split by category, matched to the bank's transaction, and kept from counting twice when the bank file arrives
 - [x] 5.7 One Claude Project for every import: one paste box in Hub (Paste from Claude) that sends each format to its import, and the Project's instructions in Settings with a Copy button and a version, kept equal to [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) by a test
-- [ ] 5.8 Bank statements and transactions from the Claude Project: statement balances and transactions read from screenshots or documents, with the same duplicate checks as bank files
+- [x] 5.8 Bank statements and transactions from the Claude Project: a `hub-statement/v1` format read from statements or app screenshots, imported like a bank file (duplicates by day and amount, receipt matching, the closing balance checked, undo), with long numbers hidden down to their last 4 digits
 - [ ] 5.9 Items to sell from the Claude Project: several items (like devices) at once into Resale inventory
 - [ ] 5.10 Tasks and goals from the Claude Project: tasks, projects, and goals read from notes or lists
 
@@ -195,6 +195,25 @@ Produced by the Claude Project ([CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has its i
 Up to 50 receipts of up to 300 lines each. Amounts are dollars (numbers, or text like `"$12.50"`); a line's amount is negative for a coupon. `type` is `purchase` or `return`. `category` on the receipt is for one without lines. Unknown fields are ignored, and nothing is stored as pasted. A receipt is refused when `cardLast4` isn't exactly 4 digits, or its store, lines, or note have a run of 9 or more digits (the shape of a card or account number).
 
 It's sent to `POST /api/money/receipts` with the book, an account for receipts without a known card, a category for each name the book doesn't have, and receipts to leave out (add `?dryRun=true` to preview).
+
+### `hub-statement/v1`
+
+Produced by the Claude Project from a bank or card statement, or a screenshot of recent transactions, and pasted into Money > Import (or Settings > Imports > Paste from Claude).
+
+```json
+{
+  "format": "hub-statement/v1",
+  "account": { "last4": "1234" },
+  "period": { "start": "2030-03-01", "end": "2030-03-31" },
+  "closingBalance": -1520.40,
+  "transactions": [
+    { "date": "2030-03-02", "description": "EXAMPLE STORE 12", "amount": -64.80 },
+    { "date": "2030-03-05", "description": "PAYMENT THANK YOU", "amount": 500.00 }
+  ]
+}
+```
+
+Up to 1,000 transactions. Amounts are signed dollars as the account sees them (negative for money out); `closingBalance` is negative for money owed. `account.last4` picks the account when a card in the book has those digits, and is otherwise ignored. Runs of 9 or more digits in descriptions and memos are hidden down to their last 4 (`••6789`). The transactions go to `POST /api/money/imports` with `source: "statement"`, where a duplicate is the same day and amount (the Project's wording isn't the bank's), and the closing balance is checked when the period's end is given.
 
 ### Bank and card files
 

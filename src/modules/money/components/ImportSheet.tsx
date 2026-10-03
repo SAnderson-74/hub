@@ -7,6 +7,7 @@ import {
   labelClass,
   primaryButton,
   secondaryButton,
+  textareaClass,
 } from "../../../client/components/ui";
 import {
   BANK_FIELD_LABELS,
@@ -24,13 +25,20 @@ import {
   readBankCsv,
   readOfx,
 } from "../../../shared/bankImport";
+import { readPaste } from "../../../shared/claudeProject";
 import { parseCsv } from "../../../shared/csv";
 import { formatSigned } from "../../../shared/profit";
+import {
+  type ReadStatement,
+  readStatement,
+  statementDocumentSchema,
+} from "../../../shared/statement";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import {
   type Account,
   type Book,
   type ImportRecord,
+  useCards,
   useImportFile,
   useImportLayouts,
   useImports,
@@ -41,10 +49,47 @@ import { BalanceCheck } from "./BalanceCheck";
 const count = (n: number, one: string, many: string) =>
   `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
-/** The file as read: an OFX statement, or a CSV table waiting for its columns. */
+/**
+ * The file as read: an OFX statement, a CSV table waiting for its columns, or a
+ * statement the Claude Project read (hub-statement/v1), pasted in.
+ */
 type Loaded =
   | { kind: "ofx"; name: string; text: string }
-  | { kind: "csv"; name: string; table: string[][] };
+  | { kind: "csv"; name: string; table: string[][] }
+  | { kind: "statement"; name: string; read: ReadStatement };
+
+/**
+ * A pasted Claude Project answer as a statement, or what's wrong with it. Null for an
+ * empty paste.
+ */
+export function readPastedStatement(
+  text: string,
+): { name: string; read: ReadStatement } | { error: string } | null {
+  const pasted = readPaste(text);
+  if (!pasted) return null;
+  if (!pasted.ok) return { error: pasted.error };
+  if (pasted.format.format !== "hub-statement/v1") {
+    return {
+      error: `That's ${pasted.format.noun} for ${pasted.format.into}, not a statement. Paste it in Settings > Imports > Paste from Claude.`,
+    };
+  }
+  const parsed = statementDocumentSchema.safeParse(pasted.data);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return {
+      error: `The statement doesn't fit the format${issue ? `: ${issue.message}` : "."} Ask the Project again.`,
+    };
+  }
+  const read = readStatement(parsed.data);
+  const name = [
+    "Statement",
+    read.last4 ? `••${read.last4}` : "",
+    read.endDate ? `to ${read.endDate}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return { name, read };
+}
 
 /**
  * Imports a bank or card export into an account: an OFX or QFX statement, or a CSV
@@ -71,11 +116,12 @@ export function ImportSheet({
       open={open}
       onClose={onClose}
       title="Import transactions"
-      description="A CSV, OFX, or QFX file from your bank or card. Transactions already in the account are skipped."
+      description="A CSV, OFX, or QFX file from your bank or card, or a statement your Claude Project read. Transactions already in the account are skipped."
     >
       {open ? (
         <div className="space-y-10">
           <ImportForm
+            book={book}
             accounts={accounts.filter((account) => !account.archived)}
             defaultAccountId={defaultAccountId}
             onDone={onClose}
@@ -87,20 +133,45 @@ export function ImportSheet({
   );
 }
 
-function ImportForm({
+/** The account, file or paste, check, and import; also used by the one paste box for every import. */
+export function ImportForm({
+  book,
   accounts,
   defaultAccountId,
+  initialText = "",
   onDone,
 }: {
+  book: Book;
   accounts: Account[];
   defaultAccountId: number | null;
+  /** A Claude Project answer to start from. */
+  initialText?: string;
   onDone: () => void;
 }) {
   const layouts = useImportLayouts();
   const run = useImportFile();
+  const cards = useCards(book.id);
   const ids = useId();
   const [accountId, setAccountId] = useState(String(defaultAccountId ?? accounts[0]?.id ?? ""));
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [pasteText, setPasteText] = useState(initialText);
+  const [loaded, setLoaded] = useState<Loaded | null>(() => {
+    const first = readPastedStatement(initialText);
+    return first && "read" in first ? { kind: "statement", ...first } : null;
+  });
+  // The account a statement is for, from a card with its last 4 digits.
+  const [guessedFor, setGuessedFor] = useState<string | null>(null);
+  const statementLast4 = loaded?.kind === "statement" ? loaded.read.last4 : null;
+  if (statementLast4 && cards.data && guessedFor !== statementLast4) {
+    setGuessedFor(statementLast4);
+    const owners = new Set(
+      cards.data
+        .filter((card) => card.last4 === statementLast4)
+        .map((card) => card.account.id)
+        .filter((id) => accounts.some((account) => account.id === id)),
+    );
+    const [only] = owners;
+    if (owners.size === 1 && only !== undefined) setAccountId(String(only));
+  }
   const [columns, setColumns] = useState<BankColumns>({});
   const [options, setOptions] = useState<BankOptions>({ flipSigns: false, dayFirst: false });
   const [fileError, setFileError] = useState("");
@@ -114,10 +185,19 @@ function ImportForm({
     run.reset();
   };
 
+  const onPaste = (value: string) => {
+    setPasteText(value);
+    clearCheck();
+    setFileError("");
+    const next = readPastedStatement(value);
+    setLoaded(next && "read" in next ? { kind: "statement", ...next } : null);
+  };
+
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     clearCheck();
     setLoaded(null);
+    setPasteText("");
     setFileError("");
     if (!file) return;
     const text = await file.text();
@@ -160,7 +240,11 @@ function ImportForm({
   const check = () => {
     if (!loaded) return;
     const result =
-      loaded.kind === "ofx" ? readOfx(loaded.text) : readBankCsv(loaded.table, columns, options);
+      loaded.kind === "statement"
+        ? loaded.read
+        : loaded.kind === "ofx"
+          ? readOfx(loaded.text)
+          : readBankCsv(loaded.table, columns, options);
     setRead(result);
     const json = request(result);
     if (json && result.transactions.length > 0) {
@@ -208,7 +292,8 @@ function ImportForm({
 
   const headers = loaded?.kind === "csv" ? (loaded.table[0] ?? []) : [];
   const sample = loaded?.kind === "csv" ? (loaded.table[1] ?? []) : [];
-  const ready = loaded?.kind === "ofx" || columnsReady(columns);
+  const ready = loaded?.kind === "ofx" || loaded?.kind === "statement" || columnsReady(columns);
+  const pasted = readPastedStatement(pasteText);
 
   return (
     <div className="space-y-5">
@@ -250,6 +335,47 @@ function ImportForm({
         <p role="alert" className="text-sm text-danger">
           {fileError}
         </p>
+      ) : null}
+      <div>
+        <label htmlFor={`${ids}-paste`} className={labelClass}>
+          Or paste a statement from your Claude Project
+        </label>
+        <textarea
+          id={`${ids}-paste`}
+          value={pasteText}
+          onChange={(event) => onPaste(event.target.value)}
+          rows={3}
+          spellCheck={false}
+          placeholder='{ "format": "hub-statement/v1", … }'
+          aria-describedby={`${ids}-paste-hint`}
+          className={`${textareaClass} font-mono text-sm`}
+        />
+        <p
+          id={`${ids}-paste-hint`}
+          className={`mt-1.5 text-sm ${pasted && "error" in pasted ? "text-danger" : "text-muted"}`}
+        >
+          {pasted && "error" in pasted
+            ? pasted.error
+            : "For a statement or app screenshot without a file to download. The Project reads it; long numbers are hidden down to their last 4 digits."}
+        </p>
+      </div>
+
+      {loaded?.kind === "statement" ? (
+        <div className="space-y-1 text-sm text-muted">
+          <p>
+            A statement from your Claude Project:{" "}
+            {count(loaded.read.transactions.length, "transaction", "transactions")}
+            {loaded.read.endDate ? ` through ${loaded.read.endDate}` : ""}
+            {loaded.read.last4 ? `, for the account ending in ${loaded.read.last4}` : ""}. Check
+            that it's going into the right account. Transactions already there on the same day for
+            the same amount are skipped.
+          </p>
+          {loaded.read.notes.map((note) => (
+            <p key={note} className="text-warn">
+              {note}
+            </p>
+          ))}
+        </div>
       ) : null}
 
       {loaded?.kind === "ofx" ? (

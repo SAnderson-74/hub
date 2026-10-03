@@ -4,6 +4,7 @@ import { PROJECT_FORMATS, PROJECT_INSTRUCTIONS, readPaste } from "./claudeProjec
 import { educationImportSchema } from "./education";
 import { hasLongNumber, receiptDocumentSchema } from "./receipts";
 import { listingImportSchema } from "./resaleListing";
+import { statementDocumentSchema } from "./statement";
 
 const receipts = {
   format: "hub-receipt/v1",
@@ -41,8 +42,8 @@ describe("reading a pasted answer", () => {
       "Part of it is missing",
     );
     expect(error('{ "receipts": [] }')).toContain("doesn't say what it is");
-    expect(error('{ "format": "hub-statement/v9" }')).toBe(
-      "Hub doesn't take \"hub-statement/v9\" yet. It takes receipts, resale listings, and study plans. Check that the Project has Hub's latest instructions.",
+    expect(error('{ "format": "hub-inventory/v9" }')).toBe(
+      "Hub doesn't take \"hub-inventory/v9\" yet. It takes receipts, bank statements, resale listings, and study plans. Check that the Project has Hub's latest instructions.",
     );
     const one = `\`\`\`json\n${JSON.stringify(receipts)}\n\`\`\``;
     expect(error(`${one}\n${one}`)).toBe(
@@ -65,6 +66,7 @@ describe("the Project's instructions", () => {
     );
     const schemas: Record<string, { safeParse: (value: unknown) => { success: boolean } }> = {
       "hub-receipt/v1": receiptDocumentSchema,
+      "hub-statement/v1": statementDocumentSchema,
       "hub-listing/v1": listingImportSchema,
       "hub-education/v1": educationImportSchema,
     };
