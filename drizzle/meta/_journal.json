@@ -148,6 +148,13 @@
       "when": 1791002064478,
       "tag": "0020_payment_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1791004585548,
+      "tag": "0021_card_rewards",
+      "breakpoints": true
     }
   ]
 }

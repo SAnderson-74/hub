@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BadgePercent,
   BookOpen,
   FileUp,
   List,
@@ -33,6 +34,7 @@ import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
 import { ImportSheet } from "../components/ImportSheet";
 import { NetWorthView } from "../components/NetWorthView";
+import { RewardsView } from "../components/RewardsView";
 import { RulesSheet } from "../components/RulesSheet";
 import { SortSheet } from "../components/SortSheet";
 import { TransactionSheet, type TransactionTarget } from "../components/TransactionSheet";
@@ -57,8 +59,8 @@ import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget" | "net-worth";
-const VIEWS: readonly View[] = ["transactions", "budget", "net-worth"];
+type View = "transactions" | "budget" | "rewards" | "net-worth";
+const VIEWS: readonly View[] = ["transactions", "budget", "rewards", "net-worth"];
 
 function storedView(): View {
   try {
@@ -181,16 +183,18 @@ function BookView({
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+        {/* Four views can be wider than a phone; they scroll sideways there. */}
+        <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
           <legend className="sr-only">View</legend>
           {(
             [
               ["transactions", "Transactions", List],
               ["budget", "Budget", PiggyBank],
+              ["rewards", "Rewards", BadgePercent],
               ["net-worth", "Net worth", TrendingUp],
             ] as const
           ).map(([value, label, Icon]) => (
-            <label key={value} className="relative">
+            <label key={value} className="relative shrink-0">
               <input
                 type="radio"
                 name="money-view"
@@ -199,8 +203,8 @@ function BookView({
                 onChange={() => chooseView(value)}
                 className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
               />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-                {/* Three views fit on a phone without icons. */}
+              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-2.5 text-[13px] font-semibold whitespace-nowrap text-muted sm:px-4 sm:text-sm peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                {/* Icons only where there's room for them. */}
                 <Icon aria-hidden="true" className="hidden size-4 sm:block" />
                 {label}
               </span>
@@ -269,6 +273,13 @@ function BookView({
 
       {view === "budget" ? (
         <BudgetView book={book} today={today} />
+      ) : view === "rewards" ? (
+        <RewardsView
+          book={book}
+          categories={categories.data ?? []}
+          today={today}
+          onAddAccount={() => setAccountTarget("new")}
+        />
       ) : view === "net-worth" ? (
         <NetWorthView
           book={book}

@@ -33,6 +33,7 @@ import {
   fillPeopleSchema,
 } from "../../shared/categorize";
 import { netWorthQuerySchema } from "../../shared/netWorth";
+import { rewardsQuerySchema, rewardsSaveSchema } from "../../shared/rewards";
 import { budgetMonth, setBudget } from "./budget.service";
 import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
@@ -58,6 +59,7 @@ import {
   updateTransaction,
 } from "./money.service";
 import { netWorth } from "./netWorth.service";
+import { deleteRewards, getRewards, rewardsReport, saveRewards } from "./rewards.service";
 import {
   applyRules,
   createRule,
@@ -142,6 +144,25 @@ export function moneyRoutes({ db }: Deps) {
         deleteCard(db, c.req.valid("param").id);
         return c.body(null, 204);
       })
+      .get("/cards/:id/rewards", idParam, (c) => c.json(getRewards(db, c.req.valid("param").id)))
+      .put(
+        "/cards/:id/rewards",
+        idParam,
+        zValidator("json", rewardsSaveSchema, invalid("Those rewards aren't valid.")),
+        (c) => c.json(saveRewards(db, c.req.valid("param").id, c.req.valid("json"))),
+      )
+      .delete("/cards/:id/rewards", idParam, (c) => {
+        deleteRewards(db, c.req.valid("param").id);
+        return c.body(null, 204);
+      })
+      .get(
+        "/rewards",
+        zValidator("query", rewardsQuerySchema, invalid("Pass the book as bookId and a year.")),
+        (c) => {
+          const { bookId, year } = c.req.valid("query");
+          return c.json(rewardsReport(db, bookId, year));
+        },
+      )
       .get("/categories", bookQuery, (c) => c.json(listCategories(db, c.req.valid("query").bookId)))
       .post(
         "/categories",

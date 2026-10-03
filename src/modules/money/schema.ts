@@ -2,6 +2,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
 import { RULE_DIRECTIONS } from "../../shared/moneyRules";
+import { REWARD_KINDS } from "../../shared/rewards";
 
 const timestamps = () => ({
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -216,4 +217,38 @@ export const moneyBalanceSnapshots = sqliteTable(
     ...timestamps(),
   },
   (t) => [uniqueIndex("money_balance_snapshots_account_date_unique").on(t.accountId, t.date)],
+);
+
+/**
+ * A card's rewards program: cash back or points, what everything earns, and what a
+ * point is worth. One per card. No foreign keys here or in its rates, so a rollback to
+ * a build without rewards can still delete cards and categories; Hub removes a card's
+ * rewards with it.
+ */
+export const moneyCardRewards = sqliteTable("money_card_rewards", {
+  cardId: integer("card_id").primaryKey(),
+  kind: text("kind", { enum: REWARD_KINDS }).notNull().default("cash_back"),
+  /** Hundredths of a percent (cash back) or of a point per dollar. */
+  baseRate: integer("base_rate").notNull().default(0),
+  /** Hundredths of a cent per point. */
+  pointValue: integer("point_value").notNull().default(100),
+  ...timestamps(),
+});
+
+/** A bonus rate on a card: for a store or a category, maybe between dates, maybe capped. */
+export const moneyRewardRates = sqliteTable(
+  "money_reward_rates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id").notNull(),
+    categoryId: integer("category_id"),
+    contains: text("contains"),
+    rate: integer("rate").notNull(),
+    startsOn: text("starts_on"),
+    endsOn: text("ends_on"),
+    capCents: integer("cap_cents"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [index("money_reward_rates_card_idx").on(t.cardId)],
 );

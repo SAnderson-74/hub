@@ -18,6 +18,7 @@ import type { BudgetSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
+import type { RewardsSave } from "../../shared/rewards";
 
 async function fetchBooks() {
   const res = await api.money.books.$get();
@@ -267,6 +268,44 @@ export function useUpdateCard() {
 export function useDeleteCard() {
   return useMoneyMutation(async (id: number) => {
     const res = await api.money.cards[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Rewards
+
+/** What a book's cards spent and earned in a year, by month and by rate. */
+export function useRewards(bookId: number, year: number) {
+  return useQuery({
+    queryKey: ["money", "rewards", bookId, year],
+    queryFn: async () => {
+      const res = await api.money.rewards.$get({
+        query: { bookId: String(bookId), year: String(year) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type RewardsReport = NonNullable<ReturnType<typeof useRewards>["data"]>;
+export type CardRewards = RewardsReport["cards"][number];
+
+export function useSaveRewards() {
+  return useMoneyMutation(async ({ cardId, json }: { cardId: number; json: RewardsSave }) => {
+    const res = await api.money.cards[":id"].rewards.$put({
+      param: { id: String(cardId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteRewards() {
+  return useMoneyMutation(async (cardId: number) => {
+    const res = await api.money.cards[":id"].rewards.$delete({ param: { id: String(cardId) } });
     if (!res.ok) throw await toApiError(res);
   });
 }
