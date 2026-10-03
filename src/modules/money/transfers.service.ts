@@ -62,7 +62,7 @@ export function createTransfer(db: Db, input: TransferCreate): TransferJson {
 /**
  * Joins two existing transactions (usually both imported) as the sides of one
  * transfer: the same amount leaving one account and arriving in another. Their
- * categories are cleared, since a transfer is neither spending nor income.
+ * categories and cards are cleared, since a transfer is neither spending nor income.
  */
 export function linkTransfer(db: Db, ids: [number, number]): TransferJson {
   return db.transaction((tx) => {
@@ -85,7 +85,7 @@ export function linkTransfer(db: Db, ids: [number, number]): TransferJson {
       [b, a],
     ] as const) {
       tx.update(moneyTransactions)
-        .set({ transferPeerId: peer.id, categoryId: null, updatedAt: now })
+        .set({ transferPeerId: peer.id, categoryId: null, cardId: null, updatedAt: now })
         .where(eq(moneyTransactions.id, row.id))
         .run();
     }

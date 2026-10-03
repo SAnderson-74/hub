@@ -15,6 +15,7 @@ import type {
   TransferCreate,
 } from "../../shared/books";
 import type { BudgetSet } from "../../shared/budget";
+import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
 
@@ -40,6 +41,8 @@ export type TransactionFilters = {
   accountId?: number;
   /** A category id, "none" for uncategorized, or "transfer" for transfers. */
   categoryId?: number | "none" | "transfer";
+  /** A card id, or "none" for transactions without a card. */
+  cardId?: number | "none";
   q?: string;
   limit: number;
 };
@@ -51,6 +54,7 @@ async function fetchTransactions(bookId: number, filters: TransactionFilters) {
       limit: String(filters.limit),
       ...(filters.accountId === undefined ? {} : { accountId: String(filters.accountId) }),
       ...(filters.categoryId === undefined ? {} : { categoryId: String(filters.categoryId) }),
+      ...(filters.cardId === undefined ? {} : { cardId: String(filters.cardId) }),
       ...(filters.q ? { q: filters.q } : {}),
     },
   });
@@ -221,6 +225,48 @@ export function useUpdateTransaction() {
 export function useDeleteTransaction() {
   return useMoneyMutation(async (id: number) => {
     const res = await api.money.transactions[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Cards
+
+async function fetchCards(bookId: number) {
+  const res = await api.money.cards.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export type Card = Awaited<ReturnType<typeof fetchCards>>[number];
+
+/** A book's payment cards, active first. */
+export function useCards(bookId: number | null) {
+  return useQuery({
+    queryKey: ["money", "cards", bookId ?? 0],
+    queryFn: () => fetchCards(bookId ?? 0),
+    enabled: bookId !== null,
+  });
+}
+
+export function useCreateCard() {
+  return useMoneyMutation(async (json: CardCreate) => {
+    const res = await api.money.cards.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUpdateCard() {
+  return useMoneyMutation(async ({ id, patch }: { id: number; patch: CardUpdate }) => {
+    const res = await api.money.cards[":id"].$patch({ param: { id: String(id) }, json: patch });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteCard() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.cards[":id"].$delete({ param: { id: String(id) } });
     if (!res.ok) throw await toApiError(res);
   });
 }

@@ -141,6 +141,13 @@
       "when": 1790635674942,
       "tag": "0019_reminder_sends",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1791002064478,
+      "tag": "0020_payment_cards",
+      "breakpoints": true
     }
   ]
 }

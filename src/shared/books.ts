@@ -171,6 +171,8 @@ const transactionFields = {
     .max(120, "Keep names under 120 characters.")
     .transform((value) => value || null)
     .nullable(),
+  /** One of the account's cards, or null for none. Left out of a new one, it's guessed. */
+  cardId: id.nullable(),
 };
 
 export const transactionCreateSchema = z
@@ -185,8 +187,8 @@ export type TransactionUpdate = z.infer<typeof transactionUpdateSchema>;
 
 /**
  * A book's transactions, newest first, a page at a time. `categoryId=none` finds
- * uncategorized ones (not transfers), `categoryId=transfer` finds transfers, and `q`
- * searches payees and memos.
+ * uncategorized ones (not transfers), `categoryId=transfer` finds transfers, `cardId`
+ * finds what a card paid for, and `q` searches payees and memos.
  */
 export const transactionQuerySchema = z.object({
   bookId: z.coerce.number().int().positive(),
@@ -194,6 +196,8 @@ export const transactionQuerySchema = z.object({
   categoryId: z
     .union([z.literal("none"), z.literal("transfer"), z.coerce.number().int().positive()])
     .optional(),
+  /** A card id, or "none" for transactions without one. */
+  cardId: z.union([z.literal("none"), z.coerce.number().int().positive()]).optional(),
   from: date.optional(),
   to: date.optional(),
   q: z.string().trim().max(100, "Search for under 100 characters.").optional(),

@@ -32,14 +32,17 @@ import {
   type TransactionQuery,
   type TransactionUpdate,
 } from "../../shared/books";
+import { type CardKind, cardKindFor } from "../../shared/cards";
 import type { LinkRole } from "../../shared/resale";
 import { goalAccounts } from "../goals/schema";
 import { transactionItems } from "../resale/transactionLinks";
+import { checkCardFits, guessCardFor } from "./cards.service";
 import {
   moneyAccounts,
   moneyBalanceSnapshots,
   moneyBooks,
   moneyBudgets,
+  moneyCards,
   moneyCategories,
   moneyImports,
   moneyRules,
@@ -104,6 +107,8 @@ export type TransactionJson = {
   /** The payee as the bank wrote it, when it came from a file. */
   bankPayee: string | null;
   category: { id: number; name: string; kind: CategoryKind } | null;
+  /** The card it was paid with, when known. */
+  card: { id: number; name: string; last4: string | null; kind: CardKind } | null;
   /** The other side when this is a transfer between accounts. Transfers have no category. */
   transfer: { transactionId: number; account: { id: number; name: string } } | null;
   /** Resale items this paid for or came from. */
@@ -423,6 +428,18 @@ export function updateAccount(db: Db, id: number, patch: AccountUpdate): Account
   return db.transaction((tx) => {
     const current = requireAccount(tx, id);
     if (patch.name !== undefined) checkAccountNameFree(tx, current.bookId, patch.name, id);
+    if (patch.kind !== undefined && cardKindFor(patch.kind) !== cardKindFor(current.kind)) {
+      const cards = tx
+        .select({ n: count() })
+        .from(moneyCards)
+        .where(eq(moneyCards.accountId, id))
+        .get();
+      if ((cards?.n ?? 0) > 0) {
+        throw conflict(
+          "This account's cards don't fit that kind of account. Delete its cards first, or keep the kind.",
+        );
+      }
+    }
     const row = tx
       .update(moneyAccounts)
       .set({ ...patch, updatedAt: new Date() })
@@ -444,6 +461,7 @@ export function deleteAccount(db: Db, id: number): void {
     // Imports whose transactions are all gone (undone) go with it, and so do goal links.
     tx.delete(moneyImports).where(eq(moneyImports.accountId, id)).run();
     tx.delete(goalAccounts).where(eq(goalAccounts.accountId, id)).run();
+    tx.delete(moneyCards).where(eq(moneyCards.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }
@@ -616,6 +634,26 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     db,
     rows.map((row) => row.id),
   );
+  const cardIds = [...new Set(rows.flatMap((row) => (row.cardId === null ? [] : [row.cardId])))];
+  const cards = new Map(
+    cardIds.length === 0
+      ? []
+      : db
+          .select({
+            id: moneyCards.id,
+            name: moneyCards.name,
+            last4: moneyCards.last4,
+            accountKind: moneyAccounts.kind,
+          })
+          .from(moneyCards)
+          .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyCards.accountId))
+          .where(inArray(moneyCards.id, cardIds))
+          .all()
+          .map(({ accountKind, ...card }) => [
+            card.id,
+            { ...card, kind: cardKindFor(accountKind) ?? ("debit" as const) },
+          ]),
+  );
   return rows.map((row) => ({
     id: row.id,
     account: accounts.get(row.accountId) ?? { id: row.accountId, name: "" },
@@ -626,6 +664,7 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     counterparty: row.counterparty,
     bankPayee: row.bankPayee,
     category: row.categoryId === null ? null : (categories.get(row.categoryId) ?? null),
+    card: row.cardId === null ? null : (cards.get(row.cardId) ?? null),
     transfer: transferJson(row.transferPeerId, peers, accounts),
     resaleItems: items.get(row.id) ?? [],
     createdAt: row.createdAt.toISOString(),
@@ -669,6 +708,11 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
     conditions.push(isNotNull(moneyTransactions.transferPeerId));
   } else if (query.categoryId !== undefined) {
     conditions.push(eq(moneyTransactions.categoryId, query.categoryId));
+  }
+  if (query.cardId === "none") {
+    conditions.push(isNull(moneyTransactions.cardId));
+  } else if (query.cardId !== undefined) {
+    conditions.push(eq(moneyTransactions.cardId, query.cardId));
   }
   if (query.from) conditions.push(gte(moneyTransactions.date, query.from));
   if (query.to) conditions.push(lte(moneyTransactions.date, query.to));
@@ -730,16 +774,25 @@ export function createTransaction(db: Db, input: TransactionCreate): Transaction
   return db.transaction((tx) => {
     const account = requireAccount(tx, input.accountId, "body");
     checkCategoryFits(tx, account, input.categoryId ?? null);
+    const payee = input.payee ?? "";
+    const memo = input.memo ?? "";
+    // Left out, the card is guessed the way imports guess it; null means no card.
+    const cardId =
+      input.cardId === undefined
+        ? guessCardFor(tx, account, { payee, memo, amountCents: input.amountCents })
+        : input.cardId;
+    checkCardFits(tx, account.id, cardId);
     const row = tx
       .insert(moneyTransactions)
       .values({
         accountId: input.accountId,
         date: input.date,
         amountCents: input.amountCents,
-        payee: input.payee ?? "",
-        memo: input.memo ?? "",
+        payee,
+        memo,
         categoryId: input.categoryId ?? null,
         counterparty: input.counterparty ?? null,
+        cardId,
       })
       .returning()
       .get();
@@ -764,9 +817,16 @@ export function updateTransaction(db: Db, id: number, patch: TransactionUpdate):
     const account = requireAccount(tx, accountId, "body");
     const categoryId = patch.categoryId === undefined ? current.categoryId : patch.categoryId;
     checkCategoryFits(tx, account, categoryId);
+    if (current.transferPeerId !== null && patch.cardId !== undefined && patch.cardId !== null) {
+      throw conflict("A transfer isn't paid with a card. Unlink the transfer to pick a card.");
+    }
+    // Moving to another account drops a card that isn't that account's.
+    let cardId = patch.cardId === undefined ? current.cardId : patch.cardId;
+    if (patch.cardId === undefined && accountId !== current.accountId) cardId = null;
+    checkCardFits(tx, accountId, cardId);
     const row = tx
       .update(moneyTransactions)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...patch, cardId, updatedAt: new Date() })
       .where(eq(moneyTransactions.id, id))
       .returning()
       .get();
