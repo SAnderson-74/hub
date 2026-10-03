@@ -189,7 +189,7 @@ function placeTask(
   return { parentId: null, projectId: task.projectId };
 }
 
-export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetailJson {
+export function createTask(db: Queryable, input: TaskCreate, actor: string): TaskDetailJson {
   return db.transaction((tx) => {
     const place = placeTask(
       tx,

@@ -1,6 +1,7 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
 import type { ProjectCreate, ProjectUpdate, TaskCreate, TaskUpdate } from "../../shared/tasks";
+import type { TasksDocument } from "../../shared/tasksImport";
 
 /** "all", "inbox" (no project), or a project id. */
 export type ProjectFilter = "all" | "inbox" | number;
@@ -167,5 +168,24 @@ export function useDeleteProject() {
       if (!res.ok) throw await toApiError(res);
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.projects }),
+  });
+}
+
+/** Projects, tasks, and goals pasted from the Claude Project. A preview changes nothing. */
+export function useImportTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ document, dryRun }: { document: TasksDocument; dryRun: boolean }) => {
+      const res = await api.tasks.import.$post({
+        query: dryRun ? { dryRun: "true" } : {},
+        json: { document },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (_result, { dryRun }) => {
+      // Tasks, projects, and goals all change.
+      if (!dryRun) void queryClient.invalidateQueries();
+    },
   });
 }

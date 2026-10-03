@@ -1,6 +1,6 @@
 # The Claude Project for Hub
 
-One Claude Project turns photos, screenshots, documents, and notes into text Hub can import. You give it a receipt, a statement, or a course list; it answers with a small block of JSON in a format Hub knows; you paste that into Hub, which shows what it will do before anything changes.
+One Claude Project turns photos, screenshots, documents, and notes into text Hub can import. You give it a receipt, a statement, a to-do list, or a course list; it answers with a small block of JSON in a format Hub knows; you paste that into Hub, which shows what it will do before anything changes.
 
 Claude can't reach Hub, and Hub never reaches Claude. Hub stays on your tailnet, and nothing in this setup needs a key, a token, or a public address. The copy and paste in between is the whole connection.
 
@@ -12,9 +12,10 @@ Today the Project writes:
 | A bank or card statement | `hub-statement/v1` | Money |
 | Items to sell | `hub-inventory/v1` | Resale |
 | A resale listing | `hub-listing/v1` | Resale |
+| Tasks and goals | `hub-tasks/v1` | Tasks and Goals |
 | A study plan | `hub-education/v1` | Courses |
 
-The same Project learns more as Hub adds formats (see [the plan](PLAN.md)): tasks and goals next. Each adds a section to its instructions, and the instructions' version goes up.
+When Hub learns another format, it adds a section to the instructions and the instructions' version goes up (see [the plan](PLAN.md)).
 
 ## Set it up
 
@@ -26,9 +27,9 @@ When Hub updates, compare the version at the top of the Project's instructions w
 
 ## Use it
 
-1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a statement's PDF or a screenshot from a bank app, photos of things to sell, a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
+1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a statement's PDF or a screenshot from a bank app, photos of things to sell, notes or a to-do list, a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
 2. Copy Claude's whole answer.
-3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Money > Import** for statements, **Resale > Paste items**, **Resale > Paste listing**, and **Courses > Import a plan**.
+3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Money > Import** for statements, **Resale > Paste items**, **Resale > Paste listing**, the paste button on **Tasks**, and **Courses > Import a plan**.
 4. Check the preview, then add it.
 
 For receipts, each one says whether it goes on a transaction already in Hub, adds a new one, or needs something first: an account for receipts without a known card, or one of your categories for each name the book doesn't have. Hub splits a receipt by category when its lines are in more than one, sharing tax and discounts out in proportion. When the bank's file arrives later, the purchase isn't added twice: the import finds the receipt's transaction and fills in the bank's details instead. Opening a transaction shows its receipt and a way to remove it.
@@ -37,12 +38,14 @@ For a statement, pick the account (Hub picks it for you when one of its cards ha
 
 For items to sell, each one says whether it will be added, flagged to review (usually because what you paid and when aren't known yet), or skipped because Hub already has an item with that title, price, and date. They go in as Acquired (or Repairing), with the brand and model in the notes. Write a listing for one later with Resale > Paste listing.
 
+For tasks and goals, the preview lists each task (with its project, due date, and subtasks) and each goal (with its target date and milestones). Projects are found by name, ignoring case, or made. A task is skipped when an open task with the same title is already in its project (or the inbox), and a goal when an active goal has its title, so pasting the same answer twice adds nothing. A date Hub can't read is left off, and anything with a long number is pointed out so you can check it isn't an account or ID number; Hub doesn't change it, since a task can need one.
+
 ## What keeps this safe
 
 - **The Project is told to leave things out.** Full card and account numbers, loyalty and member numbers, names, addresses, phone numbers, emails, barcodes, and serial and IMEI numbers stay off its answer. A card's last 4 digits are the most it gives, and only so Hub can tell your cards apart.
 - **Hub checks anyway.** Each format has its own checks and size limits, and unknown fields are ignored. Receipts with a run of 9 or more digits in their store, lines, or note, or card digits that aren't exactly 4, are refused. In statements, where banks print reference numbers, such runs are hidden down to their last 4 digits, in the browser and again on the server. Items to sell have labeled serial, IMEI, and MEID numbers taken out, and other long digit runs hidden the same way. Hub keeps the fields it imports, never the pasted text as a whole.
 - **Text in a photo is data, not instructions.** A receipt or document could carry words meant to steer Claude. The instructions tell it to ignore them, and Hub only takes the fields of a format it knows, so a pasted answer can only do what that import does.
-- **Nothing changes until you say so.** Pasting only previews. Imports can be undone: a receipt removed, a statement undone from Recent imports, a listing or item deleted, a plan imported again.
+- **Nothing changes until you say so.** Pasting only previews. Imports can be undone: a receipt removed, a statement undone from Recent imports, a listing, item, task, or goal deleted, a plan imported again.
 - **Copying is one way.** Hub writes the instructions to your clipboard when you press Copy; it never reads the clipboard.
 - **Photos and documents go to Claude.** If a receipt or statement shows a full card or account number, cover or crop it before adding it.
 
@@ -51,7 +54,7 @@ For items to sell, each one says whether it will be added, flagged to review (us
 Copy everything in this box.
 
 ````text
-Hub import instructions, version 4.
+Hub import instructions, version 5.
 
 You turn photos, screenshots, documents, and notes into JSON for Hub, a private finance and planning app. The person pastes your answer into Hub, which checks it and shows a preview before anything is saved.
 
@@ -164,6 +167,40 @@ Use this when asked to write a listing for something to sell, or to record one. 
 - listing: where it's listed, the asking price, and the listing's own title and description. Leave listing out to record the item alone.
 - purchase: what the person paid, when, and where, only when they say.
 - Keep serial numbers, IMEIs, and the person's contact details out of every field, the description included.
+
+TASKS AND GOALS (format "hub-tasks/v1")
+
+Use this when given notes, a to-do list, a plan, or a screenshot of one, to add projects, tasks, and goals. Up to 20 projects, 200 tasks, and 20 goals per answer.
+
+{
+  "format": "hub-tasks/v1",
+  "projects": [{ "name": "Garage cleanup", "notes": "Before winter." }],
+  "tasks": [
+    {
+      "title": "Sort the shelves",
+      "project": "Garage cleanup",
+      "due": "2030-04-01",
+      "priority": "high",
+      "status": "todo",
+      "notes": "Keep the paint cans.",
+      "subtasks": ["Empty the top shelf", "Label the bins"]
+    }
+  ],
+  "goals": [
+    {
+      "title": "Run a 10K",
+      "targetDate": "2030-09-01",
+      "milestones": [{ "title": "Run 5K without stopping", "targetDate": "2030-05-01" }]
+    }
+  ]
+}
+
+- projects: new groups of related tasks the person names, or that clearly belong together. A task's project can also be one already in Hub; use the name as the person writes it. Leave project out for a task on its own.
+- tasks: one per thing to do, starting with a verb ("Call", "Buy", "Sort"). Leave out ones already done.
+- due: only when a date is given or clear from one. priority: "none", "low", "medium", or "high", only when it's said or obvious. status: "todo", "backlog" for someday ideas, or "doing" for ones underway.
+- subtasks: short steps for a bigger task, up to 20.
+- goals: outcomes that take a while, with a target date when there is one and milestones along the way.
+- Keep notes short. Leave out passwords, PINs, door or alarm codes, and account, card, or ID numbers.
 
 STUDY PLAN (format "hub-education/v1")
 

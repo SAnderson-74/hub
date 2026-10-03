@@ -282,7 +282,7 @@ function goalAccountNames(tx: Queryable, goalId: number): string[] {
   return ids.map((id) => found.get(id)?.name ?? "");
 }
 
-export function createGoal(db: Db, input: GoalCreate, actor: string): GoalDetailJson {
+export function createGoal(db: Queryable, input: GoalCreate, actor: string): GoalDetailJson {
   return db.transaction((tx) => {
     const row = tx
       .insert(goals)
@@ -435,7 +435,7 @@ function requireMilestone(db: Queryable, goalId: number, milestoneId: number): M
 }
 
 export function createMilestone(
-  db: Db,
+  db: Queryable,
   goalId: number,
   input: MilestoneCreate,
   actor: string,
