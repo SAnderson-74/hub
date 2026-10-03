@@ -31,6 +31,7 @@ import {
   useUnlinkTransfer,
   useUpdateTransaction,
 } from "../queries";
+import { newPart, type PartDraft, partsOf, SplitEditor, splitProblem } from "./SplitEditor";
 
 /** "new" adds a transaction; a transaction edits it; null is closed. */
 export type TransactionTarget = "new" | Transaction | null;
@@ -156,6 +157,9 @@ function TransactionForm({
   const [suggested, setSuggested] = useState(false);
   // Likewise a card: a new transaction's card follows the account and payee until picked.
   const [cardTouched, setCardTouched] = useState(transaction !== null);
+  // The parts, while it's split into categories; null when it isn't.
+  const [parts, setParts] = useState<PartDraft[] | null>(() => partsOf(transaction));
+  const wasSplit = (transaction?.splits.length ?? 0) > 0;
   const create = useCreateTransaction();
   const createTransfer = useCreateTransfer();
   const update = useUpdateTransaction();
@@ -174,7 +178,13 @@ function TransactionForm({
   const accountMissing = draft.accountId === "";
   const toMissing =
     transferring && (draft.toAccountId === "" || draft.toAccountId === draft.accountId);
-  const blocked = amountInvalid || dateMissing || accountMissing || toMissing;
+  const splitting = parts !== null && !transferring && !(transaction?.transfer != null);
+  const blocked =
+    amountInvalid ||
+    dateMissing ||
+    accountMissing ||
+    toMissing ||
+    (splitting && parts !== null && splitProblem(parts, cents) !== null);
   const error =
     create.error ?? createTransfer.error ?? update.error ?? remove.error ?? unlink.error;
   // Archived accounts and categories stay selectable only where already used.
@@ -248,12 +258,25 @@ function TransactionForm({
       );
       return;
     }
+    const sign = draft.kind === "in" ? 1 : -1;
     const fields = {
       accountId: Number(draft.accountId),
       date: draft.date,
-      amountCents: draft.kind === "in" ? cents : -cents,
+      amountCents: sign * cents,
       payee: draft.payee.trim(),
-      categoryId: isTransferSide || !draft.categoryId ? null : Number(draft.categoryId),
+      // Split, the parts carry the categories; otherwise one category, and a split goes.
+      ...(splitting && parts
+        ? {
+            splits: parts.map((part) => ({
+              categoryId: Number(part.categoryId),
+              amountCents: sign * (parseDollars(part.amount) ?? 0),
+              memo: part.memo.trim(),
+            })),
+          }
+        : {
+            categoryId: isTransferSide || !draft.categoryId ? null : Number(draft.categoryId),
+            ...(wasSplit ? { splits: null } : {}),
+          }),
       memo: draft.memo,
       counterparty: isTransferSide ? null : draft.counterparty.trim() || null,
       ...(isTransferSide ? {} : { cardId: draft.cardId ? Number(draft.cardId) : null }),
@@ -267,6 +290,7 @@ function TransactionForm({
       {
         onSuccess: (saved) => {
           setDraft(toDraft(saved, null, today));
+          setParts(partsOf(saved));
           setMessage(isTransferSide ? "Transfer saved" : "Transaction saved");
         },
       },
@@ -523,46 +547,63 @@ function TransactionForm({
                     ))}
                   </select>
                 </div>
-                <div className="min-w-0">
-                  <label htmlFor={`${ids}-category`} className={labelClass}>
-                    Category
-                  </label>
-                  <select
-                    id={`${ids}-category`}
-                    value={draft.categoryId}
-                    onChange={(event) => {
-                      set("categoryId", event.target.value);
-                      setCategoryTouched(true);
-                      setSuggested(false);
-                    }}
-                    aria-describedby={suggested ? `${ids}-suggested` : undefined}
-                    className={inputClass}
-                  >
-                    <option value="">Uncategorized</option>
-                    {/* The kind's own categories first: spending for money out, income for in. */}
-                    {(draft.kind === "in" ? [...CATEGORY_KINDS].reverse() : CATEGORY_KINDS).map(
-                      (kind) => {
-                        const options = categoryChoices.filter(
-                          (category) => category.kind === kind,
-                        );
-                        return options.length === 0 ? null : (
-                          <optgroup key={kind} label={CATEGORY_KIND_LABELS[kind]}>
-                            {options.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        );
-                      },
-                    )}
-                  </select>
-                  {suggested ? (
-                    <p id={`${ids}-suggested`} className="mt-1.5 text-sm text-muted">
-                      Picked by a rule
-                    </p>
-                  ) : null}
-                </div>
+                {splitting ? null : (
+                  <div className="min-w-0">
+                    <label htmlFor={`${ids}-category`} className={labelClass}>
+                      Category
+                    </label>
+                    <select
+                      id={`${ids}-category`}
+                      value={draft.categoryId}
+                      onChange={(event) => {
+                        set("categoryId", event.target.value);
+                        setCategoryTouched(true);
+                        setSuggested(false);
+                      }}
+                      aria-describedby={suggested ? `${ids}-suggested` : undefined}
+                      className={inputClass}
+                    >
+                      <option value="">Uncategorized</option>
+                      {/* The kind's own categories first: spending for money out, income for in. */}
+                      {(draft.kind === "in" ? [...CATEGORY_KINDS].reverse() : CATEGORY_KINDS).map(
+                        (kind) => {
+                          const options = categoryChoices.filter(
+                            (category) => category.kind === kind,
+                          );
+                          return options.length === 0 ? null : (
+                            <optgroup key={kind} label={CATEGORY_KIND_LABELS[kind]}>
+                              {options.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        },
+                      )}
+                    </select>
+                    {suggested ? (
+                      <p id={`${ids}-suggested`} className="mt-1.5 text-sm text-muted">
+                        Picked by a rule
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`${ghostButton} -ml-4 mt-1`}
+                      onClick={() => {
+                        // The whole amount starts in the current category; the rest is split off it.
+                        setParts([
+                          newPart(draft.categoryId, cents === null ? "" : centsToInput(cents)),
+                          newPart(),
+                        ]);
+                        setCategoryTouched(true);
+                        setSuggested(false);
+                      }}
+                    >
+                      Split into categories
+                    </button>
+                  </div>
+                )}
                 {cardChoices.length > 0 ? (
                   <div className="min-w-0">
                     <label htmlFor={`${ids}-card`} className={labelClass}>
@@ -588,6 +629,24 @@ function TransactionForm({
                 ) : null}
               </div>
             )}
+            {splitting && parts ? (
+              <SplitEditor
+                parts={parts}
+                onChange={setParts}
+                categories={categories}
+                kind={draft.kind === "in" ? "in" : "out"}
+                totalCents={cents}
+                tried={tried}
+                onUnsplit={() => {
+                  // Back to one category: the largest part's, if any was picked.
+                  const largest = [...parts].sort(
+                    (a, b) => (parseDollars(b.amount) ?? 0) - (parseDollars(a.amount) ?? 0),
+                  )[0];
+                  if (largest?.categoryId) set("categoryId", largest.categoryId);
+                  setParts(null);
+                }}
+              />
+            ) : null}
           </>
         )}
 

@@ -155,6 +155,16 @@ export const bookQuerySchema = z.object({ bookId: z.coerce.number().int().positi
 
 // Transactions
 
+/** One part of a split transaction. Parts go the same way as the transaction and add up to it. */
+export const splitSchema = z
+  .object({
+    categoryId: id,
+    amountCents: signedCents.refine((value) => value !== 0, "Give each part an amount."),
+    memo: z.string().trim().max(200, "Keep part notes under 200 characters.").default(""),
+  })
+  .strict();
+export type SplitInput = z.input<typeof splitSchema>;
+
 const transactionFields = {
   accountId: id,
   date,
@@ -173,6 +183,15 @@ const transactionFields = {
     .nullable(),
   /** One of the account's cards, or null for none. Left out of a new one, it's guessed. */
   cardId: id.nullable(),
+  /**
+   * Its parts, when one charge was for several categories; null takes the split away.
+   * The transaction's category becomes its largest part's.
+   */
+  splits: z
+    .array(splitSchema)
+    .min(2, "Split into at least two parts, or don't split.")
+    .max(30, "Keep it to 30 parts.")
+    .nullable(),
 };
 
 export const transactionCreateSchema = z

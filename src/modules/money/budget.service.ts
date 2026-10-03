@@ -8,8 +8,15 @@ import {
   monthBounds,
   shiftMonth,
 } from "../../shared/budget";
+import { lineAmountCents, lineCategoryId, splitJoin } from "./lines";
 import { requireBook, requireCategory } from "./money.service";
-import { moneyAccounts, moneyBudgets, moneyCategories, moneyTransactions } from "./schema";
+import {
+  moneyAccounts,
+  moneyBudgets,
+  moneyCategories,
+  moneyTransactionSplits,
+  moneyTransactions,
+} from "./schema";
 
 const HISTORY_MONTHS = 6;
 
@@ -71,14 +78,16 @@ export function budgetMonth(db: Queryable, bookId: number, month: string): Budge
   const from = monthBounds(months[0] ?? month).from;
   const to = monthBounds(month).to;
   const monthExpr = sql<string>`substr(${moneyTransactions.date}, 1, 7)`;
+  // Split transactions count in each part's category.
   const sums = db
     .select({
-      categoryId: moneyTransactions.categoryId,
+      categoryId: lineCategoryId,
       month: monthExpr,
-      total: sql<number>`sum(${moneyTransactions.amountCents})`,
+      total: sql<number>`sum(${lineAmountCents})`,
     })
     .from(moneyTransactions)
     .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
+    .leftJoin(moneyTransactionSplits, splitJoin)
     .where(
       and(
         eq(moneyAccounts.bookId, bookId),
@@ -86,7 +95,7 @@ export function budgetMonth(db: Queryable, bookId: number, month: string): Budge
         lte(moneyTransactions.date, to),
       ),
     )
-    .groupBy(moneyTransactions.categoryId, monthExpr)
+    .groupBy(lineCategoryId, monthExpr)
     .all();
   const total = (categoryId: number, inMonth: string) =>
     sums.find((row) => row.categoryId === categoryId && row.month === inMonth)?.total ?? 0;

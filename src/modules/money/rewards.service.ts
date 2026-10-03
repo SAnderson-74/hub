@@ -19,6 +19,7 @@ import {
   type Spend,
   type ValuedProgram,
 } from "../../shared/rewards";
+import { lineAmountCents, lineCategoryId, splitJoin } from "./lines";
 import {
   moneyAccounts,
   moneyBooks,
@@ -28,6 +29,7 @@ import {
   moneyPointBalances,
   moneyPointRedemptions,
   moneyRewardRates,
+  moneyTransactionSplits,
   moneyTransactions,
 } from "./schema";
 
@@ -409,15 +411,17 @@ function cardSpends(db: Queryable, cardIds: number[], from: string, to: string):
     .select({
       cardId: moneyTransactions.cardId,
       date: moneyTransactions.date,
-      amountCents: moneyTransactions.amountCents,
-      categoryId: moneyTransactions.categoryId,
+      // A split purchase earns on each part at its category's rate.
+      amountCents: lineAmountCents,
+      categoryId: lineCategoryId,
       categoryName: moneyCategories.name,
       categoryKind: moneyCategories.kind,
       payee: moneyTransactions.payee,
       bankPayee: moneyTransactions.bankPayee,
     })
     .from(moneyTransactions)
-    .leftJoin(moneyCategories, eq(moneyCategories.id, moneyTransactions.categoryId))
+    .leftJoin(moneyTransactionSplits, splitJoin)
+    .leftJoin(moneyCategories, eq(moneyCategories.id, lineCategoryId))
     .where(
       and(
         inArray(moneyTransactions.cardId, cardIds),

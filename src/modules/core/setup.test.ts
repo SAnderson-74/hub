@@ -81,7 +81,8 @@ describe("example data", () => {
     seedDemo(t.db, "tester", "2030-03-01", new Date("2030-03-01T20:00:00Z"));
     const [book] = await body(await t.api.money.books.$get());
     const march = budgetMonth(t.db, book?.id ?? 0, "2030-03");
-    expect(march.totals).toMatchObject({ incomeCents: 420_000, spentBudgetedCents: 145_000 });
+    // Rent, and the groceries part of the split store run.
+    expect(march.totals).toMatchObject({ incomeCents: 420_000, spentBudgetedCents: 149_130 });
     expect(march.totals.budgetedCents).toBeGreaterThan(0);
     expect(march.history).toHaveLength(6);
     for (const month of march.history) expect(month.spentCents).toBeGreaterThan(0);

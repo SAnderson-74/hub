@@ -443,6 +443,15 @@ function transferLabel(transaction: Transaction): string {
   return transaction.payee === label ? "Transfer" : label;
 }
 
+/** "Split: Groceries, Shopping", or "Split: Groceries, Shopping, and 2 more". */
+function splitLabel(transaction: Transaction): string {
+  const names = [
+    ...new Set(transaction.splits.map((part) => part.category?.name ?? "Uncategorized")),
+  ];
+  const shown = names.slice(0, 2).join(", ");
+  return names.length > 2 ? `Split: ${shown}, and ${names.length - 2} more` : `Split: ${shown}`;
+}
+
 /** "Resale: Desk lamp", or "Resale: 3 items" for a bulk lot. */
 function resaleLabel(transaction: Transaction): string {
   const [first, ...rest] = transaction.resaleItems;
@@ -724,7 +733,9 @@ function TransactionsPanel({
                             : "",
                           transaction.transfer
                             ? transferLabel(transaction)
-                            : (transaction.category?.name ?? "Uncategorized"),
+                            : transaction.splits.length > 0
+                              ? splitLabel(transaction)
+                              : (transaction.category?.name ?? "Uncategorized"),
                           transaction.card
                             ? transaction.card.name
                             : accountFilter === undefined

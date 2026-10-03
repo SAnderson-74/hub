@@ -125,6 +125,30 @@ export const moneyTransactions = sqliteTable(
   ],
 );
 
+/**
+ * A part of a split transaction: one charge in several categories, like a store run
+ * that was half groceries and half household things. The parts add up to the
+ * transaction, which keeps its largest part's category, so anything that reads only
+ * the transaction (or an older build) still sees a sensible one. No foreign key, so a
+ * rollback to a build without splits can still delete transactions.
+ */
+export const moneyTransactionSplits = sqliteTable(
+  "money_transaction_splits",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    categoryId: integer("category_id").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    memo: text("memo").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_transaction_splits_transaction_idx").on(t.transactionId),
+    index("money_transaction_splits_category_idx").on(t.categoryId),
+  ],
+);
+
 /** One file imported into an account. Undoing it removes the transactions it added. */
 export const moneyImports = sqliteTable(
   "money_imports",
