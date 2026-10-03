@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
+  CASH_FLOW_GROUPS,
   CASH_FLOW_PERIODS,
+  type CashFlowGroup,
   type CashFlowPeriod,
   flowColumns,
   flowSummary,
@@ -17,10 +19,19 @@ const PERIOD_LABELS: Record<CashFlowPeriod, string> = {
   12: "12 months",
 };
 
-/** Where the book's money came from and went, for the month shown or the months to it. */
+const GROUP_LABELS: Record<CashFlowGroup, string> = {
+  category: "Category",
+  method: "Payment method",
+};
+
+/**
+ * Where the book's money came from and went, for the month shown or the months to
+ * it. Money out is by category, or by the card or account that paid.
+ */
 export function CashFlowPanel({ book, month }: { book: Book; month: string }) {
   const [months, setMonths] = useState<CashFlowPeriod>(1);
-  const flow = useCashFlow(book.id, month, months);
+  const [by, setBy] = useState<CashFlowGroup>("category");
+  const flow = useCashFlow(book.id, month, months, by);
   const columns = flow.data ? flowColumns(flow.data) : null;
 
   return (
@@ -29,24 +40,44 @@ export function CashFlowPanel({ book, month }: { book: Book; month: string }) {
       description="Where money came from and where it went. Transfers between accounts aren't counted."
       className="lg:col-span-12"
     >
-      <fieldset className="mb-4 flex w-fit rounded-full bg-base p-1 ring-1 ring-surface-0/60">
-        <legend className="sr-only">Period</legend>
-        {CASH_FLOW_PERIODS.map((value) => (
-          <label key={value} className="relative">
-            <input
-              type="radio"
-              name={`cash-flow-${book.id}`}
-              value={value}
-              checked={months === value}
-              onChange={() => setMonths(value)}
-              className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-            />
-            <span className="pointer-events-none flex h-10 items-center rounded-full px-3 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-              {PERIOD_LABELS[value]}
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <fieldset className="flex w-fit rounded-full bg-base p-1 ring-1 ring-surface-0/60">
+          <legend className="sr-only">Period</legend>
+          {CASH_FLOW_PERIODS.map((value) => (
+            <label key={value} className="relative">
+              <input
+                type="radio"
+                name={`cash-flow-${book.id}`}
+                value={value}
+                checked={months === value}
+                onChange={() => setMonths(value)}
+                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
+              />
+              <span className="pointer-events-none flex h-10 items-center rounded-full px-3 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                {PERIOD_LABELS[value]}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset className="flex w-fit rounded-full bg-base p-1 ring-1 ring-surface-0/60">
+          <legend className="sr-only">Money out by</legend>
+          {CASH_FLOW_GROUPS.map((value) => (
+            <label key={value} className="relative">
+              <input
+                type="radio"
+                name={`cash-flow-by-${book.id}`}
+                value={value}
+                checked={by === value}
+                onChange={() => setBy(value)}
+                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
+              />
+              <span className="pointer-events-none flex h-10 items-center rounded-full px-3 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                {GROUP_LABELS[value]}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      </div>
       {flow.isPending ? (
         <LoadingRows rows={4} />
       ) : flow.isError ? (

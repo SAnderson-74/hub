@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 import { type CashFlowJson, flowColumns, flowSummary, periodLabel } from "./cashFlow";
 
 const item = (name: string, cents: number) => ({ key: name, name, cents });
-const flow = (incoming: CashFlowJson["incoming"], outgoing: CashFlowJson["outgoing"]) => ({
-  from: "2030-03-01",
-  to: "2030-03-31",
-  incoming,
-  outgoing,
-});
+const flow = (
+  incoming: CashFlowJson["incoming"],
+  outgoing: CashFlowJson["outgoing"],
+  by: CashFlowJson["by"] = "category",
+) => ({ from: "2030-03-01", to: "2030-03-31", by, incoming, outgoing });
 
 describe("flowColumns", () => {
   it("sends what's left over to its own node", () => {
@@ -37,6 +36,8 @@ describe("flowColumns", () => {
       ["B", 4_000],
       ["Other spending", 6_000],
     ]);
+    const methods = flowColumns(flow([item("Paycheck", 15_000)], out, "method"), 5, 3);
+    expect(methods.sinks.at(-1)?.name).toBe("Other cards and accounts");
   });
 });
 
@@ -48,6 +49,12 @@ describe("flowSummary", () => {
     );
     const short = flowColumns(flow([item("Paycheck", 100_000)], [item("Rent", 150_000)]));
     expect(flowSummary(short, "March 2030")).toContain("$500 more than came in");
+    const methods = flowColumns(
+      flow([item("Paycheck", 300_000)], [item("Rewards card", 150_000)], "method"),
+    );
+    expect(flowSummary(methods, "March 2030")).toContain(
+      "The most went through Rewards card, $1,500.",
+    );
     expect(flowSummary(flowColumns(flow([], [])), "March 2030")).toBe(
       "No money came in or went out in March 2030.",
     );
