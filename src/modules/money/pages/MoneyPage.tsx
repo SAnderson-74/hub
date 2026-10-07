@@ -7,6 +7,7 @@ import {
   PiggyBank,
   Plus,
   ReceiptText,
+  SlidersHorizontal,
   Sparkles,
   Tags,
   TrendingUp,
@@ -18,6 +19,7 @@ import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
+  ghostButton,
   inputClass,
   labelClass,
   primaryButton,
@@ -27,6 +29,14 @@ import { useModules } from "../../../client/lib/queries";
 import { useNow } from "../../../client/lib/useNow";
 import { ACCOUNT_KIND_LABELS, CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
 import { cardLabel } from "../../../shared/cards";
+import {
+  filterCount,
+  type ListFilters,
+  noFilters,
+  SORT_LABELS,
+  SORTS,
+  type Sort,
+} from "../../../shared/listFilter";
 import { formatCents } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
 import { FUND_LABELS } from "../../../shared/tithing";
@@ -36,6 +46,7 @@ import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
 import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
+import { FilterSheet } from "../components/FilterSheet";
 import { ImportSheet } from "../components/ImportSheet";
 import { NetWorthView } from "../components/NetWorthView";
 import { ReceiptsSheet } from "../components/ReceiptsSheet";
@@ -551,8 +562,19 @@ function TransactionsPanel({
   const [cardFilter, setCardFilter] = useState<TransactionFilters["cardId"]>(undefined);
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
+  const [sort, setSort] = useState<Sort>("newest");
+  const [listFilters, setListFilters] = useState<ListFilters>(noFilters);
+  const [filtering, setFiltering] = useState(false);
+  const extra = filterCount(listFilters);
   // "Show more" grows the page; a new filter starts from the first page again.
-  const filterKey = JSON.stringify([accountFilter, cardFilter, categoryFilter, q]);
+  const filterKey = JSON.stringify([
+    accountFilter,
+    cardFilter,
+    categoryFilter,
+    q,
+    sort,
+    listFilters,
+  ]);
   const [paging, setPaging] = useState({ key: filterKey, limit: PAGE_SIZE });
   const limit = paging.key === filterKey ? paging.limit : PAGE_SIZE;
   const filters: TransactionFilters = {
@@ -560,6 +582,12 @@ function TransactionsPanel({
     cardId: cardFilter,
     categoryId: categoryFilter,
     q: q || undefined,
+    categories: listFilters.categories,
+    from: listFilters.from || undefined,
+    to: listFilters.to || undefined,
+    minCents: listFilters.minDollars === null ? undefined : listFilters.minDollars * 100,
+    maxCents: listFilters.maxDollars === null ? undefined : listFilters.maxDollars * 100,
+    sort,
     limit,
   };
   const transactions = useTransactions(book.id, filters);
@@ -568,7 +596,8 @@ function TransactionsPanel({
     accountFilter !== undefined ||
     cardFilter !== undefined ||
     categoryFilter !== undefined ||
-    q !== "";
+    q !== "" ||
+    extra > 0;
 
   const page = transactions.data;
   const count = (n: number) => `${n} ${n === 1 ? "transaction" : "transactions"}`;
@@ -633,9 +662,11 @@ function TransactionsPanel({
           </label>
           <select
             id={`${ids}-category`}
-            value={categoryFilter ?? ""}
+            value={listFilters.categories.length > 0 ? "many" : (categoryFilter ?? "")}
             onChange={(event) => {
               const value = event.target.value;
+              // Picking one category replaces any several picked in the filters.
+              setListFilters((current) => ({ ...current, categories: [] }));
               setCategoryFilter(
                 value === ""
                   ? undefined
@@ -647,6 +678,9 @@ function TransactionsPanel({
             className={inputClass}
           >
             <option value="">All categories</option>
+            {listFilters.categories.length > 0 ? (
+              <option value="many">{listFilters.categories.length} categories</option>
+            ) : null}
             <option value="none">Uncategorized</option>
             <option value="transfer">Transfers</option>
             {CATEGORY_KINDS.map((kind) => {
@@ -678,6 +712,58 @@ function TransactionsPanel({
           />
         </div>
       </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="min-w-0">
+          <label htmlFor={`${ids}-sort`} className={labelClass}>
+            Sort by
+          </label>
+          <select
+            id={`${ids}-sort`}
+            value={sort}
+            onChange={(event) => setSort(event.target.value as Sort)}
+            className={inputClass}
+          >
+            {SORTS.map((value) => (
+              <option key={value} value={value}>
+                {SORT_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end gap-2 sm:col-span-2">
+          <button type="button" className={secondaryButton} onClick={() => setFiltering(true)}>
+            <SlidersHorizontal aria-hidden="true" className="size-4" />
+            {extra > 0 ? `More filters (${extra})` : "More filters"}
+          </button>
+          {filtered ? (
+            <button
+              type="button"
+              className={ghostButton}
+              onClick={() => {
+                onAccountFilter(undefined);
+                setCardFilter(undefined);
+                setCategoryFilter(undefined);
+                setSearch("");
+                setSort("newest");
+                setListFilters(noFilters);
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <FilterSheet
+        open={filtering}
+        onClose={() => setFiltering(false)}
+        filters={listFilters}
+        onChange={setListFilters}
+        categories={categories}
+        largestCents={page?.largestCents ?? 0}
+        today={today}
+        matching={page?.total ?? null}
+      />
 
       {possibleTransfers > 0 ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
@@ -779,6 +865,7 @@ function TransactionsPanel({
                             status={transaction.tithing.status}
                             owedCents={transaction.tithing.owedCents}
                             paidCents={transaction.tithing.paidCents}
+                            settled={transaction.tithing.settled}
                           />
                         </span>
                       ) : null}

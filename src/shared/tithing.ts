@@ -86,6 +86,25 @@ export const paymentSetSchema = z
   .strict();
 export type PaymentSet = z.input<typeof paymentSetSchema>;
 
+/**
+ * Marks income as paid (or not) without a payment in Hub, for tithing paid before Hub
+ * tracked it: income picked by id, or all unpaid income through a date.
+ */
+export const settleSchema = z
+  .object({
+    incomeIds: z.array(id).min(1, "Pick the income first.").max(5_000).optional(),
+    through: date.optional(),
+    settled: z.boolean().default(true),
+  })
+  .strict()
+  .refine((value) => (value.incomeIds === undefined) !== (value.through === undefined), {
+    message: "Pick income, or a date to mark paid through.",
+  })
+  .refine((value) => value.through === undefined || value.settled, {
+    message: "Undo marked-paid income by picking it.",
+  });
+export type SettleInput = z.input<typeof settleSchema>;
+
 export const overviewQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
 });

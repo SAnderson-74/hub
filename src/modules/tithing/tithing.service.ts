@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest } from "../../server/errors";
 import {
@@ -38,6 +38,8 @@ export type IncomeRowJson = {
   customBase: boolean;
   owedCents: number;
   paidCents: number;
+  /** Marked as paid without a payment in Hub. */
+  settled: boolean;
   /** Null when tithing doesn't apply. */
   status: TithingStatus | null;
 };
@@ -86,6 +88,8 @@ export type Overview = {
     /** Tithing owed on the year's income, and what tithing payments that year came to. */
     owedYearCents: number;
     paidYearCents: number;
+    /** Tithing on that year's income that was marked paid without a payment. */
+    settledYearCents: number;
     /** Other donations given that year. */
     fastOfferingYearCents: number;
     otherYearCents: number;
@@ -98,7 +102,7 @@ export type Overview = {
     /** Every tithing owed minus every tithing payment, ever. Negative when ahead. */
     balanceCents: number;
   };
-  /** Income of the year, newest first, exempt ones included. */
+  /** All income of every year, newest first, exempt ones included. */
   income: IncomeRowJson[];
   /** Income of every year with tithing left to pay, oldest first. */
   open: IncomeRowJson[];
@@ -168,8 +172,16 @@ export function setIncome(db: Queryable, id: number, input: IncomeSet): void {
     const base = input.applies ? (input.baseCents ?? null) : null;
     const defaultBase = incomeFacts(tx, [row]).get(id)?.defaultBaseCents ?? row.amountCents;
     // Without a row the default holds, so a choice matching it needs no row.
+    const settled =
+      tx
+        .select({ settled: tithingIncome.settled })
+        .from(tithingIncome)
+        .where(eq(tithingIncome.transactionId, id))
+        .get()?.settled === true;
     const dropChoice =
-      input.applies === defaultApplies(tx, row) && (base === null || base === defaultBase);
+      !settled &&
+      input.applies === defaultApplies(tx, row) &&
+      (base === null || base === defaultBase);
     if (dropChoice) {
       tx.delete(tithingIncome).where(eq(tithingIncome.transactionId, id)).run();
     } else {
@@ -184,6 +196,68 @@ export function setIncome(db: Queryable, id: number, input: IncomeSet): void {
     if (!input.applies) {
       tx.delete(tithingLinks).where(eq(tithingLinks.incomeTransactionId, id)).run();
     }
+  });
+}
+
+export type SettleResult = {
+  /** Income marked paid, or no longer marked. */
+  changed: number;
+  /** Picked income left alone: not tithed on, or already in the state asked for. */
+  skipped: number;
+};
+
+/**
+ * Marks income as paid without a payment, for tithing paid before Hub tracked it, or
+ * takes that mark off. Marking only touches income with tithing left to pay, and
+ * un-marking only income that was marked. Income can be picked by id, or all unpaid
+ * income dated on or before a day.
+ */
+export function settleIncome(
+  db: Queryable,
+  input: { incomeIds?: number[] | undefined; through?: string | undefined; settled?: boolean },
+): SettleResult {
+  const settled = input.settled ?? true;
+  return db.transaction((tx) => {
+    const rows =
+      input.incomeIds !== undefined
+        ? inBatches(input.incomeIds, (batch) =>
+            tx.select().from(moneyTransactions).where(inArray(moneyTransactions.id, batch)).all(),
+          )
+        : tx
+            .select()
+            .from(moneyTransactions)
+            .where(lte(moneyTransactions.date, input.through ?? ""))
+            .all();
+    const facts = incomeFacts(tx, rows);
+    const targets = rows.filter((row) => {
+      const fact = facts.get(row.id);
+      if (!fact?.applies) return false;
+      return settled ? fact.status !== "paid" : fact.settled;
+    });
+    for (const row of targets) {
+      tx.insert(tithingIncome)
+        .values({ transactionId: row.id, applies: true, baseCents: null, settled })
+        .onConflictDoUpdate({
+          target: tithingIncome.transactionId,
+          set: { settled, updatedAt: new Date() },
+        })
+        .run();
+    }
+    if (!settled) {
+      // A row that only held "marked paid" goes back to the default.
+      for (const row of targets) {
+        const choice = tx
+          .select()
+          .from(tithingIncome)
+          .where(eq(tithingIncome.transactionId, row.id))
+          .get();
+        if (choice?.applies && choice.baseCents === null && defaultApplies(tx, row)) {
+          tx.delete(tithingIncome).where(eq(tithingIncome.transactionId, row.id)).run();
+        }
+      }
+    }
+    const asked = input.incomeIds !== undefined ? new Set(input.incomeIds).size : targets.length;
+    return { changed: targets.length, skipped: asked - targets.length };
   });
 }
 
@@ -230,6 +304,11 @@ function replaceLinks(
     }
     if (!fact.applies) {
       throw badRequest("Tithing doesn't apply to one of those. Turn it on there, or remove it.");
+    }
+    if (fact.settled) {
+      throw badRequest(
+        "One of those is marked as paid. Undo that on the Tithing page to match a payment to it.",
+      );
     }
     if (fact.paidCents + link.amountCents > fact.owedCents) {
       throw badRequest(
@@ -447,10 +526,12 @@ export function overview(
       customBase: fact.customBase,
       owedCents: fact.owedCents,
       paidCents: fact.paidCents,
+      settled: fact.settled,
       status: fact.status,
     });
   }
   const incomeById = new Map(incomeRows.map((row) => [row.id, row]));
+  const settledCents = (row: IncomeRowJson) => facts.get(row.id)?.settledCents ?? 0;
   const paymentRows: PaymentRowJson[] = [];
   for (const row of transactions) {
     const fund = payments.get(row.id);
@@ -500,24 +581,30 @@ export function overview(
   const sumFund = (fund: Fund) =>
     yearPayments.filter((row) => row.fund === fund).reduce((sum, row) => sum + row.amountCents, 0);
   const allOwed = incomeRows.reduce((sum, row) => sum + row.owedCents, 0);
-  const allPaid = tithingPaid.reduce((sum, row) => sum + row.amountCents, 0);
+  const allPaid =
+    tithingPaid.reduce((sum, row) => sum + row.amountCents, 0) +
+    incomeRows.reduce((sum, row) => sum + settledCents(row), 0);
 
   // Month by month: owed and paid in it, and what was still owed at its end.
   const months: MonthRow[] = [];
   let owedBefore = incomeRows
     .filter((row) => row.date < `${year}-01`)
     .reduce((s, r) => s + r.owedCents, 0);
-  let paidBefore = tithingPaid
-    .filter((row) => row.date < `${year}-01`)
-    .reduce((s, r) => s + r.amountCents, 0);
+  // Income marked as paid counts as paid in the month it came in.
+  const settledIn = (matches: (date: string) => boolean) =>
+    incomeRows.filter((row) => matches(row.date)).reduce((s, r) => s + settledCents(r), 0);
+  let paidBefore =
+    tithingPaid.filter((row) => row.date < `${year}-01`).reduce((s, r) => s + r.amountCents, 0) +
+    settledIn((date) => date < `${year}-01`);
   for (let month = 1; month <= 12; month += 1) {
     const key = `${year}-${String(month).padStart(2, "0")}`;
     const owedCents = incomeRows
       .filter((row) => monthOf(row.date) === key)
       .reduce((s, r) => s + r.owedCents, 0);
-    const paidCents = tithingPaid
-      .filter((row) => monthOf(row.date) === key)
-      .reduce((s, r) => s + r.amountCents, 0);
+    const paidCents =
+      tithingPaid
+        .filter((row) => monthOf(row.date) === key)
+        .reduce((s, r) => s + r.amountCents, 0) + settledIn((date) => monthOf(date) === key);
     owedBefore += owedCents;
     paidBefore += paidCents;
     months.push({ month: key, owedCents, paidCents, balanceCents: owedBefore - paidBefore });
@@ -544,6 +631,7 @@ export function overview(
       unpaidCount: open.length,
       owedYearCents: yearIncome.reduce((sum, row) => sum + row.owedCents, 0),
       paidYearCents: sumFund("tithing"),
+      settledYearCents: yearIncome.reduce((sum, row) => sum + settledCents(row), 0),
       fastOfferingYearCents: sumFund("fast_offering"),
       otherYearCents: sumFund("other"),
       unlinkedCents: tithingPaid.reduce((sum, row) => sum + row.amountCents - row.linkedCents, 0),
@@ -558,7 +646,7 @@ export function overview(
       ),
       balanceCents: allOwed - allPaid,
     },
-    income: yearIncome.reverse(),
+    income: [...incomeRows].reverse(),
     open,
     payments: yearPayments.reverse(),
     unlinkedPayments: tithingPaid.filter((row) => row.amountCents > row.linkedCents).reverse(),

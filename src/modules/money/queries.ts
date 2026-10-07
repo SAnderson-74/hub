@@ -18,6 +18,7 @@ import type { BudgetSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
+import type { Sort } from "../../shared/listFilter";
 import type { ReceiptImportInput } from "../../shared/receipts";
 import type { PointBalanceSave, RedemptionSave, RewardsSave } from "../../shared/rewards";
 
@@ -46,6 +47,14 @@ export type TransactionFilters = {
   /** A card id, or "none" for transactions without a card. */
   cardId?: number | "none";
   q?: string;
+  /** Several categories at once: ids, "none", or "transfer". Used instead of categoryId. */
+  categories?: string[];
+  from?: string;
+  to?: string;
+  /** Limits on an amount's size in cents, money in or out. */
+  minCents?: number;
+  maxCents?: number;
+  sort?: Sort;
   limit: number;
 };
 
@@ -58,6 +67,14 @@ async function fetchTransactions(bookId: number, filters: TransactionFilters) {
       ...(filters.categoryId === undefined ? {} : { categoryId: String(filters.categoryId) }),
       ...(filters.cardId === undefined ? {} : { cardId: String(filters.cardId) }),
       ...(filters.q ? { q: filters.q } : {}),
+      ...(filters.categories && filters.categories.length > 0
+        ? { categories: filters.categories.join(",") }
+        : {}),
+      ...(filters.from ? { from: filters.from } : {}),
+      ...(filters.to ? { to: filters.to } : {}),
+      ...(filters.minCents === undefined ? {} : { minCents: String(filters.minCents) }),
+      ...(filters.maxCents === undefined ? {} : { maxCents: String(filters.maxCents) }),
+      ...(filters.sort && filters.sort !== "newest" ? { sort: filters.sort } : {}),
     },
   });
   if (!res.ok) throw await toApiError(res);

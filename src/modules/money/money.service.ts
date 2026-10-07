@@ -11,6 +11,7 @@ import {
   isNull,
   lte,
   ne,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -146,6 +147,8 @@ export type TransactionPage = {
   outCents: number;
   /** Matching transfers, left out of the in and out totals. */
   transferCount: number;
+  /** The largest amount in the whole book, whatever the filters, for an amount slider. */
+  largestCents: number;
 };
 
 /** Names are unique ignoring case. */
@@ -761,23 +764,31 @@ export function oneTransaction(db: Queryable, row: TransactionRow): TransactionJ
 /** Escapes LIKE wildcards so a search for "50%" finds "50%", not everything. */
 export const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 
-/** A book's transactions, newest first, with totals across every page. */
+const ORDERS: Record<TransactionQuery["sort"], (size: SQL) => SQL[]> = {
+  newest: () => [desc(moneyTransactions.date), desc(moneyTransactions.id)],
+  oldest: () => [asc(moneyTransactions.date), asc(moneyTransactions.id)],
+  largest: (size) => [sql`${size} desc`, desc(moneyTransactions.date), desc(moneyTransactions.id)],
+  smallest: (size) => [sql`${size} asc`, desc(moneyTransactions.date), desc(moneyTransactions.id)],
+};
+
+/** A book's transactions, newest first unless sorted another way, with totals across every page. */
 export function listTransactions(db: Queryable, query: TransactionQuery): TransactionPage {
   requireBook(db, query.bookId);
   const conditions: SQL[] = [eq(moneyAccounts.bookId, query.bookId)];
   if (query.accountId !== undefined) {
     conditions.push(eq(moneyTransactions.accountId, query.accountId));
   }
-  if (query.categoryId === "none") {
-    conditions.push(isNull(moneyTransactions.categoryId), isNull(moneyTransactions.transferPeerId));
-  } else if (query.categoryId === "transfer") {
-    conditions.push(isNotNull(moneyTransactions.transferPeerId));
-  } else if (query.categoryId !== undefined) {
-    // A split transaction is in each of its parts' categories, and not in its own.
-    conditions.push(
-      sql`(case when exists (select 1 from ${moneyTransactionSplits} where ${moneyTransactionSplits.transactionId} = ${moneyTransactions.id}) then exists (select 1 from ${moneyTransactionSplits} where ${moneyTransactionSplits.transactionId} = ${moneyTransactions.id} and ${moneyTransactionSplits.categoryId} = ${query.categoryId}) else ${moneyTransactions.categoryId} = ${query.categoryId} end)`,
-    );
-  }
+  // A split transaction is in each of its parts' categories, and not in its own.
+  const inCategory = (categoryId: number) =>
+    sql`(case when exists (select 1 from ${moneyTransactionSplits} where ${moneyTransactionSplits.transactionId} = ${moneyTransactions.id}) then exists (select 1 from ${moneyTransactionSplits} where ${moneyTransactionSplits.transactionId} = ${moneyTransactions.id} and ${moneyTransactionSplits.categoryId} = ${categoryId}) else ${moneyTransactions.categoryId} = ${categoryId} end)`;
+  const inChoice = (choice: number | "none" | "transfer"): SQL =>
+    choice === "none"
+      ? (and(isNull(moneyTransactions.categoryId), isNull(moneyTransactions.transferPeerId)) as SQL)
+      : choice === "transfer"
+        ? (isNotNull(moneyTransactions.transferPeerId) as SQL)
+        : inCategory(choice);
+  const picked = query.categories ?? (query.categoryId === undefined ? [] : [query.categoryId]);
+  if (picked.length > 0) conditions.push(or(...picked.map(inChoice)) as SQL);
   if (query.cardId === "none") {
     conditions.push(isNull(moneyTransactions.cardId));
   } else if (query.cardId !== undefined) {
@@ -785,6 +796,9 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
   }
   if (query.from) conditions.push(gte(moneyTransactions.date, query.from));
   if (query.to) conditions.push(lte(moneyTransactions.date, query.to));
+  const size = sql`abs(${moneyTransactions.amountCents})`;
+  if (query.minCents !== undefined) conditions.push(sql`${size} >= ${query.minCents}`);
+  if (query.maxCents !== undefined) conditions.push(sql`${size} <= ${query.maxCents}`);
   if (query.q) {
     const pattern = likePattern(query.q);
     conditions.push(
@@ -809,7 +823,7 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
     .from(moneyTransactions)
     .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
     .where(where)
-    .orderBy(desc(moneyTransactions.date), desc(moneyTransactions.id))
+    .orderBy(...ORDERS[query.sort](size))
     .limit(query.limit)
     .offset(query.offset)
     .all()
@@ -821,6 +835,13 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
     inCents: totals?.inCents ?? 0,
     outCents: totals?.outCents ?? 0,
     transferCount: totals?.transfers ?? 0,
+    largestCents:
+      db
+        .select({ top: sql<number>`coalesce(max(${size}), 0)` })
+        .from(moneyTransactions)
+        .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
+        .where(eq(moneyAccounts.bookId, query.bookId))
+        .get()?.top ?? 0,
   };
 }
 

@@ -171,3 +171,189 @@ test("money in shows tithing on the Money page, and the choice saves with the tr
 
   expect(errors).toEqual([]);
 });
+
+test("tithing lists search, sort, and filter, and old income can be marked paid in bulk", async ({
+  page,
+}, testInfo) => {
+  const iphone = testInfo.project.name === "iphone";
+  const year = iphone ? 2013 : 2012;
+  const bookName = `Tithing filters ${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const post = async (url: string, data: object) => {
+    const res = await page.request.post(url, { data });
+    if (!res.ok()) throw new Error(`POST ${url} failed: ${res.status()} ${await res.text()}`);
+    return (await res.json()) as { id: number };
+  };
+  const book = await post("/api/money/books", {
+    name: bookName,
+    kind: "personal",
+    starterCategories: true,
+  });
+  const categories = (await (
+    await page.request.get(`/api/money/categories?bookId=${book.id}`)
+  ).json()) as Array<{ id: number; name: string }>;
+  const category = (name: string) => categories.find((entry) => entry.name === name)?.id;
+  const account = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: "Checking",
+    kind: "checking",
+  });
+  const income = (date: string, amountCents: number, payee: string, categoryName: string) =>
+    post("/api/money/transactions", {
+      accountId: account.id,
+      date: `${year}-${date}`,
+      amountCents,
+      payee: `${payee} ${year}`,
+      categoryId: category(categoryName),
+    });
+  await income("02-01", 100_000, "Filter Alpha", "Paycheck");
+  await income("03-01", 30_000, "Filter Beta", "Interest");
+  await income("06-01", 50_000, "Filter Gamma", "Paycheck");
+
+  // Both device runs share one database: clear earlier years so the catch-up below only
+  // finds this run's income.
+  await post("/api/tithing/settle", { through: `${year - 1}-12-31` });
+
+  await page.goto("/tithing");
+  await expect(page.getByRole("heading", { level: 1, name: "Tithing" })).toBeVisible();
+  await page.getByLabel("Year").selectOption(String(year));
+  const list = page.getByRole("region", { name: `Income in ${year}` });
+  const open = page.getByRole("region", { name: "Needs tithing paid" });
+  const row = (name: string) => list.getByRole("button", { name: new RegExp(`${name} ${year}`) });
+
+  // Search: every word, in both lists.
+  await page.getByLabel("Search").fill("alpha");
+  await expect(row("Filter Alpha")).toBeVisible();
+  await expect(row("Filter Beta")).toBeHidden();
+  await expect(open.getByRole("button", { name: /Filter Beta/ })).toBeHidden();
+  await page.getByLabel("Search").fill("");
+
+  // Sort: smallest first, then largest.
+  await page.getByLabel("Sort by").selectOption({ label: "Smallest amount first" });
+  await expect(list.getByRole("button", { name: /Filter/ }).first()).toContainText("Filter Beta");
+  await page.getByLabel("Sort by").selectOption({ label: "Largest amount first" });
+  await expect(list.getByRole("button", { name: /Filter/ }).first()).toContainText("Filter Alpha");
+
+  // Sheet: a range of amounts, then a source.
+  await page.getByRole("button", { name: /^More filters/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Filter income" });
+  await sheet.getByLabel("At least", { exact: true }).fill("400");
+  await expect(row("Filter Beta")).toBeHidden();
+  await expect(row("Filter Alpha")).toBeVisible();
+  await sheet.getByLabel("At least", { exact: true }).fill("");
+  await sheet.getByLabel("Interest").check();
+  await expect(row("Filter Alpha")).toBeHidden();
+  await expect(row("Filter Beta")).toBeVisible();
+  await sheet.getByRole("button", { name: "Clear filters" }).click();
+  await expect(row("Filter Alpha")).toBeVisible();
+  await sheet.getByRole("button", { name: /^Show \d+ incomes?$/ }).click();
+  await expect(sheet).toBeHidden();
+
+  // Catch up through a date: Alpha and Beta were paid before Hub, Gamma wasn't.
+  await open.getByText("Already paid these before using Hub?").click();
+  await open.getByLabel("Paid through").fill(`${year}-04-01`);
+  await open.getByRole("button", { name: "Mark 2 incomes paid ($130)" }).click();
+  await expect(open.getByRole("status")).toHaveText("Marked 2 incomes as paid.");
+  await expect(row("Filter Alpha")).toContainText("Paid, marked as paid");
+  await expect(row("Filter Beta")).toContainText("Paid, marked as paid");
+  await expect(row("Filter Gamma")).toContainText("Not paid, $50 owed");
+
+  // Undo it, then mark one picked income instead.
+  await open.getByRole("button", { name: "Undo" }).click();
+  await expect(row("Filter Alpha")).toContainText("Not paid, $100 owed");
+  await open.getByLabel(`Pick Filter Gamma ${year}`).check();
+  await open.getByRole("button", { name: "Mark picked as paid" }).click();
+  await expect(row("Filter Gamma")).toContainText("Paid, marked as paid");
+  await expect(row("Filter Alpha")).toContainText("Not paid, $100 owed");
+
+  // Marked-paid income opens with a way back.
+  await row("Filter Gamma").click();
+  const incomeSheet = page.getByRole("dialog", { name: "Tithing on income" });
+  await incomeSheet.getByRole("button", { name: "Undo marked as paid" }).click();
+  await expect(incomeSheet).toBeHidden();
+  await expect(row("Filter Gamma")).toContainText("Not paid, $50 owed");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test("money transactions sort, and filter by dates, amount, and several categories", async ({
+  page,
+}, testInfo) => {
+  const iphone = testInfo.project.name === "iphone";
+  const bookName = `Money filters ${testInfo.project.name} ${Date.now() % 100000}`;
+  const errors = trackErrors(page);
+  const post = async (url: string, data: object) => {
+    const res = await page.request.post(url, { data });
+    if (!res.ok()) throw new Error(`POST ${url} failed: ${res.status()} ${await res.text()}`);
+    return (await res.json()) as { id: number };
+  };
+  const book = await post("/api/money/books", {
+    name: bookName,
+    kind: "personal",
+    starterCategories: true,
+  });
+  const categories = (await (
+    await page.request.get(`/api/money/categories?bookId=${book.id}`)
+  ).json()) as Array<{ id: number; name: string }>;
+  const category = (name: string) => categories.find((entry) => entry.name === name)?.id;
+  const account = await post("/api/money/accounts", {
+    bookId: book.id,
+    name: "Checking",
+    kind: "checking",
+  });
+  const add = (date: string, amountCents: number, payee: string, categoryName?: string) =>
+    post("/api/money/transactions", {
+      accountId: account.id,
+      date,
+      amountCents,
+      payee,
+      ...(categoryName ? { categoryId: category(categoryName) } : {}),
+    });
+  const old = iphone ? "2011" : "2010";
+  await add(`${old}-01-05`, -4_500, "Corner grocery", "Groceries");
+  await add(`${old}-01-20`, 200_000, "Example Employer", "Paycheck");
+  await add(`${old}-02-10`, -12_000, "Power company", "Utilities");
+  await add(`${old}-02-14`, -900, "Coffee shop");
+  await page.addInitScript((id) => localStorage.setItem("hub.money.book", String(id)), book.id);
+
+  await page.goto("/money");
+  const panel = page.getByRole("region", { name: "Transactions" });
+  const rows = panel.getByRole("listitem");
+  await expect(rows).toHaveCount(4);
+
+  await panel.getByLabel("Sort by").selectOption({ label: "Largest amount first" });
+  await expect(rows.first()).toContainText("Example Employer");
+  await panel.getByLabel("Sort by").selectOption({ label: "Oldest first" });
+  await expect(rows.first()).toContainText("Corner grocery");
+
+  await panel.getByRole("button", { name: /^More filters/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Filter transactions" });
+  await sheet.getByLabel("At least", { exact: true }).fill("40");
+  await expect(rows).toHaveCount(3);
+  await sheet.getByLabel("At most", { exact: true }).fill("1000");
+  await expect(rows).toHaveCount(2);
+  await sheet.getByLabel("At least", { exact: true }).fill("");
+  await sheet.getByLabel("At most", { exact: true }).fill("");
+  await sheet.getByLabel("From", { exact: true }).fill(`${old}-01-15`);
+  await sheet.getByLabel("To", { exact: true }).fill(`${old}-02-10`);
+  await expect(rows).toHaveCount(2);
+  await sheet.getByRole("button", { name: "Clear filters" }).click();
+  await expect(rows).toHaveCount(4);
+  await sheet.getByLabel("Groceries").check();
+  await sheet.getByLabel("Utilities").check();
+  await expect(rows).toHaveCount(2);
+  await sheet.getByRole("button", { name: "Show 2 transactions" }).click();
+  await expect(panel.getByLabel("Category")).toContainText("2 categories");
+  await panel.getByRole("button", { name: "Clear filters" }).click();
+  await expect(rows).toHaveCount(4);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});

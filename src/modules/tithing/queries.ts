@@ -4,6 +4,7 @@ import type {
   IncomeSet,
   PaymentCreate,
   PaymentSet,
+  SettleInput,
   TithingImportInput,
 } from "../../shared/tithing";
 
@@ -46,6 +47,15 @@ export function useSetIncome() {
   return useTithingMutation(async ({ id, json }: { id: number; json: IncomeSet }) => {
     const res = await api.tithing.income[":id"].$put({ param: { id: String(id) }, json });
     if (!res.ok) throw await toApiError(res);
+  });
+}
+
+/** Marks income as paid without a payment (or takes the mark off). */
+export function useSettle() {
+  return useTithingMutation(async (json: SettleInput) => {
+    const res = await api.tithing.settle.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }
 

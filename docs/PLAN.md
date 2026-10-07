@@ -118,6 +118,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
 - [x] 5.11 Tithing: a Tithing page (money in is tithed on by default, switchable per transaction or on a partial amount like a sale's profit or gross pay; donations are money-out transactions linked to the income they pay for; red until paid, green once paid), charts of owed and paid by month and income by source, a year summary, other funds (fast offering, other donations) kept apart, and a `hub-tithing/v1` format from the Claude Project for donation history and paychecks
 - [ ] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
+- [x] 5.13 Search, sort, and filters on the Money transaction list and the Tithing lists (newest, oldest, largest or smallest amount; a range of amounts with a slider; dates with presets like 1 month and 1 year or a custom range; several categories), and income marked as paid without a payment, in bulk or through a date, for tithing paid before Hub tracked it
 
 ## Import formats
 
@@ -271,9 +272,13 @@ Produced by the Claude Project from a church donation history, a donation receip
 
 Up to 200 payments and 200 paychecks. `fund` is read as tithing, fast offering, or other (the fund's own name is kept in the note). A payment is matched to a money-out transaction of the same amount from 2 days before to 7 days after its date, which then becomes the donation; with none, it's added to the account chosen in the preview, in a "Tithing and offerings" category. A payment Hub already has is skipped, counted, so two identical gifts both import once. A paycheck is matched to the money-in transaction of the same `deposit` within 2 days before to 4 days after, and its tithing base becomes `gross` (or ten times `tithing`); a paycheck with no deposit yet is listed so the statement can be imported first. Sent to `POST /api/tithing/imports` with the account and rows to leave out (add `?dryRun=true` to preview).
 
+### Transaction list filters
+
+`GET /api/money/transactions` also takes `sort` (`newest`, `oldest`, `largest`, `smallest`; size ignores money in or out), `minCents` and `maxCents` (an amount's size), `from` and `to` (both days included), and `categories` (ids, `none`, or `transfer`, separated by commas; `categoryId` still works for one). The answer's `largestCents` is the biggest amount in the book, for the slider's scale. The Tithing lists apply the same filters in the browser.
+
 ### How tithing is figured
 
-Tithing is 10% of money in. A money-in transaction is tithed on by default, except transfers between accounts and money back into a spending category (a refund). A sale linked to resale items is tithed on its profit: the sale less the items' prices and costs. A choice on a transaction (`PUT /api/tithing/income/:id`, or `tithing` with `POST`/`PATCH /api/money/transactions`) turns it off or sets the amount it's figured on. A donation is a money-out transaction with a fund (`donation` on a transaction, or `POST /api/tithing/payments`); tithing payments are linked to income with an amount each (`PUT /api/tithing/payments/:id`), and income is unpaid, partly paid, or paid by what's linked to it.
+Tithing is 10% of money in. A money-in transaction is tithed on by default, except transfers between accounts and money back into a spending category (a refund). A sale linked to resale items is tithed on its profit: the sale less the items' prices and costs. Income can be marked as paid without a payment (`POST /api/tithing/settle` with `incomeIds`, or `through` a date, and `settled: false` to undo): it counts as paid, shows as "marked as paid", and nothing is added to Money, so balances stay as they are. A choice on a transaction (`PUT /api/tithing/income/:id`, or `tithing` with `POST`/`PATCH /api/money/transactions`) turns it off or sets the amount it's figured on. A donation is a money-out transaction with a fund (`donation` on a transaction, or `POST /api/tithing/payments`); tithing payments are linked to income with an amount each (`PUT /api/tithing/payments/:id`), and income is unpaid, partly paid, or paid by what's linked to it.
 
 ### `hub-statement/v1`
 

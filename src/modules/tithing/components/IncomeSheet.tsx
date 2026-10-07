@@ -4,7 +4,7 @@ import { Sheet } from "../../../client/components/Sheet";
 import { primaryButton, secondaryButton } from "../../../client/components/ui";
 import { formatCents } from "../../../shared/money";
 import { formatShortDate } from "../../tasks/dates";
-import { type IncomeRow, useSetIncome } from "../queries";
+import { type IncomeRow, useSetIncome, useSettle } from "../queries";
 import { TithingBadge } from "./TithingBadge";
 import {
   type ChoiceDraft,
@@ -56,6 +56,7 @@ function IncomeForm({
   const [draft, setDraft] = useState<ChoiceDraft>(saved);
   const [tried, setTried] = useState(false);
   const set = useSetIncome();
+  const settle = useSettle();
   const input = choiceInput(draft);
   const changed = !sameChoice(draft, saved);
 
@@ -82,7 +83,12 @@ function IncomeForm({
         />
         {row.status ? (
           <p>
-            <TithingBadge status={row.status} owedCents={row.owedCents} paidCents={row.paidCents} />
+            <TithingBadge
+              status={row.status}
+              owedCents={row.owedCents}
+              paidCents={row.paidCents}
+              settled={row.settled}
+            />
           </p>
         ) : null}
         {row.applies && changed && row.paidCents > 0 ? (
@@ -100,10 +106,39 @@ function IncomeForm({
               Record a payment
             </button>
           ) : null}
+          {row.applies && !changed && row.status !== null && row.status !== "paid" ? (
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={settle.isPending}
+              onClick={() =>
+                settle.mutate({ incomeIds: [row.id], settled: true }, { onSuccess: onDone })
+              }
+            >
+              Mark as paid
+            </button>
+          ) : null}
+          {row.settled && !changed ? (
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={settle.isPending}
+              onClick={() =>
+                settle.mutate({ incomeIds: [row.id], settled: false }, { onSuccess: onDone })
+              }
+            >
+              Undo marked as paid
+            </button>
+          ) : null}
         </div>
-        {set.error ? (
+        {row.settled ? (
+          <p className="text-sm text-muted">
+            Marked as paid without a payment in Hub, so nothing was added to Money.
+          </p>
+        ) : null}
+        {(set.error ?? settle.error) ? (
           <p role="alert" className="text-sm text-danger">
-            {set.error.message}
+            {(set.error ?? settle.error)?.message}
           </p>
         ) : null}
       </form>

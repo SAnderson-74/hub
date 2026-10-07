@@ -29,6 +29,10 @@ export type IncomeFacts = {
   customBase: boolean;
   owedCents: number;
   paidCents: number;
+  /** Marked as paid without a payment in Hub (see tithing_income.settled). */
+  settled: boolean;
+  /** What marking it paid covers: what's owed beyond the payments linked to it. */
+  settledCents: number;
   /** Null when tithing doesn't apply. */
   status: TithingStatus | null;
   /** Where it came from, for grouping: "Resale", its category's name, or "Other income". */
@@ -145,6 +149,7 @@ export function incomeFacts(
     const baseCents = choice?.baseCents ?? defaultBaseCents;
     const owedCents = applies ? tithingOwed(baseCents) : 0;
     const paidCents = paid.get(row.id) ?? 0;
+    const settled = applies && choice?.settled === true;
     facts.set(row.id, {
       transactionId: row.id,
       applies,
@@ -153,7 +158,9 @@ export function incomeFacts(
       customBase: choice?.baseCents != null,
       owedCents,
       paidCents,
-      status: applies ? tithingStatus(owedCents, paidCents) : null,
+      settled,
+      settledCents: settled ? Math.max(0, owedCents - paidCents) : 0,
+      status: applies ? (settled ? "paid" : tithingStatus(owedCents, paidCents)) : null,
       source: sold.has(row.id) ? "Resale" : (category?.name ?? "Other income"),
     });
   }
