@@ -11,6 +11,7 @@ import { guessCard } from "../../shared/cards";
 import { matchRule } from "../../shared/moneyRules";
 import { findPerson, memoWithPerson } from "../../shared/payees";
 import { maskLongNumbers } from "../../shared/statement";
+import { dropTithing } from "../tithing/transactionLinks";
 import { cardsOfAccount } from "./cards.service";
 import { dropSplits } from "./lines";
 import { requireAccount } from "./money.service";
@@ -409,6 +410,7 @@ export function undoImport(db: Db, id: number): ImportJson {
     }
     dropSplits(tx, removing);
     dropReceipts(tx, removing);
+    dropTithing(tx, removing);
     tx.delete(moneyTransactions).where(eq(moneyTransactions.importId, id)).run();
     const undone = tx
       .update(moneyImports)

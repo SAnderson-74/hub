@@ -116,6 +116,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.8 Bank statements and transactions from the Claude Project: a `hub-statement/v1` format read from statements or app screenshots, imported like a bank file (duplicates by day and amount, receipt matching, the closing balance checked, undo), with long numbers hidden down to their last 4 digits
 - [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
 - [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
+- [x] 5.11 Tithing: a Tithing page (money in is tithed on by default, switchable per transaction or on a partial amount like a sale's profit or gross pay; donations are money-out transactions linked to the income they pay for; red until paid, green once paid), charts of owed and paid by month and income by source, a year summary, other funds (fast offering, other donations) kept apart, and a `hub-tithing/v1` format from the Claude Project for donation history and paychecks
 
 ## Import formats
 
@@ -249,6 +250,29 @@ Produced by the Claude Project ([CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has its i
 Up to 50 receipts of up to 300 lines each. Amounts are dollars (numbers, or text like `"$12.50"`); a line's amount is negative for a coupon. `type` is `purchase` or `return`. `category` on the receipt is for one without lines. Unknown fields are ignored, and nothing is stored as pasted. A receipt is refused when `cardLast4` isn't exactly 4 digits, or its store, lines, or note have a run of 9 or more digits (the shape of a card or account number).
 
 It's sent to `POST /api/money/receipts` with the book, an account for receipts without a known card, a category for each name the book doesn't have, and receipts to leave out (add `?dryRun=true` to preview).
+
+### `hub-tithing/v1`
+
+Produced by the Claude Project from a church donation history, a donation receipt, or pay stubs, and pasted into Tithing (Paste from Claude) or Settings > Imports > Paste from Claude.
+
+```json
+{
+  "format": "hub-tithing/v1",
+  "payments": [
+    { "date": "2030-03-15", "amount": 250, "fund": "tithing" },
+    { "date": "2030-03-15", "amount": 40, "fund": "fast offering", "note": "Online" }
+  ],
+  "income": [
+    { "date": "2030-03-15", "source": "Example Employer", "deposit": 2000, "gross": 2600 }
+  ]
+}
+```
+
+Up to 200 payments and 200 paychecks. `fund` is read as tithing, fast offering, or other (the fund's own name is kept in the note). A payment is matched to a money-out transaction of the same amount from 2 days before to 7 days after its date, which then becomes the donation; with none, it's added to the account chosen in the preview, in a "Tithing and offerings" category. A payment Hub already has is skipped, counted, so two identical gifts both import once. A paycheck is matched to the money-in transaction of the same `deposit` within 2 days before to 4 days after, and its tithing base becomes `gross` (or ten times `tithing`); a paycheck with no deposit yet is listed so the statement can be imported first. Sent to `POST /api/tithing/imports` with the account and rows to leave out (add `?dryRun=true` to preview).
+
+### How tithing is figured
+
+Tithing is 10% of money in. A money-in transaction is tithed on by default, except transfers between accounts and money back into a spending category (a refund). A sale linked to resale items is tithed on its profit: the sale less the items' prices and costs. A choice on a transaction (`PUT /api/tithing/income/:id`, or `tithing` with `POST`/`PATCH /api/money/transactions`) turns it off or sets the amount it's figured on. A donation is a money-out transaction with a fund (`donation` on a transaction, or `POST /api/tithing/payments`); tithing payments are linked to income with an amount each (`PUT /api/tithing/payments/:id`), and income is unpaid, partly paid, or paid by what's linked to it.
 
 ### `hub-statement/v1`
 

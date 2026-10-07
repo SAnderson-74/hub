@@ -7,7 +7,7 @@ import type { ModuleId } from "./modules";
 // the paste sheet. Pasted answers are untrusted: each format's own schema checks them.
 
 /** Raised when the instructions change, so an older copy in the Project is easy to spot. */
-export const PROJECT_INSTRUCTIONS_VERSION = 5;
+export const PROJECT_INSTRUCTIONS_VERSION = 6;
 
 /** The formats the Project writes, where each goes, and the module it needs. */
 export const PROJECT_FORMATS = [
@@ -26,6 +26,14 @@ export const PROJECT_FORMATS = [
     noun: "a bank statement",
     into: "Money",
     module: "money",
+  },
+  {
+    format: "hub-tithing/v1",
+    label: "Tithing",
+    kind: "tithing",
+    noun: "tithing payments and paychecks",
+    into: "Tithing",
+    module: "tithing",
   },
   {
     format: "hub-inventory/v1",
@@ -148,6 +156,26 @@ Use this when given a bank or card statement, or a screenshot of transactions fr
 - description: the statement's text for it, leaving out reference, account, and card numbers.
 - amount: negative for money out (purchases, fees, withdrawals, payments sent), positive for money in (deposits, refunds, payments to a card).
 - Leave out running balances, totals, interest summaries, and the bank's address and phone number.
+
+TITHING (format "hub-tithing/v1")
+
+Use this when given a church donation history, a donation receipt or confirmation, or paychecks (pay stubs or deposit screenshots) to set what tithing is figured on. One answer can hold up to 200 payments and 200 paychecks.
+
+{
+  "format": "hub-tithing/v1",
+  "payments": [
+    { "date": "2030-03-15", "amount": 250, "fund": "tithing" },
+    { "date": "2030-03-15", "amount": 40, "fund": "fast offering", "note": "Online" }
+  ],
+  "income": [
+    { "date": "2030-03-15", "source": "Example Employer", "deposit": 2000, "gross": 2600 }
+  ]
+}
+
+- payments: one per donation, on the day it was given. amount: what was given, in dollars. fund: "tithing", "fast offering", or the fund's own name for anything else. Leave out ones that were declined or are pending.
+- income: one per paycheck. deposit: what reached the bank account (net pay), which Hub uses to find the deposit. gross: pay before taxes and deductions, which tithing is figured on. When only a tithing amount is given, send it as "tithing" and leave gross out. Leave out a paycheck with neither.
+- source: the payer's short name, like the employer. Leave out the person's own name, member and record numbers, and account numbers.
+- Send payments and income together in one answer only when they come from the same document. Otherwise answer the first kind and offer the next.
 
 ITEMS TO SELL (format "hub-inventory/v1")
 

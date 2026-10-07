@@ -131,6 +131,7 @@ function refreshMoney(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: keys.all });
   void queryClient.invalidateQueries({ queryKey: ["goals"] });
   void queryClient.invalidateQueries({ queryKey: ["resale"] });
+  void queryClient.invalidateQueries({ queryKey: ["tithing"] });
 }
 
 export function useCreateBook() {

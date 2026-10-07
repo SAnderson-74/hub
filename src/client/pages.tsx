@@ -1,6 +1,7 @@
 import {
   Briefcase,
   GraduationCap,
+  HandCoins,
   House,
   Landmark,
   ListTodo,
@@ -22,6 +23,7 @@ import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
 import { TaxesPage } from "../modules/taxes/pages/TaxesPage";
 import { TimePage } from "../modules/time/pages/TimePage";
+import { TithingPage } from "../modules/tithing/pages/TithingPage";
 import type { ModuleId } from "../shared/modules";
 
 export type AppPage = {
@@ -83,6 +85,14 @@ export const appPages: AppPage[] = [
     icon: Wallet,
     element: <MoneyPage />,
     module: "money",
+  },
+  {
+    id: "tithing",
+    label: "Tithing",
+    path: "/tithing",
+    icon: HandCoins,
+    element: <TithingPage />,
+    module: "tithing",
   },
   {
     id: "taxes",

@@ -10,6 +10,7 @@ Today the Project writes:
 | --- | --- | --- |
 | Receipts | `hub-receipt/v1` | Money |
 | A bank or card statement | `hub-statement/v1` | Money |
+| Tithing payments and paychecks | `hub-tithing/v1` | Tithing |
 | Items to sell | `hub-inventory/v1` | Resale |
 | A resale listing | `hub-listing/v1` | Resale |
 | Tasks and goals | `hub-tasks/v1` | Tasks and Goals |
@@ -27,9 +28,9 @@ When Hub updates, compare the version at the top of the Project's instructions w
 
 ## Use it
 
-1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a statement's PDF or a screenshot from a bank app, photos of things to sell, notes or a to-do list, a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
+1. Start a chat in the Project. Add photos of receipts (up to 50 at a time), a statement's PDF or a screenshot from a bank app, your church donation history or a pay stub, photos of things to sell, notes or a to-do list, a screenshot of a course list, or a few words about something to sell, and say anything that helps, like "the second one was paid in cash".
 2. Copy Claude's whole answer.
-3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Money > Import** for statements, **Resale > Paste items**, **Resale > Paste listing**, the paste button on **Tasks**, and **Courses > Import a plan**.
+3. In Hub, open **Settings > Imports > Paste from Claude** and paste it. Hub reads which kind of answer it is and opens that import. Each also has its own place: **Money > Paste receipts**, **Money > Import** for statements, **Tithing > Paste from Claude**, **Resale > Paste items**, **Resale > Paste listing**, the paste button on **Tasks**, and **Courses > Import a plan**.
 4. Check the preview, then add it.
 
 For receipts, each one says whether it goes on a transaction already in Hub, adds a new one, or needs something first: an account for receipts without a known card, or one of your categories for each name the book doesn't have. Hub splits a receipt by category when its lines are in more than one, sharing tax and discounts out in proportion. When the bank's file arrives later, the purchase isn't added twice: the import finds the receipt's transaction and fills in the bank's details instead. Opening a transaction shows its receipt and a way to remove it.
@@ -37,6 +38,8 @@ For receipts, each one says whether it goes on a transaction already in Hub, add
 For a statement, pick the account (Hub picks it for you when one of its cards has the statement's last 4 digits). It goes through the same import as a bank file: transactions already in the account on the same day for the same amount are skipped, purchases added from receipts get the bank's details, and the statement's closing balance is checked against Hub's. Use a bank's own file when there is one, since it carries the bank's ids; a statement suits accounts that don't offer downloads, or a screenshot of recent transactions. Undo it from Recent imports like any file.
 
 For items to sell, each one says whether it will be added, flagged to review (usually because what you paid and when aren't known yet), or skipped because Hub already has an item with that title, price, and date. They go in as Acquired (or Repairing), with the brand and model in the notes. Write a listing for one later with Resale > Paste listing.
+
+For tithing, the preview lists each donation and each paycheck, with what Hub will do with it. A donation is matched to a bank transaction of the same amount within a few days (a bank posts a donation a day or more after it was given), and that transaction becomes the donation, so it isn't counted twice; with no such transaction, Hub adds one to the account you pick, in a "Tithing and offerings" category. Import your bank statement first for this to work well. A donation Hub already has counts as done, so pasting the same answer twice changes nothing. A paycheck is matched to the deposit of the same amount (net pay) within a few days, and its gross pay (or the tithing amount times ten) becomes what tithing is figured on. A paycheck with no deposit yet is listed so you can import the statement and paste again. Donations are linked to the income they pay for afterward, on the Tithing page.
 
 For tasks and goals, the preview lists each task (with its project, due date, and subtasks) and each goal (with its target date and milestones). Projects are found by name, ignoring case, or made. A task is skipped when an open task with the same title is already in its project (or the inbox), and a goal when an active goal has its title, so pasting the same answer twice adds nothing. A date Hub can't read is left off, and anything with a long number is pointed out so you can check it isn't an account or ID number; Hub doesn't change it, since a task can need one.
 
@@ -54,7 +57,7 @@ For tasks and goals, the preview lists each task (with its project, due date, an
 Copy everything in this box.
 
 ````text
-Hub import instructions, version 5.
+Hub import instructions, version 6.
 
 You turn photos, screenshots, documents, and notes into JSON for Hub, a private finance and planning app. The person pastes your answer into Hub, which checks it and shows a preview before anything is saved.
 
@@ -122,6 +125,26 @@ Use this when given a bank or card statement, or a screenshot of transactions fr
 - description: the statement's text for it, leaving out reference, account, and card numbers.
 - amount: negative for money out (purchases, fees, withdrawals, payments sent), positive for money in (deposits, refunds, payments to a card).
 - Leave out running balances, totals, interest summaries, and the bank's address and phone number.
+
+TITHING (format "hub-tithing/v1")
+
+Use this when given a church donation history, a donation receipt or confirmation, or paychecks (pay stubs or deposit screenshots) to set what tithing is figured on. One answer can hold up to 200 payments and 200 paychecks.
+
+{
+  "format": "hub-tithing/v1",
+  "payments": [
+    { "date": "2030-03-15", "amount": 250, "fund": "tithing" },
+    { "date": "2030-03-15", "amount": 40, "fund": "fast offering", "note": "Online" }
+  ],
+  "income": [
+    { "date": "2030-03-15", "source": "Example Employer", "deposit": 2000, "gross": 2600 }
+  ]
+}
+
+- payments: one per donation, on the day it was given. amount: what was given, in dollars. fund: "tithing", "fast offering", or the fund's own name for anything else. Leave out ones that were declined or are pending.
+- income: one per paycheck. deposit: what reached the bank account (net pay), which Hub uses to find the deposit. gross: pay before taxes and deductions, which tithing is figured on. When only a tithing amount is given, send it as "tithing" and leave gross out. Leave out a paycheck with neither.
+- source: the payer's short name, like the employer. Leave out the person's own name, member and record numbers, and account numbers.
+- Send payments and income together in one answer only when they come from the same document. Otherwise answer the first kind and offer the next.
 
 ITEMS TO SELL (format "hub-inventory/v1")
 

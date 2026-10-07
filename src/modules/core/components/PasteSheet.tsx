@@ -22,6 +22,7 @@ import { PasteItemsForm } from "../../resale/components/PasteItemsSheet";
 import { PasteListingForm } from "../../resale/components/PasteListingSheet";
 import { PasteTasksForm } from "../../tasks/components/PasteTasksSheet";
 import { localDate } from "../../tasks/dates";
+import { PasteTithingForm } from "../../tithing/components/PasteTithingSheet";
 
 type Read = Extract<PasteRead, { ok: true }>;
 
@@ -104,6 +105,8 @@ function PasteFlow({ onDone }: { onDone: () => void }) {
               );
             }}
           </BookTarget>
+        ) : format.format === "hub-tithing/v1" ? (
+          <PasteTithingForm initialText={chosen.json} onDone={onDone} />
         ) : format.format === "hub-inventory/v1" ? (
           <PasteItemsForm initialText={chosen.json} onDone={onDone} />
         ) : format.format === "hub-tasks/v1" ? (

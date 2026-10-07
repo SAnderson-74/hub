@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Package } from "lucide-react";
+import { ArrowLeftRight, HandCoins, Package } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { Link } from "react-router";
 import { Sheet } from "../../../client/components/Sheet";
@@ -11,12 +11,24 @@ import {
   secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { useModules } from "../../../client/lib/queries";
 import { CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
 import { cardLabel, guessCard } from "../../../shared/cards";
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { matchRule } from "../../../shared/moneyRules";
 import { formatSigned } from "../../../shared/profit";
+import { FUND_LABELS, FUNDS, type Fund } from "../../../shared/tithing";
 import { formatShortDate } from "../../tasks/dates";
+import { TithingBadge } from "../../tithing/components/TithingBadge";
+import {
+  type ChoiceDraft,
+  choiceInput,
+  choiceOf,
+  choiceReady,
+  defaultChoice,
+  sameChoice,
+  TithingChoice,
+} from "../../tithing/components/TithingChoice";
 import {
   type Account,
   type Card,
@@ -161,6 +173,14 @@ function TransactionForm({
   // The parts, while it's split into categories; null when it isn't.
   const [parts, setParts] = useState<PartDraft[] | null>(() => partsOf(transaction));
   const wasSplit = (transaction?.splits.length ?? 0) > 0;
+  // Tithing: on money in, whether it applies and on what; on money out, a donation's fund.
+  const tithingOn = useModules().tithing;
+  const income = transaction?.tithing?.kind === "income" ? transaction.tithing : null;
+  const savedChoice = income ? choiceOf(income) : defaultChoice(true);
+  const [choice, setChoice] = useState<ChoiceDraft>(savedChoice);
+  const [choiceTouched, setChoiceTouched] = useState(false);
+  const savedFund = transaction?.tithing?.kind === "payment" ? transaction.tithing.fund : "";
+  const [fund, setFund] = useState<Fund | "">(savedFund);
   const create = useCreateTransaction();
   const createTransfer = useCreateTransfer();
   const update = useUpdateTransaction();
@@ -180,7 +200,17 @@ function TransactionForm({
   const toMissing =
     transferring && (draft.toAccountId === "" || draft.toAccountId === draft.accountId);
   const splitting = parts !== null && !transferring && !(transaction?.transfer != null);
+  // Money back into a spending category (a refund) isn't tithed on unless it's turned on.
+  const categoryKind = categories.find((item) => String(item.id) === draft.categoryId)?.kind;
+  const effectiveChoice: ChoiceDraft =
+    !income && !choiceTouched && categoryKind === "expense"
+      ? { ...choice, applies: false }
+      : choice;
+  const showTithing = tithingOn && draft.kind === "in" && !transferring && !isTransferSide;
+  const showDonation = tithingOn && draft.kind === "out" && !transferring && !isTransferSide;
+  const tithingNotReady = showTithing && !choiceReady(effectiveChoice);
   const blocked =
+    tithingNotReady ||
     amountInvalid ||
     dateMissing ||
     accountMissing ||
@@ -242,6 +272,19 @@ function TransactionForm({
     setDraft((current) => ({ ...current, categoryId: rule ? String(rule.categoryId) : "" }));
   };
 
+  /** The tithing choice or donation fund to save with it, only when it changed. */
+  const tithingFields = () => {
+    if (showTithing) {
+      const changed = income
+        ? !sameChoice(effectiveChoice, savedChoice)
+        : choiceTouched || !sameChoice(effectiveChoice, defaultChoice(true));
+      const tithing = choiceInput(effectiveChoice);
+      return changed && tithing ? { tithing: { baseCents: null, ...tithing } } : {};
+    }
+    if (showDonation && fund !== savedFund) return { donation: fund === "" ? null : fund };
+    return {};
+  };
+
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     setTried(true);
@@ -281,6 +324,7 @@ function TransactionForm({
       memo: draft.memo,
       counterparty: isTransferSide ? null : draft.counterparty.trim() || null,
       ...(isTransferSide ? {} : { cardId: draft.cardId ? Number(draft.cardId) : null }),
+      ...tithingFields(),
     };
     if (!transaction) {
       create.mutate(fields, { onSuccess: onDone });
@@ -292,6 +336,11 @@ function TransactionForm({
         onSuccess: (saved) => {
           setDraft(toDraft(saved, null, today));
           setParts(partsOf(saved));
+          setChoice(
+            saved.tithing?.kind === "income" ? choiceOf(saved.tithing) : defaultChoice(true),
+          );
+          setChoiceTouched(false);
+          setFund(saved.tithing?.kind === "payment" ? saved.tithing.fund : "");
           setMessage(isTransferSide ? "Transfer saved" : "Transaction saved");
         },
       },
@@ -650,6 +699,81 @@ function TransactionForm({
             ) : null}
           </>
         )}
+
+        {showTithing ? (
+          <>
+            <TithingChoice
+              draft={effectiveChoice}
+              onChange={(next) => {
+                setChoice(next);
+                setChoiceTouched(true);
+              }}
+              wholeCents={income ? income.defaultBaseCents : cents}
+              tried={tried}
+              profit={
+                income !== null && income.defaultBaseCents !== (transaction?.amountCents ?? 0)
+              }
+            />
+            {income?.status && income.applies ? (
+              <p className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <TithingBadge
+                  status={income.status}
+                  owedCents={income.owedCents}
+                  paidCents={income.paidCents}
+                />
+                <Link
+                  to={`/tithing?year=${transaction?.date.slice(0, 4)}`}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-accent-text underline-offset-4 hover:underline"
+                >
+                  Open Tithing
+                </Link>
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {showDonation ? (
+          <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+            <div className="flex items-start gap-3">
+              <HandCoins aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
+              <div className="min-w-0 flex-1">
+                <label htmlFor={`${ids}-fund`} className="block font-semibold text-fg">
+                  Church donation
+                </label>
+                <select
+                  id={`${ids}-fund`}
+                  value={fund}
+                  onChange={(event) => setFund(event.target.value as Fund | "")}
+                  aria-describedby={`${ids}-fund-hint`}
+                  className={`${inputClass} mt-2`}
+                >
+                  <option value="">Not a donation</option>
+                  {FUNDS.map((value) => (
+                    <option key={value} value={value}>
+                      {FUND_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+                <p id={`${ids}-fund-hint`} className="mt-1.5 text-sm text-muted">
+                  {transaction?.tithing?.kind === "payment" &&
+                  transaction.tithing.fund === "tithing"
+                    ? transaction.tithing.linkedCents >= -transaction.amountCents
+                      ? "Matched to the income it pays tithing on."
+                      : "Match it to income on the Tithing page."
+                    : "Tithing counts toward what you owe. Other funds are tracked on their own."}
+                </p>
+                {transaction?.tithing?.kind === "payment" &&
+                transaction.tithing.fund === "tithing" ? (
+                  <Link
+                    to={`/tithing?year=${transaction.date.slice(0, 4)}&payment=${transaction.id}`}
+                    className="inline-flex min-h-11 items-center text-sm font-semibold text-accent-text underline-offset-4 hover:underline"
+                  >
+                    Match to income
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div>
           <label htmlFor={`${ids}-memo`} className={labelClass}>

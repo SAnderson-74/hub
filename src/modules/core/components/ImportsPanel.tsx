@@ -3,6 +3,7 @@ import {
   ClipboardPaste,
   FileUp,
   GraduationCap,
+  HandCoins,
   Landmark,
   ReceiptText,
   Sparkles,
@@ -19,9 +20,10 @@ import { storedBookId } from "../../money/storedBook";
 import { ImportCsvSheet } from "../../resale/components/ImportCsvSheet";
 import { PasteListingSheet } from "../../resale/components/PasteListingSheet";
 import { localDate } from "../../tasks/dates";
+import { PasteTithingSheet } from "../../tithing/components/PasteTithingSheet";
 import { PasteSheet } from "./PasteSheet";
 
-type Open = "claude" | "bank" | "receipts" | "resale" | "listing" | "courses" | null;
+type Open = "claude" | "bank" | "receipts" | "tithing" | "resale" | "listing" | "courses" | null;
 
 /** One import: what it takes and where it goes. Opens the same sheet as on its page. */
 function ImportRow({
@@ -139,6 +141,12 @@ export function ImportsPanel() {
           onOpen={() => setOpen("receipts")}
         />
         <ImportRow
+          icon={<HandCoins className="size-5" />}
+          title="Tithing"
+          detail="Paste donations and paychecks from your Claude Project, into Tithing."
+          onOpen={() => setOpen("tithing")}
+        />
+        <ImportRow
           icon={<FileUp className="size-5" />}
           title="Resale items"
           detail="A CSV spreadsheet of items, into Resale."
@@ -179,6 +187,7 @@ export function ImportsPanel() {
         />
       ) : null}
       <PasteSheet open={open === "claude"} onClose={close} />
+      <PasteTithingSheet open={open === "tithing"} onClose={close} />
       <ImportCsvSheet open={open === "resale"} onClose={close} />
       <PasteListingSheet
         open={open === "listing"}

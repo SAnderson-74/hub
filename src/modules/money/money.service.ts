@@ -37,6 +37,7 @@ import { type CardKind, cardKindFor } from "../../shared/cards";
 import type { LinkRole } from "../../shared/resale";
 import { goalAccounts } from "../goals/schema";
 import { transactionItems } from "../resale/transactionLinks";
+import { dropTithing, type TransactionTithing, tithingOf } from "../tithing/transactionLinks";
 import { checkCardFits, guessCardFor } from "./cards.service";
 import { dropSplits, primaryCategory, splitsOf } from "./lines";
 import { dropReceipts, type ReceiptJson, receiptsOf } from "./receiptLinks";
@@ -130,6 +131,8 @@ export type TransactionJson = {
   transfer: { transactionId: number; account: { id: number; name: string } } | null;
   /** Resale items this paid for or came from. */
   resaleItems: Array<{ id: number; title: string; role: LinkRole }>;
+  /** Tithing: money in shows what it owes and what's paid; a donation shows its fund. */
+  tithing: TransactionTithing | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -584,7 +587,7 @@ function oneCategory(db: Queryable, row: CategoryRow): CategoryJson {
   return categoryJson(row, (used?.n ?? 0) + (parts?.n ?? 0));
 }
 
-export function createCategory(db: Db, input: CategoryCreate): CategoryJson {
+export function createCategory(db: Queryable, input: CategoryCreate): CategoryJson {
   return db.transaction((tx) => {
     requireBook(tx, input.bookId, "body");
     checkCategoryNameFree(tx, input.bookId, input.name);
@@ -688,6 +691,7 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     db,
     rows.map((row) => row.id),
   );
+  const tithing = tithingOf(db, rows);
   const cardIds = [...new Set(rows.flatMap((row) => (row.cardId === null ? [] : [row.cardId])))];
   const cards = new Map(
     cardIds.length === 0
@@ -728,6 +732,7 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     receipt: receipts.get(row.id) ?? null,
     transfer: transferJson(row.transferPeerId, peers, accounts),
     resaleItems: items.get(row.id) ?? [],
+    tithing: tithing.get(row.id) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }));
@@ -972,6 +977,7 @@ export function deleteTransaction(db: Queryable, id: number): void {
     const ids = row.transferPeerId === null ? [id] : [id, row.transferPeerId];
     dropSplits(tx, ids);
     dropReceipts(tx, ids);
+    dropTithing(tx, ids);
     tx.delete(moneyTransactions).where(inArray(moneyTransactions.id, ids)).run();
   });
 }

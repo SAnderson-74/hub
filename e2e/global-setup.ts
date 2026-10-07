@@ -8,10 +8,9 @@ export default async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0]?.use.baseURL;
   const context = await request.newContext({ baseURL });
   const modules = Object.fromEntries(
-    ["tasks", "time", "goals", "courses", "resale", "money", "taxes", "business"].map((id) => [
-      id,
-      true,
-    ]),
+    ["tasks", "time", "goals", "courses", "resale", "money", "tithing", "taxes", "business"].map(
+      (id) => [id, true],
+    ),
   );
   const res = await context.post("/api/setup", { data: { modules, timeZone: "", demo: false } });
   if (!res.ok()) throw new Error(`Setup failed: ${res.status()} ${await res.text()}`);

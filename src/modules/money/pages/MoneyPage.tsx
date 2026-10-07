@@ -23,12 +23,15 @@ import {
   primaryButton,
   secondaryButton,
 } from "../../../client/components/ui";
+import { useModules } from "../../../client/lib/queries";
 import { useNow } from "../../../client/lib/useNow";
 import { ACCOUNT_KIND_LABELS, CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
 import { cardLabel } from "../../../shared/cards";
 import { formatCents } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
+import { FUND_LABELS } from "../../../shared/tithing";
 import { formatShortDate, localDate } from "../../tasks/dates";
+import { TithingBadge } from "../../tithing/components/TithingBadge";
 import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
 import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
@@ -543,6 +546,7 @@ function TransactionsPanel({
   } | null;
   onSort: () => void;
 }) {
+  const tithingOn = useModules().tithing;
   const [categoryFilter, setCategoryFilter] = useState<TransactionFilters["categoryId"]>(undefined);
   const [cardFilter, setCardFilter] = useState<TransactionFilters["cardId"]>(undefined);
   const [search, setSearch] = useState("");
@@ -767,6 +771,22 @@ function TransactionsPanel({
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
+                      {tithingOn &&
+                      transaction.tithing?.kind === "income" &&
+                      transaction.tithing.status ? (
+                        <span className="mt-0.5 block">
+                          <TithingBadge
+                            status={transaction.tithing.status}
+                            owedCents={transaction.tithing.owedCents}
+                            paidCents={transaction.tithing.paidCents}
+                          />
+                        </span>
+                      ) : null}
+                      {tithingOn && transaction.tithing?.kind === "payment" ? (
+                        <span className="mt-0.5 block text-sm font-semibold text-ok">
+                          {FUND_LABELS[transaction.tithing.fund]} payment
+                        </span>
+                      ) : null}
                     </span>
                     <span
                       className={`shrink-0 font-semibold tabular-nums ${
