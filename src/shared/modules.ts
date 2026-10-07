@@ -11,6 +11,7 @@ export const MODULES = [
   { id: "courses", label: "Courses", description: "Terms, courses, and a study streak" },
   { id: "resale", label: "Resale", description: "Items bought to sell, and profit" },
   { id: "money", label: "Money", description: "Accounts, budgets, and cash flow" },
+  { id: "tithing", label: "Tithing", description: "Tithing owed, paid, and what's left" },
   { id: "taxes", label: "Taxes", description: "Tax lessons and estimates" },
   { id: "business", label: "Business", description: "Steps, gear, skills, and leads" },
 ] as const;
@@ -19,9 +20,14 @@ export type ModuleId = (typeof MODULES)[number]["id"];
 
 export const MODULE_IDS = MODULES.map((module) => module.id) as [ModuleId, ...ModuleId[]];
 
+// A module added after someone saved their settings is on until they turn it off, so
+// settings saved by an older build still read as they were.
 export const modulesSchema = z
   .object(
-    Object.fromEntries(MODULE_IDS.map((id) => [id, z.boolean()])) as Record<ModuleId, z.ZodBoolean>,
+    Object.fromEntries(MODULE_IDS.map((id) => [id, z.boolean().default(true)])) as Record<
+      ModuleId,
+      z.ZodDefault<z.ZodBoolean>
+    >,
   )
   .strict();
 export type ModuleSettings = z.infer<typeof modulesSchema>;

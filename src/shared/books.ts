@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { RULE_DIRECTIONS } from "./moneyRules";
+import { FUNDS, incomeSetSchema } from "./tithing";
 
 // Books in the accounting sense: a set of accounts, categories, and transactions
 // kept apart from the others, like personal money and a small business.
@@ -192,6 +193,10 @@ const transactionFields = {
     .min(2, "Split into at least two parts, or don't split.")
     .max(30, "Keep it to 30 parts.")
     .nullable(),
+  /** Tithing on money in: whether it applies, and the amount it's figured on. */
+  tithing: incomeSetSchema,
+  /** The fund a money-out transaction was given to, or null when it isn't a donation. */
+  donation: z.enum(FUNDS).nullable(),
 };
 
 export const transactionCreateSchema = z

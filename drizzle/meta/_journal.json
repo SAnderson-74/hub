@@ -176,6 +176,13 @@
       "when": 1791010686922,
       "tag": "0024_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1791348369223,
+      "tag": "0025_tithing",
+      "breakpoints": true
     }
   ]
 }

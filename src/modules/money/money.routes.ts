@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
+import type { Queryable } from "../../server/db/client";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
@@ -40,6 +41,8 @@ import {
   rewardsQuerySchema,
   rewardsSaveSchema,
 } from "../../shared/rewards";
+import type { Fund, IncomeSet } from "../../shared/tithing";
+import { setDonation, setIncome } from "../tithing/tithing.service";
 import { budgetMonth, setBudget } from "./budget.service";
 import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
@@ -59,6 +62,8 @@ import {
   listBooks,
   listCategories,
   listTransactions,
+  oneTransaction,
+  requireTransaction,
   updateAccount,
   updateBook,
   updateCategory,
@@ -95,6 +100,23 @@ import {
 } from "./transfers.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
+
+/**
+ * Applies the tithing choice or donation fund sent with a transaction, in the same
+ * database transaction as the change itself, and answers with the transaction as it
+ * stands. Null when neither was sent.
+ */
+function withTithing(
+  tx: Queryable,
+  id: number,
+  tithing: IncomeSet | undefined,
+  donation: Fund | null | undefined,
+) {
+  if (tithing === undefined && donation === undefined) return null;
+  if (tithing !== undefined) setIncome(tx, id, tithing);
+  if (donation !== undefined) setDonation(tx, id, donation);
+  return oneTransaction(tx, requireTransaction(tx, id));
+}
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
 /** Books, their accounts, cards, and categories, transactions, transfers, rules, sorting, budgets, cash flow, net worth, and imports. */
@@ -229,7 +251,16 @@ export function moneyRoutes({ db }: Deps) {
       .post(
         "/transactions",
         zValidator("json", transactionCreateSchema, invalid("That transaction isn't valid.")),
-        (c) => c.json(createTransaction(db, c.req.valid("json")), 201),
+        (c) => {
+          const { tithing, donation, ...fields } = c.req.valid("json");
+          return c.json(
+            db.transaction((tx) => {
+              const created = createTransaction(tx, fields);
+              return withTithing(tx, created.id, tithing, donation) ?? created;
+            }),
+            201,
+          );
+        },
       )
       .patch(
         "/transactions/:id",
@@ -239,7 +270,16 @@ export function moneyRoutes({ db }: Deps) {
           transactionUpdateSchema,
           invalid("Those transaction changes aren't valid."),
         ),
-        (c) => c.json(updateTransaction(db, c.req.valid("param").id, c.req.valid("json"))),
+        (c) => {
+          const id = c.req.valid("param").id;
+          const { tithing, donation, ...patch } = c.req.valid("json");
+          return c.json(
+            db.transaction((tx) => {
+              const updated = updateTransaction(tx, id, patch);
+              return withTithing(tx, id, tithing, donation) ?? updated;
+            }),
+          );
+        },
       )
       .delete("/transactions/:id", idParam, (c) => {
         deleteTransaction(db, c.req.valid("param").id);

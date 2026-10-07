@@ -15,6 +15,7 @@ import { resaleRoutes } from "../modules/resale/resale.routes";
 import { projectRoutes } from "../modules/tasks/projects.routes";
 import { taskRoutes } from "../modules/tasks/tasks.routes";
 import { timeRoutes } from "../modules/time/time.routes";
+import { tithingRoutes } from "../modules/tithing/tithing.routes";
 import type { Deps } from "./deps";
 import type { AppEnv } from "./env";
 
@@ -40,6 +41,7 @@ export function createApi(deps: Deps) {
     .route("/education", educationRoutes(deps))
     .route("/resale", resaleRoutes(deps))
     .route("/money", moneyRoutes(deps))
+    .route("/tithing", tithingRoutes(deps))
     .route("/business", businessRoutes(deps))
     .route("/integrations", integrationRoutes(deps));
 }

@@ -9,3 +9,4 @@ export * from "../../modules/money/schema";
 export * from "../../modules/resale/schema";
 export * from "../../modules/tasks/schema";
 export * from "../../modules/time/schema";
+export * from "../../modules/tithing/schema";
