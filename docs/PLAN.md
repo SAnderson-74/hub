@@ -117,6 +117,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
 - [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
 - [x] 5.11 Tithing: a Tithing page (money in is tithed on by default, switchable per transaction or on a partial amount like a sale's profit or gross pay; donations are money-out transactions linked to the income they pay for; red until paid, green once paid), charts of owed and paid by month and income by source, a year summary, other funds (fast offering, other donations) kept apart, and a `hub-tithing/v1` format from the Claude Project for donation history and paychecks
+- [ ] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
 
 ## Import formats
 
