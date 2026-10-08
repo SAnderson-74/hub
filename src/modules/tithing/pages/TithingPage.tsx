@@ -1,4 +1,4 @@
-import { ClipboardPaste, HandCoins, Plus } from "lucide-react";
+import { CircleCheck, ClipboardPaste, HandCoins, Plus } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -6,18 +6,25 @@ import { Panel } from "../../../client/components/Panel";
 import { Stat } from "../../../client/components/Stat";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
-import { inputClass, primaryButton, secondaryButton } from "../../../client/components/ui";
+import {
+  inputClass,
+  labelClass,
+  primaryButton,
+  secondaryButton,
+} from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { formatCents } from "../../../shared/money";
 import { FUND_LABELS } from "../../../shared/tithing";
 import { formatShortDate, localDate } from "../../tasks/dates";
+import { FilterBar } from "../components/FilterBar";
 import { IncomeSheet } from "../components/IncomeSheet";
 import { MonthlyChart } from "../components/MonthlyChart";
 import { PasteTithingSheet } from "../components/PasteTithingSheet";
 import { PaymentSheet, type PaymentTarget } from "../components/PaymentSheet";
 import { SourceChart } from "../components/SourceChart";
 import { TithingBadge } from "../components/TithingBadge";
-import { type IncomeRow, type Overview, type PaymentRow, useOverview } from "../queries";
+import { filterIncome, noTithingFilter, type TithingFilter } from "../filter";
+import { type IncomeRow, type Overview, type PaymentRow, useOverview, useSettle } from "../queries";
 
 /** Tithing: what's owed and paid, income and donations, and the year at a glance. */
 export function TithingPage() {
@@ -33,6 +40,10 @@ export function TithingPage() {
   const [income, setIncome] = useState<IncomeRow | null>(null);
   const [pasting, setPasting] = useState(false);
   const data = overview.data;
+  const [filter, setFilter] = useState<TithingFilter>(noTithingFilter);
+  // Unpaid income spans every year unless dates are picked; the income list shows the year.
+  const openRows = data ? filterIncome(data.open, filter, null) : [];
+  const incomeRows = data ? filterIncome(data.income, filter, data.year) : [];
 
   // A link from Money (?payment=12) opens that donation once the numbers are in.
   const wanted = Number(params.get("payment"));
@@ -98,13 +109,29 @@ export function TithingPage() {
           <Summary data={data} />
 
           <div className="grid grid-cols-1 gap-4 lg:col-span-7">
+            <FilterBar
+              filter={filter}
+              onChange={setFilter}
+              sources={[...new Set(data.income.map((row) => row.source))].sort()}
+              largestCents={data.income.reduce((top, row) => Math.max(top, row.amountCents), 0)}
+              today={today}
+              year={data.year}
+              shown={incomeRows.length}
+            />
             <OpenPanel
-              data={data}
+              rows={openRows}
+              allOpen={data.open}
               today={today}
               onOpen={setIncome}
               onPay={(ids) => setPayment({ kind: "new", incomeIds: ids })}
             />
-            <IncomePanel data={data} today={today} onOpen={setIncome} />
+            <IncomePanel
+              rows={incomeRows}
+              data={data}
+              datesPicked={filter.datesPicked}
+              today={today}
+              onOpen={setIncome}
+            />
           </div>
           <div className="grid grid-cols-1 gap-4 lg:col-span-5">
             <PaymentsPanel
@@ -235,26 +262,57 @@ function Summary({ data }: { data: Overview }) {
   );
 }
 
-/** Unpaid income of every year, with a way to pay several at once. */
+/** The last day of last month and of last year, for catching up in one tap. */
+function catchUpDates(today: string): Array<{ label: string; date: string }> {
+  const [year = 0, month = 1] = today.split("-").map(Number);
+  const lastMonthEnd = new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10);
+  return [
+    { label: "End of last month", date: lastMonthEnd },
+    { label: `End of ${year - 1}`, date: `${year - 1}-12-31` },
+  ];
+}
+
+/** Unpaid income of every year, with ways to pay several at once or mark them paid. */
 function OpenPanel({
-  data,
+  rows,
+  allOpen,
   today,
   onOpen,
   onPay,
 }: {
-  data: Overview;
+  /** The unpaid income that matches the filters. */
+  rows: IncomeRow[];
+  /** All unpaid income, for catching up through a date whatever the filters. */
+  allOpen: IncomeRow[];
   today: string;
   onOpen: (row: IncomeRow) => void;
   onPay: (incomeIds: number[]) => void;
 }) {
+  const ids = useId();
+  const settle = useSettle();
   const [picked, setPicked] = useState<number[]>([]);
-  const rows = data.open;
+  const [through, setThrough] = useState("");
+  // What was just marked paid, so it can be undone.
+  const [marked, setMarked] = useState<number[] | null>(null);
   // Rows that were paid since no longer count as picked.
   const chosen = rows.filter((row) => picked.includes(row.id));
   const total = chosen.reduce((sum, row) => sum + row.owedCents - row.paidCents, 0);
+  const catchUp = through === "" ? [] : allOpen.filter((row) => row.date <= through);
+  const catchUpTotal = catchUp.reduce((sum, row) => sum + row.owedCents - row.paidCents, 0);
   const toggle = (id: number) =>
     setPicked((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  const markPaid = (incomeIds: number[]) =>
+    settle.mutate(
+      { incomeIds, settled: true },
+      {
+        onSuccess: () => {
+          setMarked(incomeIds);
+          setPicked([]);
+          setThrough("");
+        },
+      },
     );
   return (
     <Panel
@@ -274,29 +332,53 @@ function OpenPanel({
         ) : undefined
       }
     >
-      {rows.length === 0 ? (
+      {marked ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-ok/40">
+          <p role="status" className="min-w-0 flex-1 font-semibold text-ok">
+            Marked {marked.length} {marked.length === 1 ? "income" : "incomes"} as paid.
+          </p>
+          <button
+            type="button"
+            className={secondaryButton}
+            disabled={settle.isPending}
+            onClick={() =>
+              settle.mutate(
+                { incomeIds: marked, settled: false },
+                { onSuccess: () => setMarked(null) },
+              )
+            }
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
+      {allOpen.length === 0 ? (
         <p className="flex items-center gap-2 font-semibold text-ok">
           <StatusDot tone="ok" />
           All caught up. Nothing is waiting to be paid.
         </p>
       ) : (
         <>
-          <ul className="divide-y divide-surface-0">
-            {rows.map((row) => (
-              <li key={row.id} className="flex items-start">
-                <label className="grid size-11 shrink-0 cursor-pointer place-items-center">
-                  <input
-                    type="checkbox"
-                    checked={picked.includes(row.id)}
-                    onChange={() => toggle(row.id)}
-                    className="size-5 accent-accent"
-                  />
-                  <span className="sr-only">Pick {row.payee || "this income"}</span>
-                </label>
-                <IncomeButton row={row} today={today} onOpen={onOpen} />
-              </li>
-            ))}
-          </ul>
+          {rows.length === 0 ? (
+            <p className="text-muted">No unpaid income matches the filters.</p>
+          ) : (
+            <ul className="divide-y divide-surface-0">
+              {rows.map((row) => (
+                <li key={row.id} className="flex items-start">
+                  <label className="grid size-11 shrink-0 cursor-pointer place-items-center">
+                    <input
+                      type="checkbox"
+                      checked={picked.includes(row.id)}
+                      onChange={() => toggle(row.id)}
+                      className="size-5 accent-accent"
+                    />
+                    <span className="sr-only">Pick {row.payee || "this income"}</span>
+                  </label>
+                  <IncomeButton row={row} today={today} onOpen={onOpen} />
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -307,12 +389,79 @@ function OpenPanel({
               <HandCoins aria-hidden="true" className="size-5" />
               {chosen.length === 0 ? "Pay picked" : `Pay ${formatCents(total)}`}
             </button>
-            <p className="text-sm text-muted">
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={chosen.length === 0 || settle.isPending}
+              onClick={() => markPaid(chosen.map((row) => row.id))}
+            >
+              <CircleCheck aria-hidden="true" className="size-4" />
+              Mark picked as paid
+            </button>
+            <p className="min-w-0 text-sm text-muted">
               {chosen.length === 0
-                ? "Pick income to pay it in one payment."
-                : `For ${chosen.length} ${chosen.length === 1 ? "income" : "incomes"}.`}
+                ? "Pick income to pay it in one payment, or to mark it paid."
+                : `${chosen.length} ${chosen.length === 1 ? "income" : "incomes"} picked.`}
             </p>
           </div>
+          <details className="mt-5 rounded-tile bg-base/80 px-4 ring-1 ring-surface-0/50">
+            <summary className="min-h-11 cursor-pointer py-3 font-semibold text-fg">
+              Already paid these before using Hub?
+            </summary>
+            <div className="space-y-4 pb-4">
+              <p className="text-sm text-muted">
+                Mark income as paid without adding a payment, so your Money balances stay as they
+                are. You can undo it.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {catchUpDates(today).map((choice) => (
+                  <button
+                    key={choice.date}
+                    type="button"
+                    aria-pressed={through === choice.date}
+                    onClick={() => setThrough(choice.date)}
+                    className={`inline-flex h-11 items-center rounded-full px-4 text-sm font-semibold ${
+                      through === choice.date
+                        ? "bg-surface-1 text-fg"
+                        : "bg-surface-0 text-muted hover:text-fg"
+                    }`}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+              <div className="max-w-60">
+                <label htmlFor={`${ids}-through`} className={labelClass}>
+                  Paid through
+                </label>
+                <input
+                  id={`${ids}-through`}
+                  type="date"
+                  value={through}
+                  max={today}
+                  onChange={(event) => setThrough(event.target.value)}
+                  className={`${inputClass} [color-scheme:dark]`}
+                />
+              </div>
+              <button
+                type="button"
+                className={secondaryButton}
+                disabled={catchUp.length === 0 || settle.isPending}
+                onClick={() => markPaid(catchUp.map((row) => row.id))}
+              >
+                {through === ""
+                  ? "Pick a date"
+                  : catchUp.length === 0
+                    ? "Nothing unpaid by then"
+                    : `Mark ${catchUp.length} ${catchUp.length === 1 ? "income" : "incomes"} paid (${formatCents(catchUpTotal)})`}
+              </button>
+              {settle.error ? (
+                <p role="alert" className="text-sm text-danger">
+                  {settle.error.message}
+                </p>
+              ) : null}
+            </div>
+          </details>
         </>
       )}
     </Panel>
@@ -347,6 +496,7 @@ function IncomeButton({
               status={row.status}
               owedCents={row.owedCents}
               paidCents={row.paidCents}
+              settled={row.settled}
               prefix=""
             />
           ) : (
@@ -368,11 +518,17 @@ function IncomeButton({
 
 /** All of the year's income, paid or not. */
 function IncomePanel({
+  rows: matching,
   data,
+  datesPicked,
   today,
   onOpen,
 }: {
+  /** The income that matches the filters. */
+  rows: IncomeRow[];
   data: Overview;
+  /** Dates were picked, so this isn't just the year shown on the page. */
+  datesPicked: boolean;
   today: string;
   onOpen: (row: IncomeRow) => void;
 }) {
@@ -383,7 +539,7 @@ function IncomePanel({
     ["paid", "Paid"],
     ["exempt", "Not tithed on"],
   ] as const;
-  const rows = data.income.filter((row) =>
+  const rows = matching.filter((row) =>
     filter === "all"
       ? true
       : filter === "exempt"
@@ -394,7 +550,7 @@ function IncomePanel({
   );
   return (
     <Panel
-      title={`Income in ${data.year}`}
+      title={datesPicked ? "Income" : `Income in ${data.year}`}
       description="Tap one to turn tithing off for it, or to tithe on only part of it, like a sale's profit."
     >
       <fieldset className="mb-4 min-w-0">
@@ -415,9 +571,13 @@ function IncomePanel({
           ))}
         </div>
       </fieldset>
-      {data.income.length === 0 ? (
+      {matching.length === 0 ? (
         <p className="text-muted">
-          No money came in during {data.year}. Income you add in Money shows up here.
+          {data.income.length === 0
+            ? "No money has come in yet. Income you add in Money shows up here."
+            : datesPicked
+              ? "No income matches the filters."
+              : `No income matches in ${data.year}. Try the filters to see other years.`}
         </p>
       ) : rows.length === 0 ? (
         <p className="text-muted">Nothing matches.</p>
@@ -522,13 +682,16 @@ function PaymentsPanel({
 /** The year's totals in one place, for tithing settlement. */
 function YearSummary({ data }: { data: Overview }) {
   const { summary } = data;
-  const short = summary.owedYearCents - summary.paidYearCents;
+  const short = summary.owedYearCents - summary.paidYearCents - summary.settledYearCents;
   const rows: Array<[string, string]> = [
     ["Money in", formatCents(summary.incomeYearCents)],
     ["Not tithed on", formatCents(summary.incomeYearCents - summary.tithableYearCents)],
     ["Tithed on", formatCents(summary.tithableYearCents)],
     [`Tithing owed (${data.percent}%)`, formatCents(summary.owedYearCents)],
     ["Tithing paid", formatCents(summary.paidYearCents)],
+    ...(summary.settledYearCents > 0
+      ? ([["Marked as paid", formatCents(summary.settledYearCents)]] as Array<[string, string]>)
+      : []),
     ["Fast offerings", formatCents(summary.fastOfferingYearCents)],
     ["Other donations", formatCents(summary.otherYearCents)],
   ];

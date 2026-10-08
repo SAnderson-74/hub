@@ -27,6 +27,11 @@ export const tithingIncome = sqliteTable(
     applies: integer("applies", { mode: "boolean" }).notNull().default(true),
     /** The amount tithing is figured on. Null means the default for the transaction. */
     baseCents: integer("base_cents"),
+    /**
+     * Marked as paid without a payment in Hub, for tithing paid before Hub tracked it
+     * (or somewhere it doesn't see). It counts as paid, and no payment links to it.
+     */
+    settled: integer("settled", { mode: "boolean" }).notNull().default(false),
     ...timestamps(),
   },
   (t) => [uniqueIndex("tithing_income_transaction_unique").on(t.transactionId)],

@@ -720,6 +720,7 @@ function TransactionForm({
                   status={income.status}
                   owedCents={income.owedCents}
                   paidCents={income.paidCents}
+                  settled={income.settled}
                 />
                 <Link
                   to={`/tithing?year=${transaction?.date.slice(0, 4)}`}

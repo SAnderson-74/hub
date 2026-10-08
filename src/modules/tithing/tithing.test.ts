@@ -678,3 +678,84 @@ describe("saving tithing with a transaction", () => {
     ).toBe(0);
   });
 });
+
+describe("marking income as paid without a payment", () => {
+  const settle = (json: object) => t.api.tithing.settle.$post({ json: json as never });
+
+  it("catches up income paid before Hub tracked it, by pick or by date", async () => {
+    const { checking, groceries } = await setup();
+    const a = await add(checking.id, "2030-01-15", 200_000);
+    const b = await add(checking.id, "2030-02-15", 100_000);
+    const c = await add(checking.id, "2030-03-15", 50_000);
+    const refund = await add(checking.id, "2030-01-16", 5_000, { categoryId: groceries });
+    await pay(checking.id, 20_000, { links: [{ incomeTransactionId: a.id, amountCents: 20_000 }] });
+
+    // Picked: one unpaid, one already paid, one not tithed on.
+    const picked = await body(await settle({ incomeIds: [b.id, a.id, refund.id] }));
+    expect(picked).toEqual({ changed: 1, skipped: 2 });
+    let page = await overview(2030);
+    const byId = new Map(page.income.map((row) => [row.id, row]));
+    expect([byId.get(b.id)?.status, byId.get(b.id)?.settled]).toEqual(["paid", true]);
+    expect(byId.get(a.id)?.settled).toBe(false);
+    expect(page.open.map((row) => row.id)).toEqual([c.id]);
+    expect(page.summary).toMatchObject({ unpaidCents: 5_000, settledYearCents: 10_000 });
+
+    // Through a date: everything unpaid on or before it.
+    const through = await body(await settle({ through: "2030-03-31" }));
+    expect(through).toEqual({ changed: 1, skipped: 0 });
+    page = await overview(2030);
+    expect(page.open).toEqual([]);
+    expect(page.summary).toMatchObject({
+      unpaidCents: 0,
+      balanceCents: 0,
+      settledYearCents: 15_000,
+    });
+  });
+
+  it("counts as paid in the charts, and can be undone", async () => {
+    const { checking } = await setup();
+    const a = await add(checking.id, "2030-01-15", 100_000);
+    await settle({ incomeIds: [a.id] });
+    let page = await overview(2030);
+    expect(page.months[0]).toMatchObject({ owedCents: 10_000, paidCents: 10_000, balanceCents: 0 });
+    // No payment is added: nothing changes in Money.
+    expect(page.payments).toEqual([]);
+    expect(page.summary.paidYearCents).toBe(0);
+
+    const undone = await body(await settle({ incomeIds: [a.id], settled: false }));
+    expect(undone).toEqual({ changed: 1, skipped: 0 });
+    page = await overview(2030);
+    expect(page.income[0]).toMatchObject({ status: "unpaid", settled: false });
+    expect(page.months[0]?.balanceCents).toBe(10_000);
+  });
+
+  it("keeps the mark through a tithing choice, and takes no payment links", async () => {
+    const { checking } = await setup();
+    const a = await add(checking.id, "2030-01-15", 100_000);
+    await settle({ incomeIds: [a.id] });
+    // Back to the default choice doesn't forget that it's marked.
+    await setIncome(a.id, { applies: true, baseCents: null });
+    expect((await overview(2030)).income[0]?.settled).toBe(true);
+
+    const spent = await add(checking.id, "2030-02-01", -10_000);
+    const linked = await t.api.tithing.payments[":id"].$put({
+      ...param(spent.id),
+      json: { fund: "tithing", links: [{ incomeTransactionId: a.id, amountCents: 5_000 }] },
+    });
+    expect(await failure(linked)).toMatchObject({
+      status: 400,
+      error: expect.stringContaining("marked as paid"),
+    });
+  });
+
+  it("needs income or a date", async () => {
+    await setup();
+    expect((await failure(await settle({}))).status).toBe(400);
+    expect((await failure(await settle({ incomeIds: [1], through: "2030-01-01" }))).status).toBe(
+      400,
+    );
+    expect((await failure(await settle({ through: "2030-01-01", settled: false }))).status).toBe(
+      400,
+    );
+  });
+});

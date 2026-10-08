@@ -9,10 +9,18 @@ import {
   overviewQuerySchema,
   paymentCreateSchema,
   paymentSetSchema,
+  settleSchema,
   tithingImportSchema,
 } from "../../shared/tithing";
 import { importTithing } from "./import.service";
-import { clearPayment, createPayment, overview, setIncome, setPayment } from "./tithing.service";
+import {
+  clearPayment,
+  createPayment,
+  overview,
+  setIncome,
+  setPayment,
+  settleIncome,
+} from "./tithing.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric id."));
 
@@ -34,6 +42,16 @@ export function tithingRoutes({ db }: Deps) {
           setIncome(db, c.req.valid("param").id, c.req.valid("json"));
           return c.body(null, 204);
         },
+      )
+      // Marks income as paid (or not) without a payment, for tithing paid before Hub.
+      .post(
+        "/settle",
+        zValidator(
+          "json",
+          settleSchema,
+          invalid("Pick the income to mark, or a date to mark paid through."),
+        ),
+        (c) => c.json(settleIncome(db, c.req.valid("json"))),
       )
       // Adds a donation as a new money-out transaction.
       .post(

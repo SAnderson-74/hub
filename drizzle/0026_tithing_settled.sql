@@ -1,0 +1,1 @@
+ALTER TABLE `tithing_income` ADD `settled` integer DEFAULT false NOT NULL;

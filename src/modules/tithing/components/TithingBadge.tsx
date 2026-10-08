@@ -16,7 +16,13 @@ const TEXT_CLASS: Record<TithingStatus, string> = {
 };
 
 /** "Not paid, $200 owed", "Partly paid, $50 left", or "Paid". */
-export function statusText(status: TithingStatus, owedCents: number, paidCents: number): string {
+export function statusText(
+  status: TithingStatus,
+  owedCents: number,
+  paidCents: number,
+  settled = false,
+): string {
+  if (settled) return "Paid, marked as paid";
   if (status === "unpaid") return `${STATUS_LABELS.unpaid}, ${formatCents(owedCents)} owed`;
   if (status === "partial") {
     return `${STATUS_LABELS.partial}, ${formatCents(owedCents - paidCents)} left`;
@@ -32,14 +38,17 @@ export function TithingBadge({
   owedCents,
   paidCents,
   prefix = "Tithing",
+  settled = false,
 }: {
   status: TithingStatus;
   owedCents: number;
   paidCents: number;
   /** What it's the status of: "Tithing" in lists, empty where the context says it. */
   prefix?: string;
+  /** Marked as paid without a payment in Hub. */
+  settled?: boolean;
 }) {
-  const text = statusText(status, owedCents, paidCents);
+  const text = statusText(status, owedCents, paidCents, settled);
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-sm font-semibold ${TEXT_CLASS[status]}`}
