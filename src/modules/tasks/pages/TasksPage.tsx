@@ -1,4 +1,4 @@
-import { ClipboardPaste, FolderPlus, List, Pencil, Plus, SquareKanban } from "lucide-react";
+import { ClipboardPaste, FolderPlus, List, Pencil, Plus, SquareKanban, X } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
@@ -6,13 +6,15 @@ import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { iconButton, inputClass, primaryButton } from "../../../client/components/ui";
 import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
+import { parseQuickAdd, type QuickAddChip } from "../../../shared/quickAdd";
+import { describeRecurrence } from "../../../shared/recurrence";
 import { MoveSheet } from "../components/MoveSheet";
 import { PasteTasksSheet } from "../components/PasteTasksSheet";
 import { ProjectSheet } from "../components/ProjectSheet";
 import { TaskBoard, type TaskMove } from "../components/TaskBoard";
 import { TaskList } from "../components/TaskList";
 import { TaskSheet } from "../components/TaskSheet";
-import { localDate } from "../dates";
+import { formatShortDate, localDate } from "../dates";
 import { seriesContinues } from "../draft";
 import {
   type ProjectFilter,
@@ -84,8 +86,25 @@ export function TasksPage() {
   const today = localDate(useNow());
 
   const [title, setTitle] = useState("");
+  // Chips turned back into plain words, by the words as typed.
+  const [keep, setKeep] = useState<string[]>([]);
   const titleInput = useRef<HTMLInputElement>(null);
-  useCommand("add-task", () => titleInput.current?.focus());
+  // "Add a task" from the command menu, with the words typed there when it has them.
+  useCommand("add-task", () => {
+    const text = params.get("text");
+    if (text) {
+      setTitle(text.slice(0, 300));
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete("text");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+    titleInput.current?.focus();
+  });
   const [announcement, setAnnouncement] = useState("");
   const [moving, setMoving] = useState<TaskItem | null>(null);
   const [projectSheet, setProjectSheet] = useState<"new" | ProjectItem | null>(null);
@@ -155,17 +174,31 @@ export function TasksPage() {
       .then(() => announceRepeat(task, done ? "done" : "todo"))
       .catch(() => undefined);
 
+  // Dates, repeats, priority, tags, and @project are read as they're typed.
+  const quick = parseQuickAdd(title, { today, projects: projectList, keep });
   const onAdd = (event: FormEvent) => {
     event.preventDefault();
-    const trimmed = title.trim();
-    if (!trimmed) return;
+    if (!quick.title) return;
+    const typed = title;
+    const kept = keep;
     // Clear now so the next task can be typed while this one saves.
     setTitle("");
+    setKeep([]);
     createTask.mutate(
-      { title: trimmed, projectId: typeof project === "number" ? project : null },
+      {
+        title: quick.title,
+        projectId: quick.projectId ?? (typeof project === "number" ? project : null),
+        dueDate: quick.dueDate,
+        tags: quick.tags,
+        recurrence: quick.recurrence,
+        ...(quick.priority === null ? {} : { priority: quick.priority }),
+      },
       {
         onSuccess: (task) => setAnnouncement(`Task added: ${task.title}`),
-        onError: () => setTitle((current) => current || trimmed),
+        onError: () => {
+          setTitle((current) => current || typed);
+          setKeep((current) => (current.length > 0 ? current : kept));
+        },
       },
     );
   };
@@ -275,7 +308,7 @@ export function TasksPage() {
         </fieldset>
       </div>
 
-      <form onSubmit={onAdd} className="mb-6 flex gap-2">
+      <form onSubmit={onAdd} className="mb-2 flex gap-2">
         <label htmlFor="new-task" className="sr-only">
           New task
         </label>
@@ -283,25 +316,37 @@ export function TasksPage() {
           ref={titleInput}
           id="new-task"
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            setTitle(event.target.value);
+            if (!event.target.value.trim()) setKeep([]);
+          }}
+          aria-describedby="new-task-hint"
           placeholder={
             typeof project === "number"
               ? `Add a task to ${projectLabel(project, projectList)}`
               : "Add a task to the inbox"
           }
-          maxLength={200}
+          maxLength={300}
           enterKeyHint="done"
           className={inputClass}
         />
         <button
           type="submit"
           className={primaryButton}
-          disabled={!title.trim() || createTask.isPending}
+          disabled={!quick.title || createTask.isPending}
         >
           <Plus aria-hidden="true" className="size-5" />
           <span className="max-sm:sr-only">Add task</span>
         </button>
       </form>
+      <QuickAddChips
+        chips={quick.chips}
+        title={quick.title}
+        typed={title.trim().length > 0}
+        today={today}
+        repeat={quick.recurrence ? describeRecurrence(quick.recurrence) : null}
+        onKeep={(chip) => setKeep((current) => [...current, chip.text])}
+      />
 
       <p role="status" className="sr-only">
         {announcement}
@@ -361,5 +406,78 @@ export function TasksPage() {
         }}
       />
     </>
+  );
+}
+
+const CHIP_PREFIX: Record<QuickAddChip["kind"], string> = {
+  date: "Due",
+  repeat: "Repeats",
+  priority: "",
+  tag: "Tag",
+  project: "Project",
+};
+
+/**
+ * What the quick-add line will set, as chips. Each can be turned back into plain words
+ * for the title, for a task that really is about "Friday" or "#1".
+ */
+function QuickAddChips({
+  chips,
+  title,
+  typed,
+  today,
+  repeat,
+  onKeep,
+}: {
+  chips: QuickAddChip[];
+  title: string;
+  typed: boolean;
+  today: string;
+  repeat: string | null;
+  onKeep: (chip: QuickAddChip) => void;
+}) {
+  const shown = (chip: QuickAddChip) =>
+    chip.kind === "date"
+      ? formatShortDate(chip.label, today)
+      : chip.kind === "repeat"
+        ? (repeat ?? chip.label)
+        : chip.label;
+  return (
+    <div className="mb-6 min-h-6">
+      {chips.length > 0 ? (
+        <ul aria-label="Read from the task" className="flex flex-wrap items-center gap-2">
+          {chips.map((chip) => (
+            <li
+              key={`${chip.kind}-${chip.text}`}
+              className="flex items-center rounded-full bg-surface-0 pl-3 text-sm text-fg"
+            >
+              <span>
+                {CHIP_PREFIX[chip.kind] ? (
+                  <span className="text-muted">{CHIP_PREFIX[chip.kind]} </span>
+                ) : null}
+                {shown(chip)}
+              </span>
+              <button
+                type="button"
+                onClick={() => onKeep(chip)}
+                aria-label={`Keep “${chip.text}” in the title`}
+                className="grid size-11 place-items-center rounded-full text-muted hover:text-fg"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p id="new-task-hint" className="mt-1 text-sm text-muted">
+        {chips.length > 0
+          ? title
+            ? `Adds “${title}”.`
+            : "Add a few words for the title."
+          : typed
+            ? "Dates like “tomorrow” or “next Fri”, “every week”, “!high”, “#tag”, and “@project” are read as you type."
+            : ""}
+      </p>
+    </div>
   );
 }

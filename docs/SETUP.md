@@ -104,7 +104,13 @@ If `apps/hub` was created without encryption (Datasets shows no lock icon on it 
    3. **Get Dictionary Value**: `message` from Contents of URL, then **Show Notification** with it. If something's wrong, Hub answers with `error` instead, so show that when `message` is empty.
 
    The same listing can also be pasted on the Resale page with **Paste listing**, which shows what will happen before it's added.
-4. Optional: a Claude Project that reads receipts, listings, and study plans for Hub. Copy its instructions from **Settings > Claude Project**; [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has the rest.
+4. Optional: a Shortcut that adds a task from one line, read the same way as the Tasks page reads it ("Renew registration next Fri !high #car every year"). Make a new shortcut called "Add to Hub" with these actions:
+   1. **Ask for Input** (Text), prompt "Task".
+   2. **Get Contents of URL**: URL `https://hub.<your-tailnet>.ts.net/api/tasks/quick`, Method **POST**, Request Body **JSON** with a Text field `text` set to Provided Input.
+   3. **Get Dictionary Value**: `title` from Contents of URL, then **Show Notification** "Added" with it. If something's wrong, Hub answers with `error` instead.
+
+   Dates are read in the time zone set in Settings. Words Hub doesn't recognize stay in the title, and `@name` picks a project whose name starts with it.
+5. Optional: a Claude Project that reads receipts, listings, and study plans for Hub. Copy its instructions from **Settings > Claude Project**; [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has the rest.
 
 ## 6. Home Assistant (optional)
 

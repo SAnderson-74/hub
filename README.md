@@ -20,7 +20,7 @@ The screenshots use the example data that setup can add, with made-up names. Mor
 
 Each module can be turned off in Settings; its page and home widgets go away with it.
 
-- **Tasks:** projects, a list and a board, subtasks, priorities, due dates, tags, and recurring tasks that create the next one when finished.
+- **Tasks:** quick add in plain English ("Renew registration next Fri !high #car every year"), projects, a list and a board, subtasks, priorities, due dates, tags, and recurring tasks that create the next one when finished.
 - **Time:** several timers at once, manual entries, and a weekly chart. Time can be for a task, a course, a resale item, or a project.
 - **Goals:** target dates, milestones, and progress from tasks, milestones, an amount, or a linked savings account, with a timeline.
 - **Courses:** terms, courses, credits, assessments, and planned windows on a pacing timeline, plus a study streak from time on courses. Terms can be imported as JSON.

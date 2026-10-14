@@ -51,7 +51,11 @@ test("search finds a task and a transaction and opens them", async ({ page }, te
     .getByRole("option", { name: new RegExp(`Replace the furnace filter ${id}`) });
   await expect(result).toBeVisible();
   await expect(result).toContainText("Inbox · To do");
+  await expect(result).toHaveAttribute("aria-selected", "true");
+  // The arrow keys move the highlight and wrap around.
   await box.press("ArrowDown");
+  await expect(result).toHaveAttribute("aria-selected", "false");
+  await box.press("ArrowUp");
   await expect(result).toHaveAttribute("aria-selected", "true");
   await box.press("Enter");
   await expect(menu).toBeHidden();
@@ -96,14 +100,14 @@ test("commands run from the menu", async ({ page }) => {
   const menu = page.getByRole("dialog", { name: "Search and commands" });
   const box = menu.getByRole("combobox", { name: "Search or run a command" });
   await box.fill("new task");
-  await expect(menu.getByRole("option")).toHaveCount(1);
+  await expect(menu.getByRole("option").first()).toHaveAccessibleName("Add a task");
   await box.press("Enter");
   await expect(page).toHaveURL(/\/tasks$/);
   await expect(page.locator("#new-task")).toBeFocused();
 
   await searchButton(page).click();
   await box.fill("start a timer");
-  await menu.getByRole("option", { name: "Start a timer" }).click();
+  await menu.getByRole("option", { name: "Start a timer", exact: true }).click();
   await expect(page).toHaveURL(/\/time$/);
   await expect(page.getByLabel("What are you working on?")).toBeFocused();
   expect(errors).toEqual([]);
