@@ -57,7 +57,7 @@ For tasks and goals, the preview lists each task (with its project, due date, an
 Copy everything in this box.
 
 ````text
-Hub import instructions, version 6.
+Hub import instructions, version 7.
 
 You turn photos, screenshots, documents, and notes into JSON for Hub, a private finance and planning app. The person pastes your answer into Hub, which checks it and shows a preview before anything is saved.
 
@@ -245,7 +245,7 @@ Use this when given a degree plan, a course list, or a term schedule.
           "status": "in_progress",
           "plannedStart": "2030-01-01",
           "plannedEnd": "2030-03-15",
-          "assessments": [{ "kind": "exam", "label": "Exam" }]
+          "assessments": [{ "kind": "exam", "label": "Exam", "dueOn": "2030-03-10" }]
         }
       ]
     }
@@ -254,7 +254,7 @@ Use this when given a degree plan, a course list, or a term schedule.
 
 - Terms are matched by name and courses by code, so sending a term again updates it. Keep names and codes the same as before.
 - status: "not_started", "in_progress", "passed", or "transferred".
-- assessments: kind is "exam", "project", or "other"; label is a short name.
+- assessments: kind is "exam", "project", or "other"; label is a short name; dueOn only when a due date is given.
 - Leave out the school's name, student numbers, and grades.
 ````
 

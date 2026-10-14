@@ -124,7 +124,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 - [x] 6.1 Finished tasks load a page at a time (newest first, from `GET /api/tasks/done`) instead of every finished task at once; Home asks only for today's
 - [ ] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
-- [ ] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
+- [x] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
 - [ ] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
 - [ ] 6.5 Home widgets for every module, chosen and ordered in Settings, including tithing on Home (5.12)
 - [ ] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
@@ -215,7 +215,7 @@ Up to 20 projects, 200 tasks (20 subtasks each), and 20 goals (20 milestones eac
           "plannedStart": "2030-01-01",
           "plannedEnd": "2030-03-15",
           "assessments": [
-            { "kind": "exam", "label": "Exam" },
+            { "kind": "exam", "label": "Exam", "dueOn": "2030-03-10" },
             { "kind": "project", "label": "Project" }
           ]
         }
@@ -225,7 +225,7 @@ Up to 20 projects, 200 tasks (20 subtasks each), and 20 goals (20 milestones eac
 }
 ```
 
-`status` is one of `not_started`, `in_progress`, `passed`, `transferred`. `kind` is `exam`, `project`, or `other`; `label` is free text.
+`status` is one of `not_started`, `in_progress`, `passed`, `transferred`. `kind` is `exam`, `project`, or `other`; `label` is free text; `dueOn` (optional) is the due date. Assessments are matched by label within their course: new ones are added, and a date fills in one that has none (a date already in Hub stays).
 
 ### `hub-inventory/v1`
 

@@ -1,0 +1,1 @@
+ALTER TABLE `assessments` ADD `due_on` text;

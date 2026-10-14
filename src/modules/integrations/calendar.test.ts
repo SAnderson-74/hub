@@ -100,4 +100,31 @@ describe("the calendar feed", () => {
     expect(text).not.toContain("Finished");
     expect(text).not.toContain("Long ago");
   });
+
+  it("includes assessments with dates", async () => {
+    const on = await body(await t.api.integrations.calendar.$post());
+    const [term] = await body(
+      await t.api.education.terms.$post({
+        json: { name: "Term 1", startDate: "2020-01-01", endDate: "2040-12-31" },
+      }),
+    );
+    const [withCourse] = await body(
+      await t.api.education.courses.$post({
+        json: { termId: term?.id ?? 0, code: "ABC101", title: "Networks" },
+      }),
+    );
+    const param = { id: String(withCourse?.courses[0]?.id) };
+    await t.api.education.courses[":id"].assessments.$post({
+      param,
+      json: { kind: "exam", label: "Final exam", dueOn: today() },
+    });
+    await t.api.education.courses[":id"].assessments.$post({
+      param,
+      json: { kind: "project", label: "No date yet" },
+    });
+    const text = await (await feed(on.path ?? "")).text();
+    expect(text).toContain("SUMMARY:Final exam (ABC101)");
+    expect(text).toContain("CATEGORIES:Assessment");
+    expect(text).not.toContain("No date yet");
+  });
 });

@@ -38,6 +38,40 @@ const configure = async (reminders: Partial<ReminderSettings> = {}, reminderUrl 
   );
 const task = async (title: string, extra: object = {}) =>
   body(await t.api.tasks.$post({ json: { title, ...extra } }));
+/** An exam on a course in its own term, due on a day. */
+const exam = async (label: string, dueOn: string, done = false) => {
+  const name = `Term for ${label}`;
+  // Each answer lists every term; this one's is found by name.
+  const own = <T extends { name: string }>(terms: T[]) => terms.find((term) => term.name === name);
+  const term = own(
+    await body(
+      await t.api.education.terms.$post({
+        json: { name, startDate: "2025-01-01", endDate: "2025-06-30" },
+      }),
+    ),
+  );
+  const course = own(
+    await body(
+      await t.api.education.courses.$post({
+        json: { termId: term?.id ?? 0, code: "ABC101", title: "Networks" },
+      }),
+    ),
+  )?.courses[0];
+  const assessment = own(
+    await body(
+      await t.api.education.courses[":id"].assessments.$post({
+        param: { id: String(course?.id) },
+        json: { kind: "exam", label, dueOn },
+      }),
+    ),
+  )?.courses[0]?.assessments[0];
+  if (done) {
+    await t.api.education.assessments[":id"].$patch({
+      param: { id: String(assessment?.id) },
+      json: { done: true },
+    });
+  }
+};
 const accept = () =>
   vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 200 }));
 const sentBodies = (mock: ReturnType<typeof accept>) =>
@@ -119,6 +153,8 @@ describe("due soon", () => {
     await t.api.business.leads.$post({
       json: { name: "Example Bakery", nextStep: "Send a quote", nextStepOn: "2025-03-11" },
     });
+    await exam("Midterm", "2025-03-11");
+    await exam("Quiz", "2025-03-11", true);
     const fetchMock = accept();
 
     expect(await runReminders(t.db, UTC, at("18:05"))).toEqual([
@@ -126,9 +162,9 @@ describe("due soon", () => {
     ]);
     expect(sentBodies(fetchMock)[0]).toMatchObject({
       kind: "due_soon",
-      title: "3 things due soon",
+      title: "4 things due soon",
       message:
-        "Submit the report, today. Renew the lease, tomorrow. Send a quote: Example Bakery, tomorrow.",
+        "Submit the report, today. Midterm (ABC101), tomorrow. Renew the lease, tomorrow. Send a quote: Example Bakery, tomorrow.",
     });
 
     // The next day, only what's newly due comes up.
@@ -221,7 +257,8 @@ describe("modules that are off", () => {
     await t.api.business.leads.$post({
       json: { name: "Example Bakery", nextStep: "Send a quote", nextStepOn: DAY },
     });
-    expect(dueSoonReminder(t.db, DAY, 1)?.keys).toHaveLength(2);
+    await exam("Midterm", DAY);
+    expect(dueSoonReminder(t.db, DAY, 1)?.keys).toHaveLength(3);
     await body(
       await t.api.settings.$put({
         json: {

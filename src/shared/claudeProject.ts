@@ -7,7 +7,7 @@ import type { ModuleId } from "./modules";
 // the paste sheet. Pasted answers are untrusted: each format's own schema checks them.
 
 /** Raised when the instructions change, so an older copy in the Project is easy to spot. */
-export const PROJECT_INSTRUCTIONS_VERSION = 6;
+export const PROJECT_INSTRUCTIONS_VERSION = 7;
 
 /** The formats the Project writes, where each goes, and the module it needs. */
 export const PROJECT_FORMATS = [
@@ -276,7 +276,7 @@ Use this when given a degree plan, a course list, or a term schedule.
           "status": "in_progress",
           "plannedStart": "2030-01-01",
           "plannedEnd": "2030-03-15",
-          "assessments": [{ "kind": "exam", "label": "Exam" }]
+          "assessments": [{ "kind": "exam", "label": "Exam", "dueOn": "2030-03-10" }]
         }
       ]
     }
@@ -285,7 +285,7 @@ Use this when given a degree plan, a course list, or a term schedule.
 
 - Terms are matched by name and courses by code, so sending a term again updates it. Keep names and codes the same as before.
 - status: "not_started", "in_progress", "passed", or "transferred".
-- assessments: kind is "exam", "project", or "other"; label is a short name.
+- assessments: kind is "exam", "project", or "other"; label is a short name; dueOn only when a due date is given.
 - Leave out the school's name, student numbers, and grades.`;
 
 const MAX_PASTE = 1024 * 1024;

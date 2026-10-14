@@ -1,7 +1,7 @@
 import { ProgressBar } from "../../../client/components/ProgressBar";
 import { COURSE_STATUS_LABELS, EARNED_STATUSES, termPacing } from "../../../shared/education";
-import { formatShortDate } from "../../tasks/dates";
-import { courseBar, monthTicks, termPercent } from "../pacing";
+import { describeDue, formatShortDate } from "../../tasks/dates";
+import { courseBar, monthTicks, nextAssessment, termPercent } from "../pacing";
 import type { Course, Term } from "../queries";
 
 /** Credits earned against the goal, with the pacing summary in words. */
@@ -96,6 +96,12 @@ export function PacingTimeline({
           {term.courses.map((course) => {
             const tone = courseTone(course, today);
             const bar = courseBar(course, term);
+            const next = nextAssessment(course.assessments);
+            const nextDue = next ? describeDue(next.dueOn, today) : null;
+            const dated = course.assessments.filter(
+              (item): item is typeof item & { dueOn: string } =>
+                item.dueOn !== null && item.dueOn >= term.startDate && item.dueOn <= term.endDate,
+            );
             return (
               <li key={course.id}>
                 <button
@@ -112,7 +118,19 @@ export function PacingTimeline({
                       {tone.label}
                     </span>
                   </span>
-                  <span className="mt-1 block text-xs text-muted">{plannedWindow(course)}</span>
+                  <span className="mt-1 block text-xs text-muted">
+                    {plannedWindow(course)}
+                    {next && nextDue ? (
+                      <>
+                        {" · "}
+                        <span
+                          className={nextDue.tone === "danger" ? "font-semibold text-danger" : ""}
+                        >
+                          {next.label}: {nextDue.label}
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
                   <span
                     aria-hidden="true"
                     className="relative mt-1.5 block h-2.5 rounded-full bg-surface-0"
@@ -121,6 +139,18 @@ export function PacingTimeline({
                       className={`absolute inset-y-0 rounded-full ${tone.bar} ${bar.planned ? "" : "opacity-40"}`}
                       style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
                     />
+                    {/* Assessments with dates, as dots; the next one is named above. */}
+                    {dated.map((item) => (
+                      <span
+                        key={item.id}
+                        className={`absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-mantle ${
+                          item.done ? "bg-ok" : item.dueOn < today ? "bg-danger" : "bg-fg"
+                        }`}
+                        style={{
+                          left: `${termPercent(item.dueOn, term.startDate, term.endDate)}%`,
+                        }}
+                      />
+                    ))}
                     {/* Today, marked on each track so it never crosses the text. */}
                     {inTerm ? (
                       <span
@@ -137,7 +167,7 @@ export function PacingTimeline({
       </div>
       <p className="mt-4 text-sm text-muted">
         {inTerm
-          ? `The marks on each bar show today, ${formatShortDate(today, today)}.`
+          ? `The marks on each bar show today, ${formatShortDate(today, today)}. Dots are assessments with dates.`
           : today < term.startDate
             ? `This term starts ${formatShortDate(term.startDate, today)}.`
             : `This term ended ${formatShortDate(term.endDate, today)}.`}

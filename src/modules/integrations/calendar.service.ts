@@ -96,6 +96,7 @@ const KIND_LABELS: Record<string, string> = {
   task: "Task",
   goal: "Goal",
   milestone: "Milestone",
+  assessment: "Assessment",
   "business step": "Business step",
   lead: "Lead follow-up",
 };
