@@ -53,8 +53,6 @@ export const settingsSchema = z.object({
   setupDone: z.boolean(),
   /** The order of Home's widgets and which are hidden. */
   homeWidgets: homeWidgetsSchema,
-  /** The tithing reminder: on or off, and when. */
-  tithingReminder: tithingReminderSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -72,5 +70,4 @@ export const defaultSettings: Settings = {
   timeZone: "",
   setupDone: false,
   homeWidgets: defaultHomeWidgets,
-  tithingReminder: defaultTithingReminder,
 };

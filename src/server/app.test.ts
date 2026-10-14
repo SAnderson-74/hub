@@ -102,7 +102,6 @@ describe("settings API", () => {
       timeZone: "",
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
-      tithingReminder: defaultTithingReminder,
     });
 
     const saved = await app.request("/api/settings", {
@@ -121,7 +120,6 @@ describe("settings API", () => {
       timeZone: "",
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
-      tithingReminder: defaultTithingReminder,
     });
 
     const reread = await app.request("/api/settings", { headers: owner });
@@ -135,7 +133,6 @@ describe("settings API", () => {
       timeZone: "",
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
-      tithingReminder: defaultTithingReminder,
     });
 
     const invalid = await app.request("/api/settings", {
