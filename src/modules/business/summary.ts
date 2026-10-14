@@ -67,3 +67,46 @@ export function leadTotals(leads: readonly LeadValue[]) {
   }
   return { open, openCents, wonCents };
 }
+
+export type FollowUp = { key: string; kind: "lead" | "step"; title: string; date: string };
+
+/**
+ * Open leads' next steps and unfinished plan steps dated up to `days` from today
+ * (overdue ones included), soonest first.
+ */
+export function followUpsDue(
+  business: {
+    leads: ReadonlyArray<{
+      id: number;
+      name: string;
+      status: LeadStatus;
+      nextStep: string;
+      nextStepOn: string | null;
+    }>;
+    phases: ReadonlyArray<{
+      steps: ReadonlyArray<{ id: number; title: string; done: boolean; dueOn: string | null }>;
+    }>;
+  },
+  today: string,
+  days: number,
+): FollowUp[] {
+  const within = (date: string | null): date is string =>
+    date !== null && daysBetween(today, date) <= days;
+  const items: FollowUp[] = [];
+  for (const lead of business.leads) {
+    if (OPEN_LEAD_STATUSES.includes(lead.status) && within(lead.nextStepOn)) {
+      items.push({
+        key: `lead:${lead.id}`,
+        kind: "lead",
+        title: lead.nextStep ? `${lead.nextStep}: ${lead.name}` : lead.name,
+        date: lead.nextStepOn,
+      });
+    }
+  }
+  for (const step of business.phases.flatMap((phase) => phase.steps)) {
+    if (!step.done && within(step.dueOn)) {
+      items.push({ key: `step:${step.id}`, kind: "step", title: step.title, date: step.dueOn });
+    }
+  }
+  return items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}

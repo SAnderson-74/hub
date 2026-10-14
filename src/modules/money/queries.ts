@@ -608,7 +608,7 @@ export function useTransferMatches(id: number | null) {
 // Budgets
 
 /** A book's budget for a month (YYYY-MM), with six months of history. */
-export function useBudget(bookId: number, month: string) {
+export function useBudget(bookId: number, month: string, enabled = true) {
   return useQuery({
     queryKey: ["money", "budget", bookId, month],
     queryFn: async () => {
@@ -617,6 +617,7 @@ export function useBudget(bookId: number, month: string) {
       return res.json();
     },
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

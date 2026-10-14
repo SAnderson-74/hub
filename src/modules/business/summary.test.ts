@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expiryStatus, leadTotals, phaseLine, planTotals } from "./summary";
+import { expiryStatus, followUpsDue, leadTotals, phaseLine, planTotals } from "./summary";
 
 describe("planTotals", () => {
   it("counts steps and what's left to spend on unfinished ones", () => {
@@ -44,5 +44,43 @@ describe("leadTotals", () => {
         { status: "contacted", valueCents: null },
       ]),
     ).toEqual({ open: 3, openCents: 35_000, wonCents: 40_000 });
+  });
+});
+
+describe("followUpsDue", () => {
+  it("lists open leads' next steps and unfinished steps due soon, soonest first", () => {
+    const today = "2030-03-10";
+    const items = followUpsDue(
+      {
+        leads: [
+          {
+            id: 1,
+            name: "Example Bakery",
+            status: "contacted",
+            nextStep: "Send a quote",
+            nextStepOn: "2030-03-12",
+          },
+          { id: 2, name: "Closed", status: "lost", nextStep: "", nextStepOn: "2030-03-11" },
+          { id: 3, name: "Later", status: "new", nextStep: "", nextStepOn: "2030-04-30" },
+          { id: 4, name: "Overdue Co", status: "quoted", nextStep: "", nextStepOn: "2030-03-01" },
+        ],
+        phases: [
+          {
+            steps: [
+              { id: 5, title: "Register the name", done: false, dueOn: "2030-03-15" },
+              { id: 6, title: "Done already", done: true, dueOn: "2030-03-11" },
+              { id: 7, title: "No date", done: false, dueOn: null },
+            ],
+          },
+        ],
+      },
+      today,
+      7,
+    );
+    expect(items.map((item) => [item.title, item.date])).toEqual([
+      ["Overdue Co", "2030-03-01"],
+      ["Send a quote: Example Bakery", "2030-03-12"],
+      ["Register the name", "2030-03-15"],
+    ]);
   });
 });

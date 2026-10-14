@@ -2,6 +2,7 @@ import { z } from "zod";
 import { businessRateSchema, defaultBusinessRate } from "./businessRate";
 import { HEX_COLOR } from "./color";
 import { defaultHomeAssistant, homeAssistantSchema } from "./homeAssistant";
+import { defaultHomeWidgets, homeWidgetsSchema } from "./homeWidgets";
 import { defaultModules, modulesSchema, timeZoneSchema } from "./modules";
 import { defaultReminders, remindersSchema } from "./reminders";
 
@@ -45,6 +46,8 @@ export const settingsSchema = z.object({
   timeZone: timeZoneSchema,
   /** Whether first-run setup is done. */
   setupDone: z.boolean(),
+  /** The order of Home's widgets and which are hidden. */
+  homeWidgets: homeWidgetsSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -61,4 +64,5 @@ export const defaultSettings: Settings = {
   modules: defaultModules,
   timeZone: "",
   setupDone: false,
+  homeWidgets: defaultHomeWidgets,
 };

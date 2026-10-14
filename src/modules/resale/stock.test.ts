@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costSummary, heldFor, listingAge, stockSummary } from "./stock";
+import { costSummary, heldFor, listingAge, staleListings, stockSummary } from "./stock";
 
 describe("stockSummary", () => {
   it("adds up what's in stock and says what's missing", () => {
@@ -68,5 +68,41 @@ describe("listingAge", () => {
     expect(listingAge({ listedOn: "2030-01-05", endedOn: "2030-01-06" }, "2030-02-01")).toBe(
       "Was up 1 day",
     );
+  });
+});
+
+describe("staleListings", () => {
+  it("finds open listings that have kept their price too long", () => {
+    const today = "2030-03-31";
+    const listing = (listedOn: string, changes: string[], endedOn: string | null = null) => ({
+      listedOn,
+      endedOn,
+      priceCents: 5000,
+      prices: [listedOn, ...changes].map((changedOn) => ({ changedOn })),
+    });
+    const stale = staleListings(
+      [
+        { id: 1, title: "Lamp", status: "listed", listings: [listing("2030-01-15", [])] },
+        {
+          id: 2,
+          title: "Camera",
+          status: "listed",
+          listings: [listing("2030-01-01", ["2030-03-20"])],
+        },
+        { id: 3, title: "Bike", status: "listed", listings: [listing("2030-02-20", [])] },
+        {
+          id: 4,
+          title: "Ended",
+          status: "listed",
+          listings: [listing("2030-01-01", [], "2030-02-01")],
+        },
+        { id: 5, title: "Sold", status: "sold", listings: [listing("2030-01-01", [])] },
+      ],
+      today,
+    );
+    expect(stale).toEqual([
+      { itemId: 1, title: "Lamp", daysUp: 75, daysSamePrice: 75, priceCents: 5000 },
+      { itemId: 3, title: "Bike", daysUp: 39, daysSamePrice: 39, priceCents: 5000 },
+    ]);
   });
 });

@@ -80,3 +80,55 @@ export function costSummary(item: {
     ? costs
     : `${costs} ${formatCents(item.costsCents + item.purchaseCents)} in with the price paid.`;
 }
+
+export type StaleListing = {
+  itemId: number;
+  title: string;
+  /** Days since it was listed. */
+  daysUp: number;
+  /** Days since its price last changed (or since it was listed). */
+  daysSamePrice: number;
+  priceCents: number;
+};
+
+/** How long a listing can keep one price before Hub suggests a look. */
+export const STALE_DAYS = 30;
+
+/**
+ * Listed items whose open listing has kept the same price for `days` or more, the
+ * longest first: candidates to reprice or relist.
+ */
+export function staleListings(
+  items: ReadonlyArray<{
+    id: number;
+    title: string;
+    status: ItemStatus;
+    listings: ReadonlyArray<{
+      listedOn: string;
+      endedOn: string | null;
+      priceCents: number;
+      prices: ReadonlyArray<{ changedOn: string }>;
+    }>;
+  }>,
+  today: string,
+  days = STALE_DAYS,
+): StaleListing[] {
+  const stale: StaleListing[] = [];
+  for (const item of items) {
+    if (item.status !== "listed") continue;
+    for (const listing of item.listings) {
+      if (listing.endedOn !== null) continue;
+      const lastChange = listing.prices.at(-1)?.changedOn ?? listing.listedOn;
+      const daysSamePrice = daysBetween(lastChange, today);
+      if (daysSamePrice < days) continue;
+      stale.push({
+        itemId: item.id,
+        title: item.title,
+        daysUp: daysBetween(listing.listedOn, today),
+        daysSamePrice,
+        priceCents: listing.priceCents,
+      });
+    }
+  }
+  return stale.sort((a, b) => b.daysSamePrice - a.daysSamePrice || a.itemId - b.itemId);
+}

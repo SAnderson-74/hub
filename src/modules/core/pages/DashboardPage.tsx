@@ -1,46 +1,24 @@
+import { Settings2 } from "lucide-react";
+import { Link } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
-import { Panel } from "../../../client/components/Panel";
-import { ErrorNote, LoadingRows } from "../../../client/components/States";
-import { StatusDot, toneLabel } from "../../../client/components/StatusDot";
+import { ghostButton } from "../../../client/components/ui";
+import { homeWidgetViews } from "../../../client/homeWidgets";
 import { formatLongDate, greetingFor } from "../../../client/lib/format";
-import { useModules, useSystem } from "../../../client/lib/queries";
+import { useModules, useSettings, useSystem } from "../../../client/lib/queries";
 import { useNow } from "../../../client/lib/useNow";
+import { defaultHomeWidgets, visibleWidgets } from "../../../shared/homeWidgets";
 import { localDate } from "../../tasks/dates";
-import { MilestonesPanel, StreakPanel, TermPanel, TodayPanel } from "../components/HomeWidgets";
-import { overallTone, type SystemCheck, systemChecks } from "../system-checks";
-
-function CheckTiles({ checks }: { checks: SystemCheck[] }) {
-  return (
-    <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {checks.map((check) => (
-        <li key={check.id} className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
-          <p className="flex items-center gap-2 text-sm font-semibold text-muted">
-            <StatusDot tone={check.tone} />
-            {check.label}
-            <span className="sr-only">: {toneLabel[check.tone]}</span>
-          </p>
-          <p className="mt-3 truncate text-xl font-bold tracking-[-0.02em] tabular-nums text-fg">
-            {check.value}
-          </p>
-          <p className="mt-1 line-clamp-2 text-sm break-words text-muted">{check.detail}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export function DashboardPage() {
   const system = useSystem();
+  const settings = useSettings();
   const now = useNow();
   const firstName = system.data?.user.name.split(/\s+/)[0];
   const greeting = greetingFor(now.getHours());
-  const checks = system.data ? systemChecks(system.data, now) : [];
-  const tone = overallTone(checks);
-  const attention = checks.filter((check) => check.tone === "warn" || check.tone === "danger");
   const today = localDate(now);
   const modules = useModules();
-  const showLeft = modules.tasks || modules.goals;
-  const showRight = modules.courses;
+  // Until settings load, the usual widgets in the usual order.
+  const widgets = visibleWidgets(settings.data?.homeWidgets ?? defaultHomeWidgets, modules);
 
   return (
     <>
@@ -48,48 +26,23 @@ export function DashboardPage() {
         title={firstName ? `${greeting}, ${firstName}` : greeting}
         subtitle={formatLongDate(now)}
       />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-        {/* Widgets for turned-off modules stay out of the way. */}
-        {showLeft ? (
-          <div
-            className={`grid grid-cols-1 gap-4 lg:gap-6 ${showRight ? "lg:col-span-7" : "lg:col-span-12"}`}
-          >
-            {modules.tasks ? <TodayPanel today={today} /> : null}
-            {modules.goals ? <MilestonesPanel today={today} /> : null}
-          </div>
-        ) : null}
-        {showRight ? (
-          <div
-            className={`grid grid-cols-1 gap-4 lg:gap-6 ${showLeft ? "lg:col-span-5" : "lg:col-span-12"}`}
-          >
-            <StreakPanel />
-            <TermPanel today={today} />
-          </div>
-        ) : null}
-
-        <Panel
-          title="System"
-          className="lg:col-span-12"
-          description={
-            system.data ? (
-              <span className="flex items-center gap-2">
-                <StatusDot tone={tone} />
-                {attention.length === 0
-                  ? "Everything looks healthy."
-                  : `Needs a look: ${attention.map((check) => check.label.toLowerCase()).join(", ")}.`}
-              </span>
-            ) : undefined
-          }
-        >
-          {system.isPending ? (
-            <LoadingRows />
-          ) : system.isError ? (
-            <ErrorNote error={system.error} onRetry={() => void system.refetch()} />
-          ) : (
-            <CheckTiles checks={checks} />
-          )}
-        </Panel>
+      {/* Two to a row on wide screens; each row's panels share a height. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+        {widgets.map((id) => {
+          const view = homeWidgetViews[id];
+          return (
+            <div key={id} className={`grid min-w-0 ${view.wide ? "lg:col-span-2" : ""}`}>
+              {view.render({ today, className: "" })}
+            </div>
+          );
+        })}
       </div>
+      <p className="mt-6 text-center">
+        <Link to="/settings#home" className={ghostButton}>
+          <Settings2 aria-hidden="true" className="size-4" />
+          Choose what Home shows
+        </Link>
+      </p>
     </>
   );
 }
