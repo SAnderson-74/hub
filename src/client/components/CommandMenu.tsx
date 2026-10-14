@@ -5,6 +5,7 @@ import {
   type LucideIcon,
   NotebookPen,
   Package,
+  Plus,
   ReceiptText,
   Search,
   Target,
@@ -152,6 +153,23 @@ export function CommandMenu({
         });
       }
     }
+    // Last, so Enter on a search still opens the top result.
+    if (commands.some((command) => command.id === "add-task")) {
+      sections.push({
+        id: "new-task",
+        label: "New task",
+        options: [
+          {
+            id: "quick-add",
+            label: `Add “${typed}” as a task`,
+            detail: "Dates, #tags, !priority, and @project are read on Tasks",
+            icon: Plus,
+            to: `/tasks?do=add-task&text=${encodeURIComponent(typed)}`,
+          },
+        ],
+        more: false,
+      });
+    }
   }
   const options = sections.flatMap((section) => section.options);
   const current = options[Math.min(active, options.length - 1)];
@@ -188,13 +206,15 @@ export function CommandMenu({
   };
 
   const busy = searching && (search.isFetching || settled.trim() !== typed);
+  // "Add as a task" is always there, so it doesn't count as a match.
+  const matches = options.filter((option) => option.id !== "quick-add").length;
   const status = !typed
     ? ""
     : search.isError && searching
       ? `Couldn't search: ${search.error.message}`
-      : busy && options.length === 0
+      : busy && matches === 0
         ? "Searching…"
-        : options.length === 0
+        : matches === 0
           ? searching
             ? `Nothing matches “${typed}”. Try fewer words or check the spelling.`
             : "Type another letter to search everything."
