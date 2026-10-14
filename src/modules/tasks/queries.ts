@@ -1,14 +1,44 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type InfiniteData,
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
 import type { ProjectCreate, ProjectUpdate, TaskCreate, TaskUpdate } from "../../shared/tasks";
 import type { TasksDocument } from "../../shared/tasksImport";
+import { mergeTasks } from "./ordering";
 
 /** "all", "inbox" (no project), or a project id. */
 export type ProjectFilter = "all" | "inbox" | number;
 
+const projectQuery = (project: ProjectFilter) =>
+  project === "all" ? {} : { projectId: String(project) };
+
+/** Open tasks. Finished ones come separately, a page at a time (fetchDone). */
 async function fetchTasks(project: ProjectFilter) {
-  const query = project === "all" ? {} : { projectId: String(project) };
-  const res = await api.tasks.$get({ query });
+  const res = await api.tasks.$get({
+    query: { ...projectQuery(project), status: "backlog,todo,doing" },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+/** A page of finished tasks, newest first. */
+async function fetchDone(
+  project: ProjectFilter,
+  { before, since, limit }: { before?: string; since?: string; limit?: number } = {},
+) {
+  const res = await api.tasks.done.$get({
+    query: {
+      ...projectQuery(project),
+      ...(before && { before }),
+      ...(since && { since }),
+      ...(limit && { limit: String(limit) }),
+    },
+  });
   if (!res.ok) throw await toApiError(res);
   return res.json();
 }
@@ -26,18 +56,60 @@ async function fetchProjects() {
 }
 
 export type TaskItem = Awaited<ReturnType<typeof fetchTasks>>[number];
+type DonePage = Awaited<ReturnType<typeof fetchDone>>;
 export type TaskDetail = Awaited<ReturnType<typeof fetchTask>>;
 export type ProjectItem = Awaited<ReturnType<typeof fetchProjects>>[number];
 
 const keys = {
   tasks: ["tasks"] as const,
   list: (project: ProjectFilter) => ["tasks", "list", project] as const,
+  done: (project: ProjectFilter) => ["tasks", "done", project] as const,
+  doneSince: (since: string) => ["tasks", "done-since", since] as const,
   detail: (id: number) => ["tasks", "detail", id] as const,
   projects: ["projects"] as const,
 };
 
 export function useTasks(project: ProjectFilter) {
   return useQuery({ queryKey: keys.list(project), queryFn: () => fetchTasks(project) });
+}
+
+/** Finished tasks, newest first, with a way to load the next page. */
+export function useDoneTasks(project: ProjectFilter) {
+  return useInfiniteQuery({
+    queryKey: keys.done(project),
+    queryFn: ({ pageParam }) => fetchDone(project, { before: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.next ?? undefined,
+  });
+}
+
+/** Tasks finished at or after an instant, like the start of today. */
+export function useTasksDoneSince(since: string) {
+  return useQuery({
+    queryKey: keys.doneSince(since),
+    queryFn: () => fetchDone("all", { since, limit: 100 }),
+  });
+}
+
+/**
+ * A project's open tasks plus its finished tasks a page at a time, as one list for the
+ * list and board views.
+ */
+export function useTaskSet(project: ProjectFilter) {
+  const open = useTasks(project);
+  const done = useDoneTasks(project);
+  const finished = done.data?.pages.flatMap((page) => page.tasks) ?? [];
+  return {
+    tasks: open.data && done.data ? mergeTasks(open.data, finished) : undefined,
+    isPending: open.isPending || done.isPending,
+    error: open.error ?? done.error,
+    refetch: () => Promise.all([open.refetch(), done.refetch()]),
+    /** Every finished task, including pages not loaded yet. */
+    doneTotal: done.data?.pages[0]?.total ?? 0,
+    hasMoreDone: done.hasNextPage,
+    loadingMoreDone: done.isFetchingNextPage,
+    loadMoreDone: () => void done.fetchNextPage(),
+  };
 }
 
 export function useTask(id: number | null) {
@@ -102,6 +174,18 @@ export function useUpdateTask() {
       const snapshot = queryClient.getQueriesData({ queryKey: keys.tasks });
       queryClient.setQueriesData<TaskItem[]>({ queryKey: ["tasks", "list"] }, (tasks) =>
         tasks?.map((task) => (task.id === id ? applyPatch(task, patch) : task)).sort(bySortOrder),
+      );
+      // Finished tasks keep their newest-first order; a reopened one moves to its status
+      // group when the views merge the lists.
+      const patchPage = (page: DonePage): DonePage => ({
+        ...page,
+        tasks: page.tasks.map((task) => (task.id === id ? applyPatch(task, patch) : task)),
+      });
+      queryClient.setQueriesData<InfiniteData<DonePage>>({ queryKey: ["tasks", "done"] }, (data) =>
+        data ? { ...data, pages: data.pages.map(patchPage) } : data,
+      );
+      queryClient.setQueriesData<DonePage>({ queryKey: ["tasks", "done-since"] }, (page) =>
+        page ? patchPage(page) : page,
       );
       queryClient.setQueriesData<TaskDetail>({ queryKey: ["tasks", "detail"] }, (task) => {
         if (!task) return task;

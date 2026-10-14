@@ -5,10 +5,22 @@ import { localDateParts } from "../../server/db/backup";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
-import { taskCreateSchema, taskListQuerySchema, taskUpdateSchema } from "../../shared/tasks";
+import {
+  doneTaskQuerySchema,
+  taskCreateSchema,
+  taskListQuerySchema,
+  taskUpdateSchema,
+} from "../../shared/tasks";
 import { tasksImportSchema } from "../../shared/tasksImport";
 import { importTasks } from "./import.service";
-import { createTask, deleteTask, getTask, listTasks, updateTask } from "./tasks.service";
+import {
+  createTask,
+  deleteTask,
+  getTask,
+  listDoneTasks,
+  listTasks,
+  updateTask,
+} from "./tasks.service";
 
 const idParam = zValidator("param", idParamSchema, invalid("Use a numeric task id."));
 
@@ -21,6 +33,12 @@ export function taskRoutes({ db, config }: Deps) {
         "/",
         zValidator("query", taskListQuerySchema, invalid("Those filters aren't valid.")),
         (c) => c.json(listTasks(db, c.req.valid("query"))),
+      )
+      // Finished tasks, newest first, a page at a time. The list above returns every task.
+      .get(
+        "/done",
+        zValidator("query", doneTaskQuerySchema, invalid("Those filters aren't valid.")),
+        (c) => c.json(listDoneTasks(db, c.req.valid("query"))),
       )
       .post("/", zValidator("json", taskCreateSchema, invalid("That task isn't valid.")), (c) =>
         c.json(createTask(db, c.req.valid("json"), c.get("user").login), 201),

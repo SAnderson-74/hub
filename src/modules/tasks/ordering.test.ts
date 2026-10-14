@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeDue, localDate } from "./dates";
-import { groupByStatus, orderAfterStep, orderAt, orderForDrop } from "./ordering";
+import { groupByStatus, mergeTasks, orderAfterStep, orderAt, orderForDrop } from "./ordering";
 
 const list = [
   { id: 1, sortOrder: 1 },
@@ -41,6 +41,21 @@ describe("ordering", () => {
     ]);
     expect(Object.keys(groups)).toEqual(["backlog", "todo", "doing", "done"]);
     expect(groups.todo.map((task) => task.id)).toEqual([2, 3]);
+  });
+});
+
+describe("mergeTasks", () => {
+  it("adds finished tasks after open ones, keeping the open copy of a task in both", () => {
+    const open = [
+      { id: 1, status: "todo" },
+      { id: 2, status: "done" }, // just finished, still in the open list
+    ];
+    const done = [
+      { id: 2, status: "done" },
+      { id: 3, status: "done" },
+    ];
+    expect(mergeTasks(open, done)).toEqual([open[0], open[1], done[1]]);
+    expect(mergeTasks([], done)).toEqual(done);
   });
 });
 

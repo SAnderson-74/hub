@@ -119,3 +119,28 @@ export const taskListQuerySchema = z
   })
   .partial();
 export type TaskListQuery = z.infer<typeof taskListQuerySchema>;
+
+/** Finished tasks come a page at a time, newest first. */
+export const DONE_PAGE_SIZE = 20;
+
+/** Where the next page of finished tasks starts: "<finished ms>-<id>" of the last one shown. */
+const doneCursor = z
+  .string()
+  .regex(/^\d+-\d+$/, "Use the next value from the previous page.")
+  .transform((value) => {
+    const [finishedMs = 0, id = 0] = value.split("-").map(Number);
+    return { finishedMs, id };
+  });
+
+/** Filters for finished top-level tasks, newest first. */
+export const doneTaskQuerySchema = z.object({
+  projectId: z.union([z.literal("inbox"), z.coerce.number().int().positive()]).optional(),
+  /** Only tasks finished at or after this instant, like the start of today. */
+  since: z.iso
+    .datetime({ offset: true, message: "Use a date and time like 2030-01-31T09:00:00Z." })
+    .transform((value) => new Date(value))
+    .optional(),
+  before: doneCursor.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(DONE_PAGE_SIZE),
+});
+export type DoneTaskQuery = z.infer<typeof doneTaskQuerySchema>;

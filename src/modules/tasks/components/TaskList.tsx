@@ -1,15 +1,23 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { TASK_STATUS_LABELS, type TaskStatus } from "../../../shared/tasks";
+import { DONE_PAGE_SIZE, TASK_STATUS_LABELS, type TaskStatus } from "../../../shared/tasks";
 import { groupByStatus } from "../ordering";
 import type { TaskItem } from "../queries";
 import { TaskMeta } from "./TaskMeta";
 
 /** Sections of the list, active work first. Done tasks are folded away. */
 const OPEN_SECTIONS: TaskStatus[] = ["doing", "todo", "backlog"];
-const DONE_PAGE = 20;
 
-type TaskListProps = {
+/** Finished tasks load a page at a time; the list shows the ones loaded so far. */
+export type DonePaging = {
+  /** Every finished task, including pages not loaded yet. */
+  doneTotal: number;
+  hasMoreDone: boolean;
+  loadingMoreDone: boolean;
+  loadMoreDone: () => void;
+};
+
+type TaskListProps = DonePaging & {
   tasks: TaskItem[];
   today: string;
   projectNames?: Map<number, string>;
@@ -89,7 +97,6 @@ function TaskRow({
 
 export function TaskList(props: TaskListProps) {
   const { tasks } = props;
-  const [doneShown, setDoneShown] = useState(DONE_PAGE);
   const groups = groupByStatus(tasks);
   const sections = OPEN_SECTIONS.filter((status) => groups[status].length > 0);
   const done = groups.done;
@@ -127,24 +134,40 @@ export function TaskList(props: TaskListProps) {
               className="size-5 text-muted transition-transform group-open:rotate-180"
             />
             Done
-            <span className="text-sm text-muted tabular-nums">{done.length}</span>
+            <span className="text-sm text-muted tabular-nums">
+              {Math.max(props.doneTotal, done.length)}
+            </span>
           </summary>
           <ul className="mt-2 space-y-2">
-            {done.slice(0, doneShown).map((task) => (
+            {done.map((task) => (
               <TaskRow key={task.id} {...props} task={task} />
             ))}
           </ul>
-          {done.length > doneShown ? (
-            <button
-              type="button"
-              onClick={() => setDoneShown((shown) => shown + DONE_PAGE)}
-              className="mt-2 h-11 rounded-full px-4 text-sm font-semibold text-accent-text hover:bg-surface-0"
-            >
-              Show {Math.min(DONE_PAGE, done.length - doneShown)} more
-            </button>
-          ) : null}
+          <ShowMoreDone {...props} shown={done.length} />
         </details>
       ) : null}
     </div>
+  );
+}
+
+/** Loads the next page of finished tasks. */
+export function ShowMoreDone({
+  doneTotal,
+  hasMoreDone,
+  loadingMoreDone,
+  loadMoreDone,
+  shown,
+}: DonePaging & { shown: number }) {
+  if (!hasMoreDone) return null;
+  const next = Math.min(DONE_PAGE_SIZE, Math.max(doneTotal - shown, 1));
+  return (
+    <button
+      type="button"
+      onClick={loadMoreDone}
+      disabled={loadingMoreDone}
+      className="mt-2 h-11 rounded-full px-4 text-sm font-semibold text-accent-text hover:bg-surface-0 disabled:opacity-60"
+    >
+      {loadingMoreDone ? "Loading…" : `Show ${next} more`}
+    </button>
   );
 }

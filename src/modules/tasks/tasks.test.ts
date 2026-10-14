@@ -1,7 +1,9 @@
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
 import { addDays, addMonths } from "../../shared/recurrence";
 import type { ProjectCreate, TaskCreate } from "../../shared/tasks";
+import { tasks } from "./schema";
 
 let t: TestApp;
 beforeEach(() => {
@@ -186,6 +188,79 @@ describe("tasks API", () => {
       status: 400,
       error: expect.stringContaining("project"),
     });
+  });
+});
+
+describe("finished tasks", () => {
+  const listDone = async (query: Record<string, string> = {}) =>
+    body(await t.api.tasks.done.$get({ query }));
+  /** Finishes a task at a set time, so the order doesn't depend on how fast the test runs. */
+  const finish = async (title: string, at: string, extra: TaskCreate = { title }) => {
+    const task = await newTask({ ...extra, title, status: "done" });
+    t.db
+      .update(tasks)
+      .set({ completedAt: new Date(at) })
+      .where(eq(tasks.id, task.id))
+      .run();
+    return task;
+  };
+
+  it("pages through finished tasks, newest first, with a total", async () => {
+    await finish("First", "2030-01-01T10:00:00Z");
+    await finish("Third", "2030-01-03T10:00:00Z");
+    await finish("Second", "2030-01-02T10:00:00Z");
+    // Finished at the same moment: the later one comes first, and paging keeps both.
+    await finish("Fourth", "2030-01-04T10:00:00Z");
+    await finish("Fifth", "2030-01-04T10:00:00Z");
+    await newTask({ title: "Still open" });
+
+    const first = await listDone({ limit: "2" });
+    expect(titles(first.tasks)).toEqual(["Fifth", "Fourth"]);
+    expect(first.total).toBe(5);
+    expect(first.next).not.toBeNull();
+
+    const second = await listDone({ limit: "2", before: first.next ?? "" });
+    expect(titles(second.tasks)).toEqual(["Third", "Second"]);
+    const third = await listDone({ limit: "2", before: second.next ?? "" });
+    expect(titles(third.tasks)).toEqual(["First"]);
+    expect(third.next).toBeNull();
+    expect(third.total).toBe(5);
+
+    // The first page holds 20 by default.
+    expect((await listDone()).tasks).toHaveLength(5);
+  });
+
+  it("filters by project, the inbox, and when they were finished", async () => {
+    const project = await newProject({ name: "Garden" });
+    await finish("Weed the beds", "2030-02-01T08:00:00Z", { title: "", projectId: project.id });
+    await finish("Call the bank", "2030-02-02T08:00:00Z");
+    const parent = await newTask({ title: "Plant bulbs", projectId: project.id });
+    // Subtasks come with their parent, never on their own.
+    await finish("Dig holes", "2030-02-03T08:00:00Z", { title: "", parentId: parent.id });
+
+    expect(titles((await listDone({ projectId: String(project.id) })).tasks)).toEqual([
+      "Weed the beds",
+    ]);
+    expect(titles((await listDone({ projectId: "inbox" })).tasks)).toEqual(["Call the bank"]);
+    const recent = await listDone({ since: "2030-02-02T00:00:00Z" });
+    expect(titles(recent.tasks)).toEqual(["Call the bank"]);
+    expect(recent.total).toBe(1);
+  });
+
+  it("follows tasks as they're finished and reopened", async () => {
+    const task = await newTask({ title: "Return library books" });
+    expect((await listDone()).total).toBe(0);
+    await patchTask(task.id, { status: "done" });
+    expect(titles((await listDone()).tasks)).toEqual(["Return library books"]);
+    await patchTask(task.id, { status: "todo" });
+    expect((await listDone()).total).toBe(0);
+  });
+
+  it("rejects a page marker it didn't make", async () => {
+    const bad = await failure(await t.api.tasks.done.$get({ query: { before: "yesterday" } }));
+    expect(bad).toMatchObject({ status: 400, error: "Those filters aren't valid." });
+    const tooMany = await failure(await t.api.tasks.done.$get({ query: { limit: "500" } }));
+    expect(tooMany.status).toBe(400);
   });
 });
 

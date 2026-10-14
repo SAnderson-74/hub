@@ -58,3 +58,12 @@ export function groupByStatus<T extends { status: TaskStatus }>(tasks: readonly 
   for (const task of tasks) groups[task.status].push(task);
   return groups;
 }
+
+/**
+ * Open tasks followed by the finished ones loaded so far. A task in both (just
+ * finished or reopened, before the lists refresh) keeps its open-list copy.
+ */
+export function mergeTasks<T extends { id: number }>(open: readonly T[], done: readonly T[]): T[] {
+  const seen = new Set(open.map((task) => task.id));
+  return [...open, ...done.filter((task) => !seen.has(task.id))];
+}
