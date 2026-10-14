@@ -24,6 +24,18 @@ export function courseBar(
   };
 }
 
+/** The soonest unfinished assessment with a date, overdue ones first. */
+export function nextAssessment<T extends { dueOn: string | null; done: boolean }>(
+  items: readonly T[],
+): (T & { dueOn: string }) | null {
+  let next: (T & { dueOn: string }) | null = null;
+  for (const item of items) {
+    if (item.done || item.dueOn === null) continue;
+    if (next === null || item.dueOn < next.dueOn) next = item as T & { dueOn: string };
+  }
+  return next;
+}
+
 /** The first of each month inside the term, for tick marks: "Feb", "Mar", ... */
 export function monthTicks(
   start: string,

@@ -9,6 +9,7 @@ import { addDays } from "../../shared/recurrence";
 import { streakState, streakSummary } from "../../shared/streak";
 import { businessLeads, businessSteps } from "../business/schema";
 import { readSettings } from "../core/settings.service";
+import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
 import { tasks } from "../tasks/schema";
@@ -22,7 +23,7 @@ const SEND_TIMEOUT_MS = 10_000;
 
 export type UpcomingDate = {
   date: string;
-  kind: "task" | "milestone" | "goal" | "business_step" | "lead";
+  kind: "task" | "milestone" | "goal" | "assessment" | "business_step" | "lead";
   title: string;
 };
 
@@ -132,6 +133,25 @@ export function upcomingDates(db: Queryable, today: string, days = UPCOMING_DAYS
         date: milestone.date,
         kind: "milestone",
         title: `${milestone.title} (${goal})`,
+      });
+    }
+  }
+  for (const assessment of db
+    .select({
+      label: assessments.label,
+      date: assessments.dueOn,
+      code: courses.code,
+      course: courses.title,
+    })
+    .from(assessments)
+    .innerJoin(courses, eq(assessments.courseId, courses.id))
+    .where(and(isNull(assessments.doneAt), lte(assessments.dueOn, to)))
+    .all()) {
+    if (within(assessment.date)) {
+      found.push({
+        date: assessment.date,
+        kind: "assessment",
+        title: `${assessment.label} (${assessment.code || assessment.course})`,
       });
     }
   }

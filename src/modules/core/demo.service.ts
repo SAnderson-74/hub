@@ -221,8 +221,12 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
     const courses = listTerms(db).find((entry) => entry.id === term.id)?.courses ?? [];
     const networks = courses.find((course) => course.code === "ABC101");
     if (networks) {
-      for (const label of ["Quiz 1", "Lab report", "Final project"]) {
-        createAssessment(db, networks.id, assessmentCreateSchema.parse({ label }), actor);
+      for (const [label, dueOn] of [
+        ["Quiz 1", day(4)],
+        ["Lab report", day(12)],
+        ["Final project", null],
+      ] as const) {
+        createAssessment(db, networks.id, assessmentCreateSchema.parse({ label, dueOn }), actor);
       }
       // A few days of study, so the streak has something to show.
       for (const [offset, minutes] of [

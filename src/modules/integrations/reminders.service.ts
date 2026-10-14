@@ -10,6 +10,7 @@ import { inWindow, type ReminderKind, type ReminderSettings } from "../../shared
 import { streakState } from "../../shared/streak";
 import { businessLeads, businessSteps } from "../business/schema";
 import { readSettings } from "../core/settings.service";
+import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
 import { tasks } from "../tasks/schema";
@@ -64,6 +65,7 @@ const MODULE_OF: Record<string, ModuleId> = {
   task: "tasks",
   goal: "goals",
   milestone: "goals",
+  assessment: "courses",
   "business step": "business",
   lead: "business",
 };
@@ -75,7 +77,7 @@ export function dueItems(db: Queryable, today: string, days: number): DueItem[] 
 
 /**
  * Unfinished things dated from `from` through `to`: tasks, active goals and their
- * milestones, business steps, and open leads' next steps. Soonest first.
+ * milestones, assessments, business steps, and open leads' next steps. Soonest first.
  */
 export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
   const items: DueItem[] = [];
@@ -119,6 +121,29 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
           date: milestone.date,
         });
       }
+    }
+  }
+  for (const assessment of db
+    .select({
+      id: assessments.id,
+      label: assessments.label,
+      date: assessments.dueOn,
+      code: courses.code,
+      course: courses.title,
+    })
+    .from(assessments)
+    .innerJoin(courses, eq(assessments.courseId, courses.id))
+    .where(
+      and(isNull(assessments.doneAt), gte(assessments.dueOn, from), lte(assessments.dueOn, to)),
+    )
+    .all()) {
+    if (assessment.date) {
+      items.push({
+        key: `assessment:${assessment.id}`,
+        kind: "assessment",
+        title: `${assessment.label} (${assessment.code || assessment.course})`,
+        date: assessment.date,
+      });
     }
   }
   for (const step of db

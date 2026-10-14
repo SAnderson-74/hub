@@ -143,7 +143,7 @@ describe("terms and courses", () => {
       await t.api.education.assessments[":id"].$delete({ param: { id: String(lab?.id) } }),
     );
     expect(final?.courses[0]?.assessments).toEqual([
-      { id: exam?.id, kind: "exam", label: "Final exam", done: true },
+      { id: exam?.id, kind: "exam", label: "Final exam", dueOn: null, done: true },
     ]);
     expect((await history(courseId)).map((entry) => entry.details)).toEqual([
       { changes: { assessments: { from: "1 of 2 done", to: "1 of 1 done" } } },
@@ -152,6 +152,35 @@ describe("terms and courses", () => {
       { changes: { assessments: { from: "0 of 0 done", to: "0 of 1 done" } } },
       null,
     ]);
+  });
+
+  it("keeps an optional due date on each assessment", async () => {
+    const [term] = await newTerm();
+    const [withCourse] = await body(
+      await t.api.education.courses.$post({ json: { termId: term?.id ?? 0, title: "Biology" } }),
+    );
+    const courseId = withCourse?.courses[0]?.id ?? 0;
+    const [added] = await body(
+      await t.api.education.courses[":id"].assessments.$post({
+        ...courseParam(courseId),
+        json: { kind: "exam", label: "Midterm", dueOn: "2030-03-10" },
+      }),
+    );
+    const midterm = added?.courses[0]?.assessments[0];
+    expect(midterm).toMatchObject({ label: "Midterm", dueOn: "2030-03-10", done: false });
+
+    const patch = (json: { dueOn?: string | null; label?: string }) =>
+      t.api.education.assessments[":id"].$patch({ param: { id: String(midterm?.id) }, json });
+    const [moved] = await body(await patch({ dueOn: "2030-03-17" }));
+    expect(moved?.courses[0]?.assessments[0]?.dueOn).toBe("2030-03-17");
+    // Other changes leave the date alone; null clears it.
+    const [renamed] = await body(await patch({ label: "Midterm exam" }));
+    expect(renamed?.courses[0]?.assessments[0]?.dueOn).toBe("2030-03-17");
+    const [cleared] = await body(await patch({ dueOn: null }));
+    expect(cleared?.courses[0]?.assessments[0]?.dueOn).toBeNull();
+
+    const bad = await failure(await patch({ dueOn: "next week" }));
+    expect(bad.status).toBe(400);
   });
 
   it("deletes a term with its courses, keeping time logged on them", async () => {
@@ -194,6 +223,7 @@ describe("hub-education/v1 import", () => {
       coursesCreated: 2,
       coursesUpdated: 0,
       assessmentsAdded: 2,
+      assessmentsDated: 0,
     });
     expect(await body(await t.api.education.terms.$get())).toEqual([]);
 
@@ -237,6 +267,7 @@ describe("hub-education/v1 import", () => {
       coursesCreated: 0,
       coursesUpdated: 1,
       assessmentsAdded: 1,
+      assessmentsDated: 0,
     });
     const [after] = await body(await t.api.education.terms.$get());
     expect(after).toMatchObject({ endDate: "2030-07-31" });
@@ -249,6 +280,69 @@ describe("hub-education/v1 import", () => {
       "Exam",
       "Project",
       "Discussion posts",
+    ]);
+  });
+
+  it("dates new assessments and fills in missing dates, keeping dates already set", async () => {
+    const dated: EducationImport = {
+      format: "hub-education/v1",
+      terms: [
+        {
+          name: "Term 1",
+          startDate: "2030-01-01",
+          endDate: "2030-06-30",
+          courses: [
+            {
+              code: "ABC101",
+              title: "Networks",
+              assessments: [
+                { kind: "exam", label: "Exam", dueOn: "2030-03-10" },
+                { kind: "project", label: "Project" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    await body(await t.api.education.import.$post({ query: {}, json: dated }));
+    const dates = async () =>
+      (await body(await t.api.education.terms.$get()))[0]?.courses[0]?.assessments.map((item) => [
+        item.label,
+        item.dueOn,
+      ]);
+    expect(await dates()).toEqual([
+      ["Exam", "2030-03-10"],
+      ["Project", null],
+    ]);
+
+    const course = dated.terms[0]?.courses?.[0];
+    if (!course) throw new Error("Expected a course");
+    const again = await body(
+      await t.api.education.import.$post({
+        query: {},
+        json: {
+          ...dated,
+          terms: [
+            {
+              ...(dated.terms[0] as NonNullable<(typeof dated.terms)[0]>),
+              courses: [
+                {
+                  ...course,
+                  assessments: [
+                    { kind: "exam", label: "exam", dueOn: "2030-04-01" },
+                    { kind: "project", label: "Project", dueOn: "2030-05-15" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    expect(again).toMatchObject({ assessmentsAdded: 0, assessmentsDated: 1 });
+    expect(await dates()).toEqual([
+      ["Exam", "2030-03-10"],
+      ["Project", "2030-05-15"],
     ]);
   });
 

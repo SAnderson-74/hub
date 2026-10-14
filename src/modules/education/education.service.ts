@@ -22,7 +22,13 @@ type TermRow = typeof terms.$inferSelect;
 type CourseRow = typeof courses.$inferSelect;
 type AssessmentRow = typeof assessments.$inferSelect;
 
-export type AssessmentJson = { id: number; kind: AssessmentKind; label: string; done: boolean };
+export type AssessmentJson = {
+  id: number;
+  kind: AssessmentKind;
+  label: string;
+  dueOn: string | null;
+  done: boolean;
+};
 
 export type CourseJson = {
   id: number;
@@ -73,6 +79,7 @@ function toCourseJson(row: CourseRow, items: AssessmentRow[]): CourseJson {
       id: item.id,
       kind: item.kind,
       label: item.label,
+      dueOn: item.dueOn,
       done: item.doneAt !== null,
     })),
   };
@@ -372,7 +379,12 @@ export function createAssessment(
     changeAssessments(tx, course, actor, () =>
       tx
         .insert(assessments)
-        .values({ courseId, kind: input.kind ?? "other", label: input.label })
+        .values({
+          courseId,
+          kind: input.kind ?? "other",
+          label: input.label,
+          dueOn: input.dueOn ?? null,
+        })
         .run(),
     );
   });
@@ -404,6 +416,7 @@ export function updateAssessment(
         .set({
           kind: patch.kind ?? current.kind,
           label: patch.label ?? current.label,
+          dueOn: patch.dueOn === undefined ? current.dueOn : patch.dueOn,
           doneAt,
           updatedAt: new Date(),
         })
@@ -452,6 +465,7 @@ export function importEducation(
     coursesCreated: 0,
     coursesUpdated: 0,
     assessmentsAdded: 0,
+    assessmentsDated: 0,
   };
   try {
     db.transaction((tx) => {
@@ -542,20 +556,34 @@ export function importEducation(
             summary.coursesCreated += 1;
           }
 
-          const known = new Set(
+          const known = new Map(
             tx
-              .select({ label: assessments.label })
+              .select({ id: assessments.id, label: assessments.label, dueOn: assessments.dueOn })
               .from(assessments)
               .where(eq(assessments.courseId, course.id))
               .all()
-              .map((item) => item.label.toLowerCase()),
+              .map((item): [string, { id: number | null; dueOn: string | null }] => [
+                item.label.toLowerCase(),
+                item,
+              ]),
           );
-          const added = (courseInput.assessments ?? []).filter((item) => {
+          const added: NonNullable<typeof courseInput.assessments> = [];
+          for (const item of courseInput.assessments ?? []) {
             const key = item.label.toLowerCase();
-            if (known.has(key)) return false;
-            known.add(key);
-            return true;
-          });
+            const found = known.get(key);
+            if (!found) {
+              added.push(item);
+              known.set(key, { id: null, dueOn: item.dueOn ?? null });
+            } else if (found.id !== null && item.dueOn && found.dueOn === null) {
+              // A date fills in a missing one; a date already in Hub stays.
+              tx.update(assessments)
+                .set({ dueOn: item.dueOn, updatedAt: new Date() })
+                .where(eq(assessments.id, found.id))
+                .run();
+              found.dueOn = item.dueOn;
+              summary.assessmentsDated += 1;
+            }
+          }
           if (added.length > 0) {
             changeAssessments(tx, course, actor, () =>
               tx
@@ -565,6 +593,7 @@ export function importEducation(
                     courseId: course.id,
                     kind: item.kind ?? "other",
                     label: item.label,
+                    dueOn: item.dueOn ?? null,
                   })),
                 )
                 .run(),

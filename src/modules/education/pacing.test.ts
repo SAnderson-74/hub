@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { courseBar, defaultTerm, formatCredits, monthTicks, termPercent } from "./pacing";
+import {
+  courseBar,
+  defaultTerm,
+  formatCredits,
+  monthTicks,
+  nextAssessment,
+  termPercent,
+} from "./pacing";
 
 const term = { startDate: "2030-01-01", endDate: "2030-01-31" };
 
@@ -53,5 +60,19 @@ describe("pacing timeline", () => {
     expect(defaultTerm(terms, "2029-10-01")?.id).toBe(1);
     expect(defaultTerm(terms, "2031-03-01")?.id).toBe(2);
     expect(defaultTerm([], "2031-03-01")).toBeUndefined();
+  });
+});
+
+describe("nextAssessment", () => {
+  it("picks the soonest unfinished assessment with a date", () => {
+    const items = [
+      { label: "No date", dueOn: null, done: false },
+      { label: "Later", dueOn: "2030-04-01", done: false },
+      { label: "Done early", dueOn: "2030-02-01", done: true },
+      { label: "Overdue", dueOn: "2030-03-01", done: false },
+    ];
+    expect(nextAssessment(items)?.label).toBe("Overdue");
+    expect(nextAssessment(items.slice(0, 1))).toBeNull();
+    expect(nextAssessment([])).toBeNull();
   });
 });

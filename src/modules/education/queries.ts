@@ -18,6 +18,7 @@ async function fetchTerms() {
 
 export type Term = Awaited<ReturnType<typeof fetchTerms>>[number];
 export type Course = Term["courses"][number];
+export type Assessment = Course["assessments"][number];
 
 const keys = { terms: ["education", "terms"] as const };
 

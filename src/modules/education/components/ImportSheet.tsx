@@ -23,6 +23,9 @@ function describe(summary: ImportSummary): string[] {
     summary.assessmentsAdded
       ? count(summary.assessmentsAdded, "new assessment", "new assessments")
       : null,
+    summary.assessmentsDated
+      ? count(summary.assessmentsDated, "assessment given a date", "assessments given dates")
+      : null,
   ].filter((line): line is string => line !== null);
   return lines.length > 0 ? lines : ["Nothing to change. Everything in the file is already here."];
 }

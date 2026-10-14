@@ -1,4 +1,4 @@
-import { Plus, X } from "lucide-react";
+import { CalendarDays, Plus, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { Sheet } from "../../../client/components/Sheet";
 import {
@@ -10,6 +10,7 @@ import {
   primaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { useNow } from "../../../client/lib/useNow";
 import {
   ASSESSMENT_KIND_LABELS,
   ASSESSMENT_KINDS,
@@ -20,7 +21,9 @@ import {
   type CourseUpdate,
 } from "../../../shared/education";
 import { TaskCheckbox } from "../../tasks/components/TaskList";
+import { describeDue, localDate } from "../../tasks/dates";
 import {
+  type Assessment,
   type Course,
   useAddAssessment,
   useCreateCourse,
@@ -337,9 +340,62 @@ function CourseForm({
   );
 }
 
+const dueTone = { danger: "text-danger", warn: "text-warn", muted: "text-muted" } as const;
+
+/** The kind and due date under an assessment's name. Tapping it sets or changes the date. */
+function AssessmentDue({
+  item,
+  today,
+  onChange,
+}: {
+  item: Assessment;
+  today: string;
+  onChange: (dueOn: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const due = item.dueOn ? describeDue(item.dueOn, today, { done: item.done }) : null;
+  if (editing) {
+    return (
+      <span className="mt-1 flex items-center gap-2">
+        <input
+          type="date"
+          // biome-ignore lint/a11y/noAutofocus: opened by tapping the date, so focus goes to it.
+          autoFocus
+          value={item.dueOn ?? ""}
+          onChange={(event) => onChange(event.target.value || null)}
+          aria-label={`Due date for ${item.label}`}
+          className={`${inputClass} h-11 max-w-48 min-w-0`}
+        />
+        <button type="button" className={ghostButton} onClick={() => setEditing(false)}>
+          Done
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      aria-label={`${ASSESSMENT_KIND_LABELS[item.kind]}, ${due ? due.label : "add a date"}: change the date for ${item.label}`}
+      className="flex min-h-11 items-center gap-1.5 rounded-control text-left text-sm text-muted hover:text-fg"
+    >
+      {ASSESSMENT_KIND_LABELS[item.kind]}
+      <span aria-hidden="true">·</span>
+      <CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />
+      {due ? (
+        <span className={`font-semibold ${dueTone[due.tone]}`}>{due.label}</span>
+      ) : (
+        <span>Add a date</span>
+      )}
+    </button>
+  );
+}
+
 function Assessments({ course }: { course: Course }) {
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<AssessmentKind>("exam");
+  const [dueOn, setDueOn] = useState("");
+  const today = localDate(useNow());
   const add = useAddAssessment();
   const update = useUpdateAssessment();
   const remove = useDeleteAssessment();
@@ -353,9 +409,15 @@ function Assessments({ course }: { course: Course }) {
     if (!trimmed) return;
     // Clear now so the next assessment can be typed while this one saves.
     setLabel("");
+    setDueOn("");
     add.mutate(
-      { courseId: course.id, json: { kind, label: trimmed } },
-      { onError: () => setLabel((current) => current || trimmed) },
+      { courseId: course.id, json: { kind, label: trimmed, dueOn: dueOn || null } },
+      {
+        onError: () => {
+          setLabel((current) => current || trimmed);
+          setDueOn((current) => current || dueOn);
+        },
+      },
     );
   };
 
@@ -389,9 +451,11 @@ function Assessments({ course }: { course: Course }) {
                 >
                   {item.label}
                 </span>
-                <span className="block text-sm text-muted">
-                  {ASSESSMENT_KIND_LABELS[item.kind]}
-                </span>
+                <AssessmentDue
+                  item={item}
+                  today={today}
+                  onChange={(next) => update.mutate({ id: item.id, patch: { dueOn: next } })}
+                />
               </span>
               <button
                 type="button"
@@ -406,7 +470,7 @@ function Assessments({ course }: { course: Course }) {
           ))}
         </ul>
       ) : null}
-      <form onSubmit={onAdd} className="mt-3 flex gap-2">
+      <form onSubmit={onAdd} className="mt-3 grid grid-cols-[auto_1fr_auto] gap-2">
         <label className="sr-only" htmlFor={`${headingId}-kind`}>
           Assessment kind
         </label>
@@ -414,7 +478,7 @@ function Assessments({ course }: { course: Course }) {
           id={`${headingId}-kind`}
           value={kind}
           onChange={(event) => setKind(event.target.value as AssessmentKind)}
-          className={`${inputClass} w-28 shrink-0`}
+          className={`${inputClass} max-w-28 shrink-0`}
         >
           {ASSESSMENT_KINDS.map((value) => (
             <option key={value} value={value}>
@@ -438,6 +502,15 @@ function Assessments({ course }: { course: Course }) {
         >
           <Plus aria-hidden="true" className="size-5" />
         </button>
+        <label className="col-span-3 flex items-center gap-3 text-sm text-muted">
+          <span className="shrink-0">Due date (optional)</span>
+          <input
+            type="date"
+            value={dueOn}
+            onChange={(event) => setDueOn(event.target.value)}
+            className={`${inputClass} max-w-48 min-w-0`}
+          />
+        </label>
       </form>
       {error ? (
         <p role="alert" className="mt-2 text-sm text-danger">
