@@ -132,7 +132,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 ### Phase 7: Tasks and planning
 
 - [x] 7.1 Quick add in plain English ("Renew registration next Fri !high #car every year"), shown as chips before saving, also in the command menu and the Shortcuts endpoint
-- [ ] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
+- [x] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
 - [ ] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
 
 ### Phase 8: Money ahead

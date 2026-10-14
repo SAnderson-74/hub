@@ -24,6 +24,12 @@ export type Draft = {
   priority: TaskPriority;
   /** "" for no due date. */
   dueDate: string;
+  /** "" for no start date. */
+  startDate: string;
+  someday: boolean;
+  evening: boolean;
+  /** Ids of the tasks it waits on, in order. */
+  waitingOn: number[];
   /** "" for the inbox, otherwise a project id. */
   projectId: string;
   /** Comma-separated. */
@@ -53,6 +59,10 @@ export function toDraft(task: TaskDetail): Draft {
     status: task.status,
     priority: task.priority,
     dueDate: task.dueDate ?? "",
+    startDate: task.startDate ?? "",
+    someday: task.someday,
+    evening: task.evening,
+    waitingOn: task.waitingOn.map((other) => other.id),
     projectId: task.projectId === null ? "" : String(task.projectId),
     tags: task.tags.map((tag) => tag.name).join(", "),
     repeat: !rule ? "" : yearly ? "yearly" : rule.frequency,
@@ -170,6 +180,10 @@ export function draftChanges(task: TaskDetail, draft: Draft, today = ""): TaskUp
   if (draft.status !== saved.status) patch.status = draft.status;
   if (draft.priority !== saved.priority) patch.priority = draft.priority;
   if (draft.dueDate !== saved.dueDate) patch.dueDate = draft.dueDate || null;
+  if (draft.startDate !== saved.startDate) patch.startDate = draft.startDate || null;
+  if (draft.someday !== saved.someday) patch.someday = draft.someday;
+  if (draft.evening !== saved.evening) patch.evening = draft.evening;
+  if (draft.waitingOn.join() !== saved.waitingOn.join()) patch.waitingOn = draft.waitingOn;
   if (draft.projectId !== saved.projectId) {
     patch.projectId = draft.projectId === "" ? null : Number(draft.projectId);
   }
@@ -180,4 +194,11 @@ export function draftChanges(task: TaskDetail, draft: Draft, today = ""): TaskUp
     patch.recurrence = rule === null ? null : { interval: 1, ...rule };
   }
   return patch;
+}
+
+/** Why the start and due dates can't be saved together, or null. */
+export function datesProblem(draft: Pick<Draft, "startDate" | "dueDate">): string | null {
+  return draft.startDate && draft.dueDate && draft.startDate > draft.dueDate
+    ? "The start date can't be after the due date. Move one of them."
+    : null;
 }
