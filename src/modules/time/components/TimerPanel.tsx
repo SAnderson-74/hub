@@ -1,5 +1,5 @@
 import { Play, Plus, Square } from "lucide-react";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
@@ -9,6 +9,7 @@ import {
   primaryButton,
   secondaryButton,
 } from "../../../client/components/ui";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import {
   type RunningTimer,
@@ -26,6 +27,16 @@ export function TimerPanel({ className = "" }: { className?: string }) {
   const running = timers.data ?? [];
   const stopAll = useStopAllTimers();
   const [adding, setAdding] = useState(false);
+  // "Start a timer" from the command menu opens the form and puts the cursor in it.
+  const [focusNote, setFocusNote] = useState(0);
+  useCommand(
+    "start-timer",
+    () => {
+      setAdding(true);
+      setFocusNote((count) => count + 1);
+    },
+    !timers.isPending,
+  );
   const showForm = running.length === 0 || adding;
 
   return (
@@ -56,6 +67,7 @@ export function TimerPanel({ className = "" }: { className?: string }) {
           {showForm ? (
             <StartTimerForm
               another={running.length > 0}
+              focusNote={focusNote}
               onStarted={() => setAdding(false)}
               onCancel={running.length > 0 ? () => setAdding(false) : undefined}
             />
@@ -131,10 +143,13 @@ function RunningTimerRow({ timer }: { timer: RunningTimer }) {
 
 function StartTimerForm({
   another,
+  focusNote,
   onStarted,
   onCancel,
 }: {
   another: boolean;
+  /** Puts the cursor in the note each time it changes, past 0. */
+  focusNote: number;
   onStarted: () => void;
   onCancel?: (() => void) | undefined;
 }) {
@@ -142,6 +157,10 @@ function StartTimerForm({
   const [subject, setSubject] = useState("");
   const start = useStartTimer();
   const ids = useId();
+  const noteInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusNote > 0) noteInput.current?.focus();
+  }, [focusNote]);
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -164,6 +183,7 @@ function StartTimerForm({
           What are you working on?
         </label>
         <input
+          ref={noteInput}
           id={`${ids}-note`}
           value={note}
           onChange={(event) => setNote(event.target.value)}

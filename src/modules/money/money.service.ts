@@ -16,6 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
+import { likePattern } from "../../server/db/like";
 import { badRequest, conflict, notFound } from "../../server/errors";
 import {
   type AccountCreate,
@@ -760,9 +761,6 @@ export function oneTransaction(db: Queryable, row: TransactionRow): TransactionJ
   if (!transaction) throw new Error("Expected one transaction");
   return transaction;
 }
-
-/** Escapes LIKE wildcards so a search for "50%" finds "50%", not everything. */
-export const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 
 const ORDERS: Record<TransactionQuery["sort"], (size: SQL) => SQL[]> = {
   newest: () => [desc(moneyTransactions.date), desc(moneyTransactions.id)],

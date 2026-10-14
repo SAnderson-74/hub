@@ -28,7 +28,7 @@ Each module can be turned off in Settings; its page and home widgets go away wit
 - **Money:** books, accounts, and categories; CSV and OFX/QFX imports with duplicate checks and undo; rules, transfer matching, and help sorting what's left (names from payment apps go into the memo); monthly budgets, cash flow, and net worth.
 - **Taxes:** a plain-language guide to US federal basics with sources and review dates, plus a resale income summary and a set-aside estimate. It's education, not tax advice.
 - **Business:** a phased setup checklist with cost estimates, gear, skills and certifications, a rate calculator, leads, and notes.
-- **Around the edges:** reminders and a home summary sent to Home Assistant, an optional calendar feed for dated things, resale items linked to their transactions, nightly backups you can download and restore from Settings, and an accent color.
+- **Around the edges:** one search box for everything with a command menu (Ctrl+K or ⌘K, and G-then-a-letter to jump between pages), reminders and a home summary sent to Home Assistant, an optional calendar feed for dated things, resale items linked to their transactions, nightly backups you can download and restore from Settings, and an accent color.
 
 <table>
   <tr>
