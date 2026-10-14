@@ -45,7 +45,7 @@ test("home shows today's tasks and the next milestones", async ({ page }, testIn
   expect(milestone.ok()).toBe(true);
 
   await page.goto("/");
-  const today = page.getByRole("region", { name: "Today" });
+  const today = page.getByRole("region", { name: "Today", exact: true });
   await expect(today.getByRole("link", { name: new RegExp(`Water plants ${id}`) })).toContainText(
     "Due today",
   );
@@ -72,4 +72,40 @@ test("home shows today's tasks and the next milestones", async ({ page }, testIn
     `Run a 10K ${id}`,
   );
   expect(errors).toEqual([]);
+});
+
+test.describe("choosing Home's widgets", () => {
+  // Every test shares one database, so put Home back the way it was afterward.
+  const reset = (page: Page) =>
+    page.request.put("/api/settings", { data: { homeWidgets: { order: [], hidden: [] } } });
+  test.afterEach(async ({ page }) => {
+    await reset(page);
+  });
+
+  test("widgets can be hidden and moved, and Home follows", async ({ page }) => {
+    await reset(page);
+    const errors = trackErrors(page);
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "Money this month" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Tithing" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Time today" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Choose what Home shows" }).click();
+    const panel = page.getByRole("region", { name: "Home", exact: true });
+    await expect(panel).toBeVisible();
+    await panel.getByRole("checkbox", { name: /^System/ }).uncheck();
+    // Tithing goes to the top, one step at a time.
+    for (let step = 0; step < 3; step += 1) {
+      await panel.getByRole("button", { name: "Move Tithing up" }).click();
+    }
+    await expect(panel.getByRole("button", { name: "Move Tithing up" })).toBeDisabled();
+    await panel.getByRole("button", { name: "Save Home" }).click();
+    await expect(panel.getByRole("status").filter({ hasText: "Home saved" })).toBeVisible();
+
+    await page.goto("/");
+    const headings = page.locator("main section h2");
+    await expect(headings.first()).toHaveText("Tithing");
+    await expect(page.getByRole("region", { name: "System" })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
 });

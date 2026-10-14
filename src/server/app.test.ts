@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultBusinessRate } from "../shared/businessRate";
 import { defaultHomeAssistant } from "../shared/homeAssistant";
+import { defaultHomeWidgets } from "../shared/homeWidgets";
 import { defaultModules } from "../shared/modules";
 import { defaultReminders } from "../shared/reminders";
 import { createApp } from "./app";
@@ -100,6 +101,7 @@ describe("settings API", () => {
       modules: defaultModules,
       timeZone: "",
       setupDone: false,
+      homeWidgets: defaultHomeWidgets,
     });
 
     const saved = await app.request("/api/settings", {
@@ -117,6 +119,7 @@ describe("settings API", () => {
       modules: defaultModules,
       timeZone: "",
       setupDone: false,
+      homeWidgets: defaultHomeWidgets,
     });
 
     const reread = await app.request("/api/settings", { headers: owner });
@@ -129,6 +132,7 @@ describe("settings API", () => {
       modules: defaultModules,
       timeZone: "",
       setupDone: false,
+      homeWidgets: defaultHomeWidgets,
     });
 
     const invalid = await app.request("/api/settings", {
