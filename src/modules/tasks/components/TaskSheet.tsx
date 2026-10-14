@@ -12,11 +12,11 @@ import {
   textareaClass,
 } from "../../../client/components/ui";
 import {
-  describeRecurrence,
-  nextDueDate,
-  RECURRENCE_FREQUENCIES,
-  type RecurrenceFrequency,
-  recurrenceUnit,
+  monthWeekOf,
+  nextInSeries,
+  WEEKDAY_NAMES,
+  WEEKDAY_SHORT,
+  weekdayOf,
 } from "../../../shared/recurrence";
 import {
   TASK_PRIORITY_LABELS,
@@ -26,7 +26,19 @@ import {
 } from "../../../shared/tasks";
 import { SubjectTime } from "../../time/components/SubjectTime";
 import { formatShortDate, localDate } from "../dates";
-import { type Draft, draftChanges, parseInterval, toDraft } from "../draft";
+import {
+  canCountFromCompletion,
+  type Draft,
+  draftChanges,
+  draftRule,
+  type EndChoice,
+  type MonthlyOn,
+  monthlyChoices,
+  type RepeatChoice,
+  repeatProblem,
+  seriesContinues,
+  toDraft,
+} from "../draft";
 import {
   type ProjectItem,
   type TaskDetail,
@@ -120,12 +132,12 @@ function TaskEditor({
   const update = useUpdateTask();
   const parent = useTask(task.parentId);
   const ids = useId();
-  const patch = draftChanges(task, draft);
+  const today = localDate();
+  const patch = draftChanges(task, draft, today);
   const dirty = Object.keys(patch).length > 0;
   const titleMissing = draft.title.trim() === "";
-  const interval = parseInterval(draft.interval);
-  const intervalInvalid = draft.repeat !== "" && interval === null;
-  const blocked = titleMissing || intervalInvalid;
+  const repeatInvalid = repeatProblem(draft) !== null;
+  const blocked = titleMissing || repeatInvalid;
   const isSubtask = task.parentId !== null;
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -142,8 +154,14 @@ function TaskEditor({
       {
         onSuccess: (saved) => {
           setDraft(toDraft(saved));
-          const repeated = task.recurrence && task.status !== "done" && saved.status === "done";
-          setMessage(repeated ? "Task saved. The next one is in To do." : "Task saved");
+          const finished = task.recurrence && task.status !== "done" && saved.status === "done";
+          setMessage(
+            !finished || !task.recurrence
+              ? "Task saved"
+              : seriesContinues(task.recurrence, task.dueDate, today)
+                ? "Task saved. The next one is in To do."
+                : "Task saved. That was the last one.",
+          );
           after?.();
         },
       },
@@ -255,14 +273,7 @@ function TaskEditor({
           </div>
         </div>
 
-        {isSubtask ? null : (
-          <RepeatFields
-            draft={draft}
-            interval={interval}
-            invalid={intervalInvalid}
-            onChange={set}
-          />
-        )}
+        {isSubtask ? null : <RepeatFields draft={draft} today={today} onChange={set} />}
 
         <div>
           <label htmlFor={`${ids}-project`} className={labelClass}>
@@ -508,24 +519,60 @@ function DeleteTask({ task, onDeleted }: { task: TaskDetail; onDeleted: () => vo
   );
 }
 
+const REPEAT_LABELS: Record<Exclude<RepeatChoice, "">, [string, string, string]> = {
+  daily: ["Daily", "day", "days"],
+  weekly: ["Weekly", "week", "weeks"],
+  monthly: ["Monthly", "month", "months"],
+  yearly: ["Yearly", "year", "years"],
+};
+
+const ORDINAL = ["", "1st", "2nd", "3rd", "4th"] as const;
+
+/** "Day 13", "The 2nd Wednesday", "The last Wednesday", "The last day" (of March, when yearly). */
+function monthlyLabel(choice: MonthlyOn, anchor: string, yearly: boolean): string {
+  const date = new Date(`${anchor}T00:00:00Z`);
+  const monthName = date.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  const ofMonth = yearly ? ` of ${monthName}` : "";
+  const day = WEEKDAY_NAMES[weekdayOf(anchor)];
+  if (choice === "day")
+    return yearly ? `${monthName} ${date.getUTCDate()}` : `Day ${date.getUTCDate()}`;
+  if (choice === "weekday") return `The ${ORDINAL[monthWeekOf(anchor)] ?? ""} ${day}${ofMonth}`;
+  if (choice === "lastWeekday") return `The last ${day}${ofMonth}`;
+  return `The last day${ofMonth}`;
+}
+
+/**
+ * How a task repeats: how often, which days, whether the next one counts from when
+ * it's done, and when the series ends. Days of the week and of the month come from
+ * the due date (today without one).
+ */
 function RepeatFields({
   draft,
-  interval,
-  invalid,
+  today,
   onChange,
 }: {
   draft: Draft;
-  interval: number | null;
-  invalid: boolean;
+  today: string;
   onChange: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
 }) {
   const ids = useId();
-  const today = localDate();
-  const rule = draft.repeat && interval !== null ? { frequency: draft.repeat, interval } : null;
-  const next = rule ? nextDueDate(rule, draft.dueDate || today, today) : null;
+  const anchor = draft.dueDate || today;
+  const problem = repeatProblem(draft);
+  const rule = draftRule(draft, today);
+  const next = rule ? nextInSeries({ interval: 1, ...rule }, anchor, today) : null;
+  const unit = draft.repeat ? REPEAT_LABELS[draft.repeat] : null;
+  const count = Number(draft.interval) || 2;
+  const monthly = draft.repeat === "monthly" || draft.repeat === "yearly";
+  const toggleDay = (day: number) =>
+    onChange(
+      "weekdays",
+      draft.weekdays.includes(day)
+        ? draft.weekdays.filter((item) => item !== day)
+        : [...draft.weekdays, day].sort((a, b) => a - b),
+    );
 
   return (
-    <div>
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor={`${ids}-repeat`} className={labelClass}>
@@ -534,19 +581,19 @@ function RepeatFields({
           <select
             id={`${ids}-repeat`}
             value={draft.repeat}
-            onChange={(event) => onChange("repeat", event.target.value as RecurrenceFrequency | "")}
+            onChange={(event) => onChange("repeat", event.target.value as RepeatChoice)}
             aria-describedby={`${ids}-repeat-note`}
             className={inputClass}
           >
             <option value="">Doesn't repeat</option>
-            {RECURRENCE_FREQUENCIES.map((frequency) => (
-              <option key={frequency} value={frequency}>
-                {describeRecurrence({ frequency, interval: 1 })}
+            {(["daily", "weekly", "monthly", "yearly"] as const).map((choice) => (
+              <option key={choice} value={choice}>
+                {REPEAT_LABELS[choice][0]}
               </option>
             ))}
           </select>
         </div>
-        {draft.repeat ? (
+        {unit ? (
           <div>
             <label htmlFor={`${ids}-interval`} className={labelClass}>
               Every
@@ -559,26 +606,150 @@ function RepeatFields({
                 value={draft.interval}
                 onChange={(event) => onChange("interval", event.target.value)}
                 maxLength={2}
-                aria-invalid={invalid}
+                aria-invalid={problem?.startsWith("Use a whole number from 1") ?? false}
                 aria-describedby={`${ids}-repeat-note`}
                 className={`${inputClass} min-w-0 text-center tabular-nums`}
               />
-              <span className="shrink-0 text-muted">
-                {recurrenceUnit(draft.repeat, interval ?? 2)}
-              </span>
+              <span className="shrink-0 text-muted">{count === 1 ? unit[1] : unit[2]}</span>
             </div>
           </div>
         ) : null}
       </div>
+
+      {draft.repeat === "weekly" ? (
+        <fieldset>
+          <legend className={labelClass}>On</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {WEEKDAY_SHORT.map((short, day) => {
+              const on = draft.weekdays.includes(day);
+              return (
+                <button
+                  key={short}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={WEEKDAY_NAMES[day]}
+                  onClick={() => toggleDay(day)}
+                  className={`grid size-11 place-items-center rounded-full text-sm font-semibold ring-1 transition-colors ${
+                    on
+                      ? "bg-accent text-on-accent ring-accent"
+                      : "bg-base text-muted ring-surface-1 hover:text-fg"
+                  }`}
+                >
+                  {short.slice(0, 2)}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            {draft.weekdays.length === 0
+              ? `None picked: ${WEEKDAY_NAMES[weekdayOf(anchor)]}s, the due date's day.`
+              : "Tap a day to add or remove it."}
+          </p>
+        </fieldset>
+      ) : null}
+
+      {monthly ? (
+        <div>
+          <label htmlFor={`${ids}-on`} className={labelClass}>
+            On
+          </label>
+          <select
+            id={`${ids}-on`}
+            value={monthlyChoices(anchor).includes(draft.monthlyOn) ? draft.monthlyOn : "day"}
+            onChange={(event) => onChange("monthlyOn", event.target.value as MonthlyOn)}
+            className={inputClass}
+          >
+            {monthlyChoices(anchor).map((choice) => (
+              <option key={choice} value={choice}>
+                {monthlyLabel(choice, anchor, draft.repeat === "yearly")}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {unit ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {canCountFromCompletion(draft) ? (
+            <div>
+              <label htmlFor={`${ids}-from`} className={labelClass}>
+                Count the next one from
+              </label>
+              <select
+                id={`${ids}-from`}
+                value={draft.fromCompletion ? "completion" : "schedule"}
+                onChange={(event) =>
+                  onChange("fromCompletion", event.target.value === "completion")
+                }
+                className={inputClass}
+              >
+                <option value="schedule">The due date</option>
+                <option value="completion">When it's done</option>
+              </select>
+            </div>
+          ) : null}
+          <div>
+            <label htmlFor={`${ids}-ends`} className={labelClass}>
+              Ends
+            </label>
+            <select
+              id={`${ids}-ends`}
+              value={draft.ends}
+              onChange={(event) => onChange("ends", event.target.value as EndChoice)}
+              className={inputClass}
+            >
+              <option value="never">Never</option>
+              <option value="date">On a date</option>
+              <option value="count">After a number more</option>
+            </select>
+          </div>
+          {draft.ends === "date" ? (
+            <div>
+              <label htmlFor={`${ids}-until`} className={labelClass}>
+                Last date
+              </label>
+              <input
+                id={`${ids}-until`}
+                type="date"
+                value={draft.until}
+                onChange={(event) => onChange("until", event.target.value)}
+                aria-describedby={`${ids}-repeat-note`}
+                className={inputClass}
+              />
+            </div>
+          ) : null}
+          {draft.ends === "count" ? (
+            <div>
+              <label htmlFor={`${ids}-left`} className={labelClass}>
+                How many more
+              </label>
+              <input
+                id={`${ids}-left`}
+                type="text"
+                inputMode="numeric"
+                value={draft.left}
+                onChange={(event) => onChange("left", event.target.value)}
+                maxLength={3}
+                aria-invalid={problem?.includes("how many more") ?? false}
+                className={`${inputClass} tabular-nums`}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* A date still to pick isn't a mistake; numbers typed wrong are. */}
       <p
         id={`${ids}-repeat-note`}
-        className={`mt-1.5 text-sm ${invalid ? "text-danger" : "text-muted"}`}
+        className={`text-sm ${problem && draft.ends !== "date" ? "text-danger" : "text-muted"}`}
       >
-        {invalid
-          ? "Use a whole number from 1 to 99."
-          : next
-            ? `Completing it adds the next one, due ${formatShortDate(next, today)}.`
-            : "Repeating tasks come back when you complete them."}
+        {problem
+          ? problem
+          : !draft.repeat
+            ? "Repeating tasks come back when you complete them."
+            : next
+              ? `Completing it adds the next one, due ${formatShortDate(next.dueDate, today)}.`
+              : "This is the last one; completing it ends the series."}
       </p>
     </div>
   );

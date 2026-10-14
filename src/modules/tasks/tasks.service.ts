@@ -5,9 +5,8 @@ import {
   addDays,
   daysBetween,
   describeRecurrence,
-  nextDueDate,
+  nextInSeries,
   type Recurrence,
-  type RecurrenceFrequency,
 } from "../../shared/recurrence";
 import type {
   DoneTaskQuery,
@@ -36,7 +35,8 @@ export type TaskJson = {
   dueDate: string | null;
   sortOrder: number;
   completedAt: string | null;
-  recurrence: { frequency: RecurrenceFrequency; interval: number } | null;
+  /** The repeat rule as set; the server's own bookkeeping (the day of the month) left out. */
+  recurrence: Omit<Recurrence, "monthDay"> | null;
   createdAt: string;
   updatedAt: string;
   tags: TagJson[];
@@ -47,6 +47,10 @@ export type TaskJson = {
 export type TaskDetailJson = TaskJson & { subtasks: TaskJson[] };
 
 const inOrder = [asc(tasks.sortOrder), asc(tasks.id)];
+
+function withoutMonthDay({ monthDay: _kept, ...rule }: Recurrence): Omit<Recurrence, "monthDay"> {
+  return rule;
+}
 
 /** Adds tags and subtask counts to task rows. */
 function withExtras(db: Queryable, rows: TaskRow[]): TaskJson[] {
@@ -78,9 +82,7 @@ function withExtras(db: Queryable, rows: TaskRow[]): TaskJson[] {
     dueDate: row.dueDate,
     sortOrder: row.sortOrder,
     completedAt: row.completedAt?.toISOString() ?? null,
-    recurrence: row.recurrence
-      ? { frequency: row.recurrence.frequency, interval: row.recurrence.interval }
-      : null,
+    recurrence: row.recurrence ? withoutMonthDay(row.recurrence) : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     tags: tagMap.get(row.id) ?? [],
@@ -299,6 +301,7 @@ const tracked = (row: TaskRow) => ({
 /**
  * Creates the next task in a repeating series from one just completed: same title,
  * notes, priority, project, and tags, the subtasks reopened, and the next due date.
+ * Nothing when the series has ended (its end date passed, or none left).
  */
 function createNextInSeries(
   tx: Queryable,
@@ -308,10 +311,10 @@ function createNextInSeries(
   actor: string,
 ): void {
   const from = done.dueDate ?? today;
-  const dueDate = nextDueDate(rule, from, today);
+  const next = nextInSeries(rule, from, today);
+  if (!next) return;
+  const { dueDate } = next;
   const shift = daysBetween(from, dueDate);
-  const monthDay =
-    rule.frequency === "monthly" ? (rule.monthDay ?? Number(from.slice(8))) : undefined;
   const now = new Date();
   const copy = (source: TaskRow, parentId: number | null) =>
     tx
@@ -325,10 +328,7 @@ function createNextInSeries(
         priority: source.priority,
         dueDate: parentId === null ? dueDate : source.dueDate && addDays(source.dueDate, shift),
         sortOrder: nextSortOrder(tx),
-        recurrence:
-          parentId === null
-            ? { frequency: rule.frequency, interval: rule.interval, ...(monthDay && { monthDay }) }
-            : null,
+        recurrence: parentId === null ? next.rule : null,
         createdAt: now,
         updatedAt: now,
       })

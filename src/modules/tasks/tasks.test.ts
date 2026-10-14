@@ -379,6 +379,62 @@ describe("repeating tasks", () => {
     expect(copies).toHaveLength(2);
   });
 
+  it("keeps set weekdays, counts down, and ends the series", async () => {
+    // A Monday-Wednesday-Friday chore due today, with one more after this one.
+    const task = await newTask({
+      title: "Run the dishwasher",
+      dueDate: today,
+      recurrence: { frequency: "weekly", interval: 1, weekdays: [5, 1, 3], left: 1 },
+    });
+    expect(task.recurrence).toEqual({
+      frequency: "weekly",
+      interval: 1,
+      weekdays: [1, 3, 5],
+      left: 1,
+    });
+    await complete(task.id);
+    const [second] = (await listTasks({ status: "todo" })).filter(
+      (item) => item.title === "Run the dishwasher",
+    );
+    expect(second?.recurrence).toEqual({
+      frequency: "weekly",
+      interval: 1,
+      weekdays: [1, 3, 5],
+      left: 0,
+    });
+    const weekday = new Date(`${second?.dueDate}T00:00:00Z`).getUTCDay();
+    expect([1, 3, 5]).toContain(weekday);
+    expect(second?.dueDate && second.dueDate > today).toBe(true);
+
+    // That was the last one: completing it adds nothing more.
+    await complete(second?.id ?? 0);
+    expect(
+      (await listTasks({ status: "todo" })).filter((item) => item.title === "Run the dishwasher"),
+    ).toEqual([]);
+  });
+
+  it("stops after the end date", async () => {
+    const task = await newTask({
+      title: "Take the vitamins",
+      dueDate: today,
+      recurrence: { frequency: "daily", interval: 1, until: today },
+    });
+    await complete(task.id);
+    expect(
+      (await listTasks({ status: "todo" })).filter((item) => item.title === "Take the vitamins"),
+    ).toEqual([]);
+  });
+
+  it("explains rules that don't fit together", async () => {
+    const bad = await failure(
+      await t.api.tasks.$post({
+        json: { title: "Pay rent", recurrence: { frequency: "weekly", monthWeek: 2, weekday: 2 } },
+      }),
+    );
+    expect(bad.status).toBe(400);
+    expect(JSON.stringify(bad)).toContain("only for monthly or yearly repeats");
+  });
+
   it("skips ahead when finished late and uses today without a due date", async () => {
     const late = await newTask({
       title: "Stretch",

@@ -125,7 +125,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 6.1 Finished tasks load a page at a time (newest first, from `GET /api/tasks/done`) instead of every finished task at once; Home asks only for today's
 - [x] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
 - [x] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
-- [ ] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
+- [x] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
 - [ ] 6.5 Home widgets for every module, chosen and ordered in Settings, including tithing on Home (5.12)
 - [ ] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
 
@@ -318,6 +318,16 @@ Up to 200 payments and 200 paychecks. `fund` is read as tithing, fast offering, 
 ### Transaction list filters
 
 `GET /api/money/transactions` also takes `sort` (`newest`, `oldest`, `largest`, `smallest`; size ignores money in or out), `minCents` and `maxCents` (an amount's size), `from` and `to` (both days included), and `categories` (ids, `none`, or `transfer`, separated by commas; `categoryId` still works for one). The answer's `largestCents` is the biggest amount in the book, for the slider's scale. The Tithing lists apply the same filters in the browser.
+
+### Repeat rules
+
+A task's `recurrence` (and later a bill's or a habit's schedule) is a JSON rule, worked out in `src/shared/recurrence.ts`:
+
+```json
+{ "frequency": "weekly", "interval": 1, "weekdays": [1, 3, 5], "until": "2030-12-31" }
+```
+
+`frequency` is `daily`, `weekly`, or `monthly`, and `interval` is every how many (1 to 99); yearly is `monthly` every 12. Optional: `weekdays` (weekly, 0 is Sunday), `monthWeek` (1 to 4, or -1 for the last) with `weekday` for "the 2nd Tuesday" (monthly), `onLastDay: true` (monthly), `from: "completion"` to count the next one from the day this one is done (not with set days), `until` (no repeats due after that date), and `left` (how many more after this one; 0 is the last). The next one is the first date in the schedule after the later of the due date and today, so finishing late never piles up copies. A build from before these fields still repeats every `interval` days, weeks, or months.
 
 ### How tithing is figured
 
