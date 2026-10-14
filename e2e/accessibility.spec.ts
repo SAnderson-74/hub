@@ -78,8 +78,8 @@ for (const { path, heading } of PAGES) {
 
 test("Money's views meet WCAG 2.1 AA", async ({ page }) => {
   await open(page, "/money", "Money");
-  for (const view of ["Budget", "Rewards", "Net worth"]) {
-    await page.getByRole("radio", { name: view }).check();
+  for (const view of ["Budget", "Bills", "Forecast", "Rewards", "Net worth"]) {
+    await page.getByRole("radio", { name: view, exact: true }).check();
     await settled(page);
     expect(await violations(page), view).toEqual([]);
   }

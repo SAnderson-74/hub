@@ -1,5 +1,7 @@
 import {
   BadgePercent,
+  CalendarDays,
+  ChartLine,
   FileUp,
   Keyboard,
   LayoutGrid,
@@ -114,6 +116,22 @@ const ACTIONS: Array<Omit<Command, "group">> = [
     keywords: "money spending left",
     icon: PiggyBank,
     to: "/money?do=budget",
+    module: "money",
+  },
+  {
+    id: "bills",
+    label: "Go to Bills",
+    keywords: "money subscriptions recurring calendar income",
+    icon: CalendarDays,
+    to: "/money?do=bills",
+    module: "money",
+  },
+  {
+    id: "forecast",
+    label: "Go to Forecast",
+    keywords: "money cash flow balance ahead low",
+    icon: ChartLine,
+    to: "/money?do=forecast",
     module: "money",
   },
   {

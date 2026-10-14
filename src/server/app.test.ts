@@ -7,7 +7,7 @@ import { defaultHomeAssistant } from "../shared/homeAssistant";
 import { defaultHomeWidgets } from "../shared/homeWidgets";
 import { defaultModules } from "../shared/modules";
 import { defaultReminders, defaultTithingReminder } from "../shared/reminders";
-import { defaultDayPlan } from "../shared/settings";
+import { defaultDayPlan, defaultMoneyForecast } from "../shared/settings";
 import { createApp } from "./app";
 import { decodeHeaderName } from "./auth";
 import { loadConfig } from "./config";
@@ -104,6 +104,7 @@ describe("settings API", () => {
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
       dayPlan: defaultDayPlan,
+      moneyForecast: defaultMoneyForecast,
       tithingReminder: defaultTithingReminder,
     });
 
@@ -124,6 +125,7 @@ describe("settings API", () => {
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
       dayPlan: defaultDayPlan,
+      moneyForecast: defaultMoneyForecast,
       tithingReminder: defaultTithingReminder,
     });
 
@@ -139,6 +141,7 @@ describe("settings API", () => {
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
       dayPlan: defaultDayPlan,
+      moneyForecast: defaultMoneyForecast,
       tithingReminder: defaultTithingReminder,
     });
 

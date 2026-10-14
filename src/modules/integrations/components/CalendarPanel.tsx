@@ -48,8 +48,9 @@ export function CalendarPanel() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted">
-          Tasks, goals, milestones, business steps, and lead follow-ups with dates, as all-day
-          events. The calendar checks for changes about once an hour.
+          Tasks, goals, milestones, bills (names only, no amounts), business steps, and lead
+          follow-ups with dates, as all-day events. The calendar checks for changes about once an
+          hour.
         </p>
         <button
           type="button"

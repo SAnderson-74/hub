@@ -211,6 +211,13 @@
       "when": 1792013527183,
       "tag": "0029_task_templates_and_estimates",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1792018663692,
+      "tag": "0030_money_bills",
+      "breakpoints": true
     }
   ]
 }

@@ -137,9 +137,9 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 ### Phase 8: Money ahead
 
-- [ ] 8.1 Bills, subscriptions, and repeating income: found from repeating transactions, confirmed, listed with the next date and amount, and the yearly cost of subscriptions
-- [ ] 8.2 Bills on a calendar, alerts when one changes price or doesn't arrive, and reminders before each is due
-- [ ] 8.3 Cash-flow forecast: each account's expected balance 30, 60, or 90 days ahead, with a warning before it runs low
+- [x] 8.1 Bills, subscriptions, and repeating income: found from repeating transactions, confirmed, listed with the next date and amount, and the yearly cost of subscriptions
+- [x] 8.2 Bills on a calendar, alerts when one changes price or doesn't arrive, and reminders before each is due
+- [x] 8.3 Cash-flow forecast: each account's expected balance 30, 60, or 90 days ahead, with a warning before it runs low
 - [ ] 8.4 Sinking funds for costs that come once or twice a year, and budgets that carry unspent money into the next month
 - [ ] 8.5 Reimbursements and shared costs: the part owed back is matched to the repayment, counts only your share, and stays out of tithing
 - [ ] 8.6 Spending insights: month over month and year over year by category and store, a year in review, and alerts when a category runs well above its usual

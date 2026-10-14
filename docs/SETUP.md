@@ -170,7 +170,7 @@ Hub can send Home Assistant a summary (study streak, today's tasks, and dates co
 **Reminders.** Settings > **Reminders** chooses what Hub sends to the reminder webhook, and when (in Hub's time zone):
 
 - **Daily digest**: today's tasks, what's due in the next three days, and the study streak. Skipped when nothing is due.
-- **Due soon**: tasks, goals, milestones, assessments, business steps, and lead follow-ups due today or within the days you pick. Each is reminded once per due date.
+- **Due soon**: tasks, goals, milestones, assessments, bills and income, business steps, and lead follow-ups due today or within the days you pick. Each is reminded once per due date.
 - **Study streak at risk**: when there's a streak and today's minimum isn't met yet.
 - **Tithing unpaid** (off until turned on, and only while Tithing is on): when income comes in with tithing to pay, and every 7 days while some stays unpaid.
 
@@ -182,7 +182,7 @@ Each goes out once a day. If Hub is down or Home Assistant doesn't answer at tha
 
 ## 7. Calendar feed (optional)
 
-Hub can publish its dated things (open tasks, active goals and their milestones, assessments, business steps, and lead follow-ups) as a calendar to subscribe to. Each shows as an all-day event, from two months back to a year ahead, and calendars check for changes about once an hour.
+Hub can publish its dated things (open tasks, active goals and their milestones, assessments, bills and income by name only, business steps, and lead follow-ups) as a calendar to subscribe to. Each shows as an all-day event, from two months back to a year ahead, and calendars check for changes about once an hour.
 
 1. Settings > **Calendar feed** > **Turn on calendar feed**.
 2. **iPhone:** Settings > Apps > Calendar > Calendar Accounts > Add Account > Other > **Add Subscribed Calendar**, and paste the address. Adding it there keeps it on the phone, which reaches Hub over Tailscale. If asked where to keep it, choose On My iPhone, not iCloud: iCloud's servers can't reach Hub.
