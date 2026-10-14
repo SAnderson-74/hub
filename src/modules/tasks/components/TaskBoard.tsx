@@ -4,13 +4,12 @@ import { useMediaQuery } from "../../../client/lib/useMediaQuery";
 import { TASK_STATUS_LABELS, TASK_STATUSES, type TaskStatus } from "../../../shared/tasks";
 import { groupByStatus, orderForDrop } from "../ordering";
 import type { TaskItem } from "../queries";
+import { type DonePaging, ShowMoreDone } from "./TaskList";
 import { TaskMeta } from "./TaskMeta";
-
-const DONE_PAGE = 20;
 
 export type TaskMove = { task: TaskItem; status: TaskStatus; sortOrder: number };
 
-type TaskBoardProps = {
+type TaskBoardProps = DonePaging & {
   tasks: TaskItem[];
   today: string;
   projectNames?: Map<number, string>;
@@ -45,12 +44,12 @@ export function TaskBoard({
   onOpen,
   onMoveMenu,
   onMove,
+  ...paging
 }: TaskBoardProps) {
   // Dragging needs a mouse or trackpad; on touch screens the move menu does the job.
   const canDrag = useMediaQuery("(pointer: fine)");
   const [dragging, setDragging] = useState<TaskItem | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
-  const [doneShown, setDoneShown] = useState(DONE_PAGE);
   const columns = groupByStatus(tasks);
 
   const endDrag = () => {
@@ -71,7 +70,6 @@ export function TaskBoard({
     <div className="relative -mx-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0">
       {TASK_STATUSES.map((status) => {
         const column = columns[status];
-        const visible = status === "done" ? column.slice(0, doneShown) : column;
         const target = drop?.status === status ? drop.index : null;
         let othersSeen = 0;
         return (
@@ -101,10 +99,12 @@ export function TaskBoard({
               className="flex items-baseline gap-2 px-2 pt-1 pb-3 font-semibold text-fg"
             >
               {TASK_STATUS_LABELS[status]}
-              <span className="text-sm text-muted tabular-nums">{column.length}</span>
+              <span className="text-sm text-muted tabular-nums">
+                {status === "done" ? Math.max(paging.doneTotal, column.length) : column.length}
+              </span>
             </h2>
             <ul className="flex min-h-24 flex-1 flex-col gap-2">
-              {visible.map((task) => {
+              {column.map((task) => {
                 const isDragged = dragging?.id === task.id;
                 const lineBefore = !isDragged && target === othersSeen;
                 if (!isDragged) othersSeen += 1;
@@ -164,15 +164,7 @@ export function TaskBoard({
                 </li>
               ) : null}
             </ul>
-            {status === "done" && column.length > doneShown ? (
-              <button
-                type="button"
-                onClick={() => setDoneShown((shown) => shown + DONE_PAGE)}
-                className="mt-2 h-11 rounded-full px-4 text-sm font-semibold text-accent-text hover:bg-surface-0"
-              >
-                Show {Math.min(DONE_PAGE, column.length - doneShown)} more
-              </button>
-            ) : null}
+            {status === "done" ? <ShowMoreDone {...paging} shown={column.length} /> : null}
           </section>
         );
       })}

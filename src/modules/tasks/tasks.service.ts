@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, isNull, lte, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, lte, type SQL, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, notFound } from "../../server/errors";
 import {
@@ -10,6 +10,7 @@ import {
   type RecurrenceFrequency,
 } from "../../shared/recurrence";
 import type {
+  DoneTaskQuery,
   TaskCreate,
   TaskListQuery,
   TaskPriority,
@@ -110,6 +111,59 @@ export function listTasks(db: Queryable, query: TaskListQuery): TaskJson[] {
     .orderBy(...inOrder)
     .all();
   return withExtras(db, rows);
+}
+
+export type DonePageJson = {
+  tasks: TaskJson[];
+  /** Every finished task matching the filters, not just this page. */
+  total: number;
+  /** Pass as `before` for the next page; null on the last one. */
+  next: string | null;
+};
+
+/**
+ * When a task was finished. Tasks marked done before completion times were kept fall
+ * back to their last change.
+ */
+const finishedAt = sql<number>`coalesce(${tasks.completedAt}, ${tasks.updatedAt})`;
+
+/** Finished top-level tasks, most recently finished first, a page at a time. */
+export function listDoneTasks(db: Queryable, query: DoneTaskQuery): DonePageJson {
+  const conditions: SQL[] = [isNull(tasks.parentId), eq(tasks.status, "done")];
+  if (query.projectId === "inbox") conditions.push(isNull(tasks.projectId));
+  else if (query.projectId !== undefined) conditions.push(eq(tasks.projectId, query.projectId));
+  if (query.since) conditions.push(sql`${finishedAt} >= ${query.since.getTime()}`);
+  const total =
+    db
+      .select({ total: count() })
+      .from(tasks)
+      .where(and(...conditions))
+      .get()?.total ?? 0;
+
+  const { before } = query;
+  if (before) {
+    conditions.push(
+      sql`(${finishedAt} < ${before.finishedMs} or (${finishedAt} = ${before.finishedMs} and ${tasks.id} < ${before.id}))`,
+    );
+  }
+  // One extra row says whether there's another page.
+  const rows = db
+    .select()
+    .from(tasks)
+    .where(and(...conditions))
+    .orderBy(desc(finishedAt), desc(tasks.id))
+    .limit(query.limit + 1)
+    .all();
+  const page = rows.slice(0, query.limit);
+  const last = page.at(-1);
+  return {
+    tasks: withExtras(db, page),
+    total,
+    next:
+      rows.length > query.limit && last
+        ? `${(last.completedAt ?? last.updatedAt).getTime()}-${last.id}`
+        : null,
+  };
 }
 
 function findTask(db: Queryable, id: number): TaskRow | undefined {

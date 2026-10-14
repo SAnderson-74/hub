@@ -18,7 +18,7 @@ import {
   type TaskItem,
   useCreateTask,
   useProjects,
-  useTasks,
+  useTaskSet,
   useUpdateTask,
 } from "../queries";
 
@@ -76,7 +76,7 @@ export function TasksPage() {
       : requested;
   const openTaskId = Number(params.get("task")) || null;
 
-  const tasks = useTasks(project);
+  const tasks = useTaskSet(project);
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const today = localDate(useNow());
@@ -120,7 +120,9 @@ export function TasksPage() {
     typeof project === "number" ? projectList.find((item) => item.id === project) : undefined;
   const projectNames =
     project === "all" ? new Map(projectList.map((item) => [item.id, item.name])) : undefined;
-  const taskList = tasks.data ?? [];
+  const taskList = tasks.tasks ?? [];
+  const { doneTotal, hasMoreDone, loadingMoreDone, loadMoreDone } = tasks;
+  const donePaging = { doneTotal, hasMoreDone, loadingMoreDone, loadMoreDone };
   const openCount = taskList.filter((task) => task.status !== "done").length;
   const doingCount = taskList.filter((task) => task.status === "doing").length;
 
@@ -168,7 +170,7 @@ export function TasksPage() {
       <PageHeader
         title="Tasks"
         subtitle={
-          tasks.data
+          tasks.tasks
             ? openCount === 0
               ? `Nothing open in ${projectLabel(project, projectList)}.`
               : `${openCount} open${doingCount > 0 ? `, ${doingCount} in progress` : ""} in ${projectLabel(project, projectList)}.`
@@ -304,12 +306,13 @@ export function TasksPage() {
         </p>
       ) : null}
 
-      {tasks.isPending ? (
-        <LoadingRows rows={4} />
-      ) : tasks.isError ? (
+      {tasks.error ? (
         <ErrorNote error={tasks.error} onRetry={() => void tasks.refetch()} />
+      ) : tasks.isPending ? (
+        <LoadingRows rows={4} />
       ) : view === "board" ? (
         <TaskBoard
+          {...donePaging}
           tasks={taskList}
           today={today}
           projectNames={projectNames}
@@ -319,6 +322,7 @@ export function TasksPage() {
         />
       ) : (
         <TaskList
+          {...donePaging}
           tasks={taskList}
           today={today}
           projectNames={projectNames}

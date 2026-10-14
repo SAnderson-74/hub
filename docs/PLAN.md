@@ -120,6 +120,49 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [ ] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
 - [x] 5.13 Search, sort, and filters on the Money transaction list and the Tithing lists (newest, oldest, largest or smallest amount; a range of amounts with a slider; dates with presets like 1 month and 1 year or a custom range; several categories), and income marked as paid without a payment, in bulk or through a date, for tithing paid before Hub tracked it
 
+### Phase 6: Groundwork, Home, and search
+
+- [x] 6.1 Finished tasks load a page at a time (newest first, from `GET /api/tasks/done`) instead of every finished task at once; Home asks only for today's
+- [ ] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
+- [ ] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
+- [ ] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
+- [ ] 6.5 Home widgets for every module, chosen and ordered in Settings, including tithing on Home (5.12)
+- [ ] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
+
+### Phase 7: Tasks and planning
+
+- [ ] 7.1 Quick add in plain English ("Renew registration next Fri !high #car every year"), shown as chips before saving, also in the command menu and the Shortcuts endpoint
+- [ ] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
+- [ ] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
+
+### Phase 8: Money ahead
+
+- [ ] 8.1 Bills, subscriptions, and repeating income: found from repeating transactions, confirmed, listed with the next date and amount, and the yearly cost of subscriptions
+- [ ] 8.2 Bills on a calendar, alerts when one changes price or doesn't arrive, and reminders before each is due
+- [ ] 8.3 Cash-flow forecast: each account's expected balance 30, 60, or 90 days ahead, with a warning before it runs low
+- [ ] 8.4 Sinking funds for costs that come once or twice a year, and budgets that carry unspent money into the next month
+- [ ] 8.5 Reimbursements and shared costs: the part owed back is matched to the repayment, counts only your share, and stays out of tithing
+- [ ] 8.6 Spending insights: month over month and year over year by category and store, a year in review, and alerts when a category runs well above its usual
+- [ ] 8.7 Debt payoff planner: snowball, avalanche, or your own order, with payoff dates, interest, and what extra payments change
+- [ ] 8.8 Money health numbers (months of spending covered, savings rate) and a net-worth projection with what-if sliders
+
+### Phase 9: Habits, focus, resale, and goals
+
+- [ ] 9.1 Push notifications on the phone's Home Screen app (Web Push): encrypted end to end, sent only to Apple's and other browsers' push services, counts only on the lock screen unless chosen, off until turned on per device
+- [ ] 9.2 Habits: flexible schedules, check-ins, and a strength score that dips for a miss instead of resetting
+- [ ] 9.3 Habits on Home, a heat map, reminders, and the study streak linked as a habit
+- [ ] 9.4 Focus timer: work and break blocks on a task or course, saved as time entries
+- [ ] 9.5 Inventory aging and stale listings: age groups, sell-through, days to sell, and suggestions to reprice or relist
+- [ ] 9.6 Storage spots and SKUs for resale items, with printable labels
+- [ ] 9.7 Goal pace: on track or behind, a projected finish date, what's needed each week, and check-in notes
+
+### Phase 10: Plan and review
+
+- [ ] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
+- [ ] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
+- [ ] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
+- [ ] 10.4 Undo for a few seconds after deleting a task, transaction, or item
+
 ## Import formats
 
 ### `hub-tasks/v1`
