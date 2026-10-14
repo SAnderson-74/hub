@@ -5,8 +5,16 @@ import { log } from "../../server/log";
 import { OPEN_LEAD_STATUSES } from "../../shared/business";
 import type { Reminder } from "../../shared/homeAssistant";
 import type { ModuleId } from "../../shared/modules";
-import { addDays } from "../../shared/recurrence";
-import { inWindow, type ReminderKind, type ReminderSettings } from "../../shared/reminders";
+import { formatCents } from "../../shared/money";
+import { addDays, daysBetween } from "../../shared/recurrence";
+import {
+  inWindow,
+  REMINDER_KINDS,
+  type ReminderKind,
+  type ReminderSettings,
+  TITHING_REPEAT_DAYS,
+} from "../../shared/reminders";
+import type { Settings } from "../../shared/settings";
 import { streakState } from "../../shared/streak";
 import { businessLeads, businessSteps } from "../business/schema";
 import { readSettings } from "../core/settings.service";
@@ -14,6 +22,7 @@ import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
 import { tasks } from "../tasks/schema";
+import { overview as tithingOverview } from "../tithing/tithing.service";
 import { sendReminder, todayTasks } from "./homeAssistant.service";
 import { reminderSends } from "./schema";
 
@@ -301,6 +310,54 @@ export function streakReminder(
   };
 }
 
+const incomeKey = (id: number) => `tithing-income:${id}`;
+
+/**
+ * Unpaid tithing, when there's new income with tithing to pay since the last tithing
+ * reminder, or otherwise once every TITHING_REPEAT_DAYS while any stays unpaid. Null
+ * when it's all paid, or nothing new came in and it was reminded recently.
+ */
+export function tithingReminder(
+  db: Db,
+  today: string,
+  now: Date,
+): { reminder: Reminder; keys: string[] } | null {
+  if (!readSettings(db).modules.tithing) return null;
+  const { summary, open } = tithingOverview(db, undefined, now);
+  if (summary.unpaidCents <= 0 || open.length === 0) return null;
+  const sent = db
+    .select({ key: reminderSends.key })
+    .from(reminderSends)
+    .where(eq(reminderSends.kind, "tithing"))
+    .all()
+    .map((row) => row.key);
+  const mentioned = new Set(sent);
+  const fresh = open.filter((row) => !mentioned.has(incomeKey(row.id)));
+  // Day keys ("tithing:2030-03-01") sort by date.
+  const lastDay = sent
+    .filter((key) => /^tithing:\d{4}-\d{2}-\d{2}$/.test(key))
+    .map((key) => key.slice("tithing:".length))
+    .sort()
+    .at(-1);
+  const due = lastDay === undefined || daysBetween(lastDay, today) >= TITHING_REPEAT_DAYS;
+  if (fresh.length === 0 && !due) return null;
+  const freshCents = fresh.reduce((sum, row) => sum + row.owedCents - row.paidCents, 0);
+  return {
+    reminder: {
+      kind: "tithing",
+      title:
+        fresh.length > 0
+          ? `${formatCents(freshCents)} of tithing on new income`
+          : `${formatCents(summary.unpaidCents)} of tithing unpaid`,
+      message: `${formatCents(summary.unpaidCents)} of tithing is unpaid on ${plural(
+        summary.unpaidCount,
+        "income",
+      )}.${fresh.length > 0 ? ` ${plural(fresh.length, "income")} came in since the last reminder.` : ""}`,
+    },
+    keys: open.map((row) => incomeKey(row.id)),
+  };
+}
+
 // Sending
 
 type Built = { reminder: Reminder; keys: string[] };
@@ -309,21 +366,32 @@ function build(
   db: Db,
   config: Pick<Config, "timeZone">,
   kind: ReminderKind,
-  settings: ReminderSettings,
+  settings: Settings,
   now: Date,
 ): Built | null {
   const today = localClock(now, config.timeZone).date;
-  if (kind === "due_soon") return dueSoonReminder(db, today, settings.dueSoon.days);
+  if (kind === "due_soon") return dueSoonReminder(db, today, settings.reminders.dueSoon.days);
+  if (kind === "tithing") return tithingReminder(db, today, now);
   const reminder =
     kind === "digest" ? digestReminder(db, config, now) : streakReminder(db, config, now);
   return reminder ? { reminder, keys: [] } : null;
 }
 
-const SETTING: Record<ReminderKind, keyof ReminderSettings> = {
+const SETTING: Record<Exclude<ReminderKind, "tithing">, keyof ReminderSettings> = {
   digest: "digest",
   due_soon: "dueSoon",
   streak: "streak",
 };
+
+/** Whether a reminder is on, and its time. */
+function settingFor(settings: Settings, kind: ReminderKind): { enabled: boolean; time: string } {
+  return kind === "tithing" ? settings.tithingReminder : settings.reminders[SETTING[kind]];
+}
+
+/** Reminders that apply: the tithing one only while Tithing is on. */
+function kindsFor(settings: Settings): ReminderKind[] {
+  return REMINDER_KINDS.filter((kind) => kind !== "tithing" || settings.modules.tithing);
+}
 
 const dayKey = (kind: ReminderKind, date: string) => `${kind}:${date}`;
 
@@ -376,13 +444,13 @@ export async function runReminders(
   if (!settings.homeAssistant.reminderUrl) return [];
   const clock = localClock(now, config.timeZone);
   const outcomes: ReminderOutcome[] = [];
-  for (const kind of ["digest", "due_soon", "streak"] as const) {
-    const setting = settings.reminders[SETTING[kind]];
+  for (const kind of kindsFor(settings)) {
+    const setting = settingFor(settings, kind);
     if (!setting.enabled || !inWindow(setting.time, clock.minutes)) continue;
     if (sentToday(db, kind, clock.date)) continue;
     const tryKey = dayKey(kind, clock.date);
     if (now.getTime() - (lastTry.get(tryKey) ?? 0) < RETRY_MS) continue;
-    const built = build(db, config, kind, settings.reminders, now);
+    const built = build(db, config, kind, settings, now);
     if (!built) continue;
     const delivery = await sendReminder(db, built.reminder, now);
     if (delivery?.ok) {
@@ -405,7 +473,7 @@ export async function sendReminderNow(
   now = new Date(),
 ): Promise<{ built: Built | null; delivery: Awaited<ReturnType<typeof sendReminder>> }> {
   const settings = readSettings(db);
-  const built = build(db, config, kind, settings.reminders, now);
+  const built = build(db, config, kind, settings, now);
   if (!built) return { built: null, delivery: null };
   const delivery = await sendReminder(db, built.reminder, now);
   if (delivery?.ok) record(db, kind, localClock(now, config.timeZone).date, built, now);
@@ -427,28 +495,33 @@ export function previewReminders(
 ): ReminderPreview[] {
   const settings = readSettings(db);
   const today = localClock(now, config.timeZone).date;
-  return (["digest", "due_soon", "streak"] as const).map((kind) => ({
+  return kindsFor(settings).map((kind) => ({
     kind,
-    reminder: build(db, config, kind, settings.reminders, now)?.reminder ?? null,
+    reminder: build(db, config, kind, settings, now)?.reminder ?? null,
     sentToday: sentToday(db, kind, today),
   }));
 }
 
 /** The latest reminders sent, newest first. */
 export function recentReminders(db: Queryable, limit = 10) {
-  return db
-    .select({
-      kind: reminderSends.kind,
-      title: reminderSends.title,
-      message: reminderSends.message,
-      sentAt: reminderSends.sentAt,
-    })
-    .from(reminderSends)
-    .where(notLike(reminderSends.key, "due:%"))
-    .orderBy(desc(reminderSends.sentAt), desc(reminderSends.id))
-    .limit(limit)
-    .all()
-    .map((row) => ({ ...row, sentAt: row.sentAt.toISOString() }));
+  return (
+    db
+      .select({
+        kind: reminderSends.kind,
+        title: reminderSends.title,
+        message: reminderSends.message,
+        sentAt: reminderSends.sentAt,
+      })
+      .from(reminderSends)
+      // One row per reminder: not the extra keys for each item or income it named.
+      .where(
+        and(notLike(reminderSends.key, "due:%"), notLike(reminderSends.key, "tithing-income:%")),
+      )
+      .orderBy(desc(reminderSends.sentAt), desc(reminderSends.id))
+      .limit(limit)
+      .all()
+      .map((row) => ({ ...row, sentAt: row.sentAt.toISOString() }))
+  );
 }
 
 /**

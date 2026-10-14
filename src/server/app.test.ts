@@ -6,7 +6,7 @@ import { defaultBusinessRate } from "../shared/businessRate";
 import { defaultHomeAssistant } from "../shared/homeAssistant";
 import { defaultHomeWidgets } from "../shared/homeWidgets";
 import { defaultModules } from "../shared/modules";
-import { defaultReminders } from "../shared/reminders";
+import { defaultReminders, defaultTithingReminder } from "../shared/reminders";
 import { createApp } from "./app";
 import { decodeHeaderName } from "./auth";
 import { loadConfig } from "./config";
@@ -102,6 +102,7 @@ describe("settings API", () => {
       timeZone: "",
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
+      tithingReminder: defaultTithingReminder,
     });
 
     const saved = await app.request("/api/settings", {
@@ -120,6 +121,7 @@ describe("settings API", () => {
       timeZone: "",
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
+      tithingReminder: defaultTithingReminder,
     });
 
     const reread = await app.request("/api/settings", { headers: owner });
@@ -133,6 +135,7 @@ describe("settings API", () => {
       timeZone: "",
       setupDone: false,
       homeWidgets: defaultHomeWidgets,
+      tithingReminder: defaultTithingReminder,
     });
 
     const invalid = await app.request("/api/settings", {

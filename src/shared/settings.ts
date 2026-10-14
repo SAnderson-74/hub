@@ -4,7 +4,12 @@ import { HEX_COLOR } from "./color";
 import { defaultHomeAssistant, homeAssistantSchema } from "./homeAssistant";
 import { defaultHomeWidgets, homeWidgetsSchema } from "./homeWidgets";
 import { defaultModules, modulesSchema, timeZoneSchema } from "./modules";
-import { defaultReminders, remindersSchema } from "./reminders";
+import {
+  defaultReminders,
+  defaultTithingReminder,
+  remindersSchema,
+  tithingReminderSchema,
+} from "./reminders";
 
 export type AccentPreset = { name: string; hex: string };
 
@@ -48,6 +53,8 @@ export const settingsSchema = z.object({
   setupDone: z.boolean(),
   /** The order of Home's widgets and which are hidden. */
   homeWidgets: homeWidgetsSchema,
+  /** The tithing reminder: on or off, and when. */
+  tithingReminder: tithingReminderSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -65,4 +72,5 @@ export const defaultSettings: Settings = {
   timeZone: "",
   setupDone: false,
   homeWidgets: defaultHomeWidgets,
+  tithingReminder: defaultTithingReminder,
 };
