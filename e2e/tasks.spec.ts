@@ -143,6 +143,33 @@ test("a repeating task comes back when it's completed", async ({ page }, testInf
   await expect(row).toContainText("Due");
   await page.locator("summary", { hasText: "Done" }).click();
   await expect(page.getByRole("checkbox", { name: "Water plants" })).toHaveCount(2);
+
+  // Set days, and a series that ends.
+  await newTask.fill("Take out the bins");
+  await newTask.press("Enter");
+  await todo.getByRole("button", { name: /^Take out the bins/ }).click();
+  await sheet.getByLabel("Repeat").selectOption({ label: "Weekly" });
+  await sheet.getByRole("button", { name: "Monday" }).click();
+  await sheet.getByRole("button", { name: "Thursday" }).click();
+  await expect(sheet.getByRole("button", { name: "Thursday" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await sheet.getByLabel("Ends").selectOption({ label: "After a number more" });
+  await sheet.getByLabel("How many more").fill("0");
+  await expect(
+    sheet.getByText("This is the last one; completing it ends the series."),
+  ).toBeVisible();
+  await sheet.getByRole("button", { name: "Save task" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Task saved");
+  await sheet.getByRole("button", { name: "Close" }).click();
+  const bins = todo.getByRole("button", { name: /^Take out the bins/ });
+  await expect(bins).toContainText("Weekly on Mon and Thu, last one");
+  await page.getByRole("checkbox", { name: "Take out the bins" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "That was the last “Take out the bins”" }),
+  ).toHaveCount(1);
+  await expect(todo.getByRole("button", { name: /^Take out the bins/ })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

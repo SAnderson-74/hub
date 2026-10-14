@@ -12,6 +12,7 @@ import { TaskBoard, type TaskMove } from "../components/TaskBoard";
 import { TaskList } from "../components/TaskList";
 import { TaskSheet } from "../components/TaskSheet";
 import { localDate } from "../dates";
+import { seriesContinues } from "../draft";
 import {
   type ProjectFilter,
   type ProjectItem,
@@ -129,7 +130,11 @@ export function TasksPage() {
   // Completing a repeating task adds the next one; say so for screen readers too.
   const announceRepeat = (task: TaskItem, status: TaskItem["status"]) => {
     if (task.recurrence && task.status !== "done" && status === "done") {
-      setAnnouncement(`Done. The next “${task.title}” is in To do.`);
+      setAnnouncement(
+        seriesContinues(task.recurrence, task.dueDate, today)
+          ? `Done. The next “${task.title}” is in To do.`
+          : `Done. That was the last “${task.title}”.`,
+      );
     }
   };
 
