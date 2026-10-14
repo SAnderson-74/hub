@@ -9,6 +9,7 @@ import {
 import { api, toApiError } from "../../client/lib/api";
 import type { ProjectCreate, ProjectUpdate, TaskCreate, TaskUpdate } from "../../shared/tasks";
 import type { TasksDocument } from "../../shared/tasksImport";
+import type { TemplateFrom, TemplateUse } from "../../shared/templates";
 import { mergeTasks } from "./ordering";
 
 /** "all", "inbox" (no project), or a project id. */
@@ -271,5 +272,68 @@ export function useImportTasks() {
       // Tasks, projects, and goals all change.
       if (!dryRun) void queryClient.invalidateQueries();
     },
+  });
+}
+
+// Templates
+
+export type Template = Awaited<ReturnType<typeof fetchTemplates>>[number];
+
+async function fetchTemplates() {
+  const res = await api.templates.$get();
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+const templateKey = ["templates"] as const;
+
+export function useTemplates(enabled = true) {
+  return useQuery({ queryKey: templateKey, queryFn: fetchTemplates, enabled });
+}
+
+export function useSaveTemplateFrom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (json: TemplateFrom) => {
+      const res = await api.templates.from.$post({ json });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: templateKey }),
+  });
+}
+
+export function useRenameTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const res = await api.templates[":id"].$patch({ param: { id: String(id) }, json: { name } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: templateKey }),
+  });
+}
+
+export function useDeleteTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.templates[":id"].$delete({ param: { id: String(id) } });
+      if (!res.ok) throw await toApiError(res);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: templateKey }),
+  });
+}
+
+export function useUseTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...json }: TemplateUse & { id: number }) => {
+      const res = await api.templates[":id"].use.$post({ param: { id: String(id) }, json });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => refreshTasks(queryClient),
   });
 }

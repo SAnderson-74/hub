@@ -23,6 +23,7 @@ const task: TaskDetail = {
   startDate: null,
   someday: false,
   evening: false,
+  estimateMinutes: null,
   waitingOn: [],
   sortOrder: 1,
   completedAt: null,

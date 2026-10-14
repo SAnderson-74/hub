@@ -37,6 +37,8 @@ export type TaskJson = {
   startDate: string | null;
   someday: boolean;
   evening: boolean;
+  /** Minutes it should take, for planning the day. */
+  estimateMinutes: number | null;
   /** Tasks this one waits on, done ones included. While any is open, it's waiting. */
   waitingOn: Array<{ id: number; title: string; done: boolean }>;
   sortOrder: number;
@@ -192,6 +194,7 @@ function withExtras(db: Queryable, rows: TaskRow[]): TaskJson[] {
     startDate: row.startDate,
     someday: row.someday,
     evening: row.evening,
+    estimateMinutes: row.estimateMinutes,
     waitingOn: waits.get(row.id) ?? [],
     sortOrder: row.sortOrder,
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -382,6 +385,7 @@ export function createTask(db: Queryable, input: TaskCreate, actor: string): Tas
         startDate: input.startDate ?? null,
         someday: input.someday ?? false,
         evening: input.evening ?? false,
+        estimateMinutes: input.estimateMinutes ?? null,
         sortOrder: nextSortOrder(tx),
         completedAt: status === "done" ? now : null,
         recurrence,
@@ -414,6 +418,7 @@ const tracked = (row: TaskRow) => ({
   startDate: row.startDate,
   someday: row.someday,
   evening: row.evening,
+  estimateMinutes: row.estimateMinutes,
   projectId: row.projectId,
   parentId: row.parentId,
   repeat: row.recurrence ? describeRecurrence(row.recurrence) : null,
@@ -451,6 +456,7 @@ function createNextInSeries(
         // The start date moves with the due date, so the gap between them stays.
         startDate: source.startDate && addDays(source.startDate, shift),
         evening: source.evening,
+        estimateMinutes: source.estimateMinutes,
         sortOrder: nextSortOrder(tx),
         recurrence: parentId === null ? next.rule : null,
         createdAt: now,
@@ -528,6 +534,8 @@ export function updateTask(
       startDate: patch.startDate !== undefined ? patch.startDate : current.startDate,
       someday: patch.someday ?? current.someday,
       evening: patch.evening ?? current.evening,
+      estimateMinutes:
+        patch.estimateMinutes !== undefined ? patch.estimateMinutes : current.estimateMinutes,
       sortOrder: patch.sortOrder ?? current.sortOrder,
       completedAt,
       recurrence,
@@ -571,6 +579,7 @@ export function updateTask(
         startDate: next.startDate,
         someday: next.someday,
         evening: next.evening,
+        estimateMinutes: next.estimateMinutes,
         sortOrder: next.sortOrder,
         completedAt: next.completedAt,
         recurrence: completesSeries ? null : recurrence,

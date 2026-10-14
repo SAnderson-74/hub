@@ -8,7 +8,9 @@ const labels = (list: Array<{ label: string }>) => list.map((item) => item.label
 describe("command menu commands", () => {
   it("offer actions for turned-on modules, then every page", () => {
     const all = appCommands(appPages, defaultModules);
-    expect(labels(all).slice(0, 2)).toEqual(["Add a task", "Start a timer"]);
+    expect(labels(all)[0]).toBe("Add a task");
+    expect(labels(all)).toContain("Plan the day");
+    expect(labels(all)).toContain("Start a timer");
     expect(all.find((command) => command.label === "Go to Tasks")).toMatchObject({
       group: "Pages",
       to: "/tasks",

@@ -1,14 +1,31 @@
-import { ClipboardPaste, FolderPlus, List, Pencil, Plus, SquareKanban, X } from "lucide-react";
+import {
+  ClipboardPaste,
+  FolderPlus,
+  LayoutTemplate,
+  List,
+  Moon,
+  Pencil,
+  Plus,
+  SquareKanban,
+  Sunrise,
+  X,
+} from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
-import { iconButton, inputClass, primaryButton } from "../../../client/components/ui";
+import {
+  iconButton,
+  inputClass,
+  primaryButton,
+  secondaryButton,
+} from "../../../client/components/ui";
 import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { parseQuickAdd, type QuickAddChip } from "../../../shared/quickAdd";
 import { describeRecurrence } from "../../../shared/recurrence";
 import { SMART_LIST_LABELS, SMART_LISTS, type SmartList } from "../../../shared/smartLists";
+import { type DayPlanMode, DayPlanSheet } from "../components/DayPlanSheet";
 import { MoveSheet } from "../components/MoveSheet";
 import { PasteTasksSheet } from "../components/PasteTasksSheet";
 import { ProjectSheet } from "../components/ProjectSheet";
@@ -16,6 +33,7 @@ import { SmartTaskList } from "../components/SmartList";
 import { TaskBoard, type TaskMove } from "../components/TaskBoard";
 import { TaskList } from "../components/TaskList";
 import { TaskSheet } from "../components/TaskSheet";
+import { TemplatesSheet } from "../components/TemplatesSheet";
 import { formatShortDate, localDate } from "../dates";
 import { seriesContinues } from "../draft";
 import {
@@ -123,6 +141,11 @@ export function TasksPage() {
   const [moving, setMoving] = useState<TaskItem | null>(null);
   const [projectSheet, setProjectSheet] = useState<"new" | ProjectItem | null>(null);
   const [pastingTasks, setPastingTasks] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [dayPlan, setDayPlan] = useState<DayPlanMode>(null);
+  useCommand("templates", () => setTemplatesOpen(true));
+  useCommand("plan", () => setDayPlan("plan"));
+  useCommand("shutdown", () => setDayPlan("shutdown"));
 
   const selectProject = (value: ProjectFilter) => {
     setRequested(value);
@@ -205,6 +228,7 @@ export function TasksPage() {
         dueDate: quick.dueDate,
         tags: quick.tags,
         recurrence: quick.recurrence,
+        estimateMinutes: quick.estimateMinutes,
         ...(quick.priority === null ? {} : { priority: quick.priority }),
       },
       {
@@ -282,6 +306,14 @@ export function TasksPage() {
             onClick={() => setProjectSheet("new")}
           >
             <FolderPlus aria-hidden="true" className="size-5" />
+          </button>
+          <button
+            type="button"
+            className={iconButton}
+            aria-label="Templates"
+            onClick={() => setTemplatesOpen(true)}
+          >
+            <LayoutTemplate aria-hidden="true" className="size-5" />
           </button>
           <button
             type="button"
@@ -401,15 +433,33 @@ export function TasksPage() {
       ) : tasks.isPending ? (
         <LoadingRows rows={4} />
       ) : list !== "all" ? (
-        <SmartTaskList
-          {...donePaging}
-          list={list}
-          tasks={taskList}
-          today={today}
-          projectNames={projectNames}
-          onOpen={(task) => openTask(task.id)}
-          onToggleDone={toggleDone}
-        />
+        <>
+          {list === "today" ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button type="button" className={secondaryButton} onClick={() => setDayPlan("plan")}>
+                <Sunrise aria-hidden="true" className="size-4" />
+                Plan the day
+              </button>
+              <button
+                type="button"
+                className={secondaryButton}
+                onClick={() => setDayPlan("shutdown")}
+              >
+                <Moon aria-hidden="true" className="size-4" />
+                Shut down
+              </button>
+            </div>
+          ) : null}
+          <SmartTaskList
+            {...donePaging}
+            list={list}
+            tasks={taskList}
+            today={today}
+            projectNames={projectNames}
+            onOpen={(task) => openTask(task.id)}
+            onToggleDone={toggleDone}
+          />
+        </>
       ) : view === "board" ? (
         <TaskBoard
           {...donePaging}
@@ -438,6 +488,14 @@ export function TasksPage() {
         onClose={closeTask}
       />
       <PasteTasksSheet open={pastingTasks} onClose={() => setPastingTasks(false)} />
+      <TemplatesSheet
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        projects={projectList}
+        defaultProjectId={typeof project === "number" ? project : null}
+        today={today}
+      />
+      <DayPlanSheet mode={dayPlan} today={today} onClose={() => setDayPlan(null)} />
       <MoveSheet task={moving} tasks={taskList} onMove={move} onClose={() => setMoving(null)} />
       <ProjectSheet
         target={projectSheet}
@@ -461,6 +519,7 @@ const CHIP_PREFIX: Record<QuickAddChip["kind"], string> = {
   priority: "",
   tag: "Tag",
   project: "Project",
+  estimate: "About",
 };
 
 /**

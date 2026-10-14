@@ -102,6 +102,9 @@ describe("quick add", () => {
       projectId: 1,
     });
     expect(read("Oil change @car !1").projectId).toBe(2);
+    expect(read("Mow the lawn ~45m")).toMatchObject({ title: "Mow the lawn", estimateMinutes: 45 });
+    expect(read("Clean the garage ~1.5h").estimateMinutes).toBe(90);
+    expect(read("Clean the garage ~2 hours").chips[0]?.label).toBe("2 h");
     expect(read("Oil change @boat").projectId).toBeNull();
     expect(read("Oil change @boat").title).toBe("Oil change @boat");
   });
