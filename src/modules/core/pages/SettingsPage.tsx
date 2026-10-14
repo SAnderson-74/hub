@@ -375,6 +375,8 @@ export function SettingsPage() {
           {settings.data ? (
             <RemindersPanel
               saved={settings.data.reminders}
+              savedTithing={settings.data.tithingReminder}
+              tithingOn={settings.data.modules.tithing}
               configured={settings.data.homeAssistant.reminderUrl !== ""}
             />
           ) : settings.isError ? (

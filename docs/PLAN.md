@@ -117,7 +117,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
 - [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
 - [x] 5.11 Tithing: a Tithing page (money in is tithed on by default, switchable per transaction or on a partial amount like a sale's profit or gross pay; donations are money-out transactions linked to the income they pay for; red until paid, green once paid), charts of owed and paid by month and income by source, a year summary, other funds (fast offering, other donations) kept apart, and a `hub-tithing/v1` format from the Claude Project for donation history and paychecks
-- [ ] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
+- [x] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
 - [x] 5.13 Search, sort, and filters on the Money transaction list and the Tithing lists (newest, oldest, largest or smallest amount; a range of amounts with a slider; dates with presets like 1 month and 1 year or a custom range; several categories), and income marked as paid without a payment, in bulk or through a date, for tithing paid before Hub tracked it
 
 ### Phase 6: Groundwork, Home, and search
@@ -126,7 +126,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
 - [x] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
 - [x] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
-- [x] 6.5 Home widgets for every module (money this month, tithing unpaid or paid up, time today, resale stock and listings that have sat, business follow-ups), chosen and ordered in Settings; the tithing reminder (rest of 5.12) follows
+- [x] 6.5 Home widgets for every module (money this month, tithing unpaid or paid up, time today, resale stock and listings that have sat, business follow-ups), chosen and ordered in Settings
 - [ ] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
 
 ### Phase 7: Tasks and planning
