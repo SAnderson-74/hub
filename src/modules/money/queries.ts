@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
 import type { BankImport } from "../../shared/bankImport";
+import type { BillCreate, BillDismiss, BillUpdate } from "../../shared/bills";
 import type {
   AccountCreate,
   AccountUpdate,
@@ -733,5 +734,68 @@ export function useAllAccounts(enabled = true) {
       return res.json();
     },
     enabled,
+  });
+}
+
+// Bills and the forecast
+
+export type BillsData = Awaited<ReturnType<typeof fetchBills>>;
+export type Bill = BillsData["bills"][number];
+export type BillSuggestion = BillsData["suggestions"][number];
+export type Forecast = Awaited<ReturnType<typeof fetchForecast>>;
+
+async function fetchBills(bookId: number) {
+  const res = await api.money.bills.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchForecast(bookId: number, days: number) {
+  const res = await api.money.forecast.$get({
+    query: { bookId: String(bookId), days: String(days) },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useBills(bookId: number) {
+  return useQuery({ queryKey: ["money", "bills", bookId], queryFn: () => fetchBills(bookId) });
+}
+
+export function useForecast(bookId: number, days: number) {
+  return useQuery({
+    queryKey: ["money", "forecast", bookId, days],
+    queryFn: () => fetchForecast(bookId, days),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCreateBill() {
+  return useMoneyMutation(async (json: BillCreate) => {
+    const res = await api.money.bills.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUpdateBill() {
+  return useMoneyMutation(async ({ id, patch }: { id: number; patch: BillUpdate }) => {
+    const res = await api.money.bills[":id"].$patch({ param: { id: String(id) }, json: patch });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteBill() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.bills[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+export function useDismissBill() {
+  return useMoneyMutation(async (json: BillDismiss) => {
+    const res = await api.money.bills.dismiss.$post({ json });
+    if (!res.ok) throw await toApiError(res);
   });
 }

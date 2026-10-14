@@ -20,7 +20,7 @@ const HINTS: Record<ReminderKind, string> = {
   digest:
     "Today's tasks, what's due in the next few days, and your study streak. Skipped on a quiet day.",
   due_soon:
-    "Tasks, goals, milestones, assessments, business steps, and lead follow-ups coming due. Each one once.",
+    "Tasks, goals, milestones, assessments, bills, business steps, and lead follow-ups coming due. Each one once.",
   streak: "When you have a study streak and haven't met today's minimum yet.",
   tithing: `When income comes in with tithing to pay, and every ${TITHING_REPEAT_DAYS} days while some is unpaid.`,
 };

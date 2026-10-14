@@ -47,6 +47,7 @@ import { dropCategoryRates, dropRewards } from "./rewards.service";
 import {
   moneyAccounts,
   moneyBalanceSnapshots,
+  moneyBills,
   moneyBooks,
   moneyBudgets,
   moneyCards,
@@ -264,6 +265,7 @@ export function deleteBook(db: Db, id: number): void {
     }
     // Without accounts there are no transactions, so its rules and categories are unused.
     tx.delete(moneyRules).where(eq(moneyRules.bookId, id)).run();
+    tx.delete(moneyBills).where(eq(moneyBills.bookId, id)).run();
     const categoryIds = tx
       .select({ id: moneyCategories.id })
       .from(moneyCategories)
@@ -496,6 +498,8 @@ export function deleteAccount(db: Db, id: number): void {
         .map((card) => card.id),
     );
     tx.delete(moneyCards).where(eq(moneyCards.accountId, id)).run();
+    // Bills paid from it stay, without an account, so the forecast lists them as left out.
+    tx.update(moneyBills).set({ accountId: null }).where(eq(moneyBills.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }
@@ -635,6 +639,7 @@ export function deleteCategory(db: Db, id: number): void {
     // An unused category's budgets and card bonus rates mean nothing without it.
     tx.delete(moneyBudgets).where(eq(moneyBudgets.categoryId, id)).run();
     dropCategoryRates(tx, [id]);
+    tx.update(moneyBills).set({ categoryId: null }).where(eq(moneyBills.categoryId, id)).run();
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
   });
 }

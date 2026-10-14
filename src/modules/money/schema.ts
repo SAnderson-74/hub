@@ -1,5 +1,6 @@
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
+import { BILL_FREQUENCIES, BILL_KINDS } from "../../shared/bills";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
 import { RULE_DIRECTIONS } from "../../shared/moneyRules";
 import { REWARD_KINDS } from "../../shared/rewards";
@@ -347,4 +348,35 @@ export const moneyReceipts = sqliteTable(
     index("money_receipts_transaction_idx").on(t.transactionId),
     index("money_receipts_date_idx").on(t.date),
   ],
+);
+
+/**
+ * A bill, subscription, or repeating income: confirmed from transactions that repeat
+ * (with the payee group it matches) or added by hand. "dismissed" rows are suggestions
+ * marked "not a bill", kept so they don't come back.
+ */
+export const moneyBills = sqliteTable(
+  "money_bills",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => moneyBooks.id),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: BILL_KINDS }).notNull().default("bill"),
+    status: text("status", { enum: ["active", "dismissed"] })
+      .notNull()
+      .default("active"),
+    /** The usual amount, always positive. */
+    amountCents: integer("amount_cents").notNull().default(0),
+    frequency: text("frequency", { enum: BILL_FREQUENCIES }).notNull().default("monthly"),
+    /** The next date on its schedule, as last set; later dates follow from the frequency. */
+    nextDate: text("next_date").notNull(),
+    /** No foreign keys, so deleting an account or category leaves the bill. */
+    accountId: integer("account_id"),
+    categoryId: integer("category_id"),
+    matchKey: text("match_key"),
+    ...timestamps(),
+  },
+  (t) => [index("money_bills_book_idx").on(t.bookId)],
 );

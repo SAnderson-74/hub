@@ -21,6 +21,7 @@ import { readSettings } from "../core/settings.service";
 import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
+import { billOccurrences } from "../money/bills.service";
 import { tasks } from "../tasks/schema";
 import { overview as tithingOverview } from "../tithing/tithing.service";
 import { sendReminder, todayTasks } from "./homeAssistant.service";
@@ -77,6 +78,8 @@ const MODULE_OF: Record<string, ModuleId> = {
   assessment: "courses",
   "business step": "business",
   lead: "business",
+  bill: "money",
+  income: "money",
 };
 
 /** Unfinished things due from today through `days` ahead, soonest first. */
@@ -199,6 +202,16 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
         date: lead.date,
       });
     }
+  }
+  // Bills and repeating income on their schedules. Names only: these also go to the
+  // calendar feed, which an outside calendar may fetch, so amounts stay in Hub.
+  for (const bill of billOccurrences(db, from, to)) {
+    items.push({
+      key: `bill:${bill.id}:${bill.date}`,
+      kind: bill.kind === "income" ? "income" : "bill",
+      title: bill.name,
+      date: bill.date,
+    });
   }
   // Only modules that are on: a turned-off module stays out of reminders and the calendar.
   const modules = readSettings(db).modules;

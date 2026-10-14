@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { HTTPException } from "hono/http-exception";
 import type { Db, Queryable } from "../../server/db/client";
 import { log } from "../../server/log";
+import { billCreateSchema } from "../../shared/bills";
 import { accountCreateSchema, bookCreateSchema, transactionCreateSchema } from "../../shared/books";
 import {
   gearCreateSchema,
@@ -42,6 +43,7 @@ import {
   listTerms,
 } from "../education/education.service";
 import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service";
+import { createBill, deleteBill, listBills } from "../money/bills.service";
 import { setBudget } from "../money/budget.service";
 import { createCard, deleteCard } from "../money/cards.service";
 import {
@@ -81,6 +83,7 @@ const DEMO_KINDS = [
   "account",
   "card",
   "transaction",
+  "bill",
   "phase",
   "step",
   "gear",
@@ -480,6 +483,34 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       if (id) setBudget(db, { categoryId: id, month: monthStart(-5).slice(0, 7), amountCents });
     }
 
+    // Pay, rent, and the subscription confirmed as bills. The other repeating payments
+    // stay suggestions, so Bills shows both.
+    const confirmed = new Set(
+      ["Paycheck", "Housing", "Subscriptions"].map((name) => categoryId.get(name)),
+    );
+    for (const found of listBills(db, book.id, today).suggestions) {
+      if (!confirmed.has(found.categoryId ?? undefined)) continue;
+      const subscription = found.categoryId === categoryId.get("Subscriptions");
+      note(
+        "bill",
+        createBill(
+          db,
+          billCreateSchema.parse({
+            bookId: book.id,
+            name: found.name,
+            kind: subscription ? "subscription" : found.kind,
+            amountCents: found.amountCents,
+            frequency: found.frequency,
+            nextDate: found.nextDate,
+            accountId: found.accountId,
+            categoryId: found.categoryId,
+            matchKey: found.matchKey,
+          }),
+          today,
+        ),
+      );
+    }
+
     // Business
     const phase = note("phase", createPhase(db, phaseCreateSchema.parse({ name: "Set up" })));
     for (const [title, offset] of [
@@ -549,6 +580,7 @@ const DELETERS: Record<DemoKind, (db: Db, id: number, actor: string) => void> = 
   account: (db, id) => deleteAccount(db, id),
   card: (db, id) => deleteCard(db, id),
   transaction: (db, id) => deleteTransaction(db, id),
+  bill: (db, id) => deleteBill(db, id),
   phase: (db, id) => deletePhase(db, id),
   step: (db, id) => deleteStep(db, id),
   gear: (db, id) => deleteGear(db, id),

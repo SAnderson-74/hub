@@ -44,6 +44,17 @@ export const dayPlanSchema = z
 export type DayPlan = z.infer<typeof dayPlanSchema>;
 export const defaultDayPlan: DayPlan = { hours: 6 };
 
+export const moneyForecastSchema = z
+  .object({
+    lowCents: z
+      .number()
+      .int()
+      .min(0, "Use $0 or more.")
+      .max(100_000_000, "Use an amount under $1,000,000."),
+  })
+  .strict();
+export const defaultMoneyForecast = { lowCents: 10_000 };
+
 export const settingsSchema = z.object({
   accentColor: hexColor,
   /** Minutes of study a day that keep the study streak going. */
@@ -70,6 +81,8 @@ export const settingsSchema = z.object({
   tithingReminder: tithingReminderSchema,
   /** Planning the day: the hours there are for tasks. */
   dayPlan: dayPlanSchema,
+  /** The cash-flow forecast warns when a balance is expected to fall below this. */
+  moneyForecast: moneyForecastSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -89,4 +102,5 @@ export const defaultSettings: Settings = {
   homeWidgets: defaultHomeWidgets,
   tithingReminder: defaultTithingReminder,
   dayPlan: defaultDayPlan,
+  moneyForecast: defaultMoneyForecast,
 };

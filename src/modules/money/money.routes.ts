@@ -1,11 +1,18 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
+import { localDateParts } from "../../server/db/backup";
 import type { Queryable } from "../../server/db/client";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
 import { bankImportSchema } from "../../shared/bankImport";
+import {
+  billCreateSchema,
+  billDismissSchema,
+  billUpdateSchema,
+  forecastQuerySchema,
+} from "../../shared/bills";
 import {
   accountCreateSchema,
   accountUpdateSchema,
@@ -43,6 +50,14 @@ import {
 } from "../../shared/rewards";
 import type { Fund, IncomeSet } from "../../shared/tithing";
 import { setDonation, setIncome } from "../tithing/tithing.service";
+import {
+  createBill,
+  deleteBill,
+  dismissBill,
+  forecast,
+  listBills,
+  updateBill,
+} from "./bills.service";
 import { budgetMonth, setBudget } from "./budget.service";
 import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
@@ -120,7 +135,9 @@ function withTithing(
 const bookQuery = zValidator("query", bookQuerySchema, invalid("Pass the book as bookId."));
 
 /** Books, their accounts, cards, and categories, transactions, transfers, rules, sorting, budgets, cash flow, net worth, and imports. */
-export function moneyRoutes({ db }: Deps) {
+export function moneyRoutes({ db, config }: Deps) {
+  // "Today" for bills and the forecast, in the owner's time zone.
+  const today = () => localDateParts(new Date(), config.timeZone).date;
   return (
     new Hono<AppEnv>()
       .get("/books", (c) => c.json(listBooks(db)))
@@ -425,6 +442,43 @@ export function moneyRoutes({ db }: Deps) {
           ),
         ),
         (c) => c.json(netWorth(db, c.req.valid("query"))),
+      )
+      // Bills, subscriptions, and repeating income, with suggestions from repeating payments.
+      .get("/bills", bookQuery, (c) => c.json(listBills(db, c.req.valid("query").bookId, today())))
+      .post(
+        "/bills",
+        zValidator("json", billCreateSchema, invalid("That bill isn't valid.")),
+        (c) => c.json(createBill(db, c.req.valid("json"), today()), 201),
+      )
+      .post(
+        "/bills/dismiss",
+        zValidator("json", billDismissSchema, invalid("Say which suggestion isn't a bill.")),
+        (c) => {
+          dismissBill(db, c.req.valid("json"), today());
+          return c.body(null, 204);
+        },
+      )
+      .patch(
+        "/bills/:id",
+        idParam,
+        zValidator("json", billUpdateSchema, invalid("Those bill changes aren't valid.")),
+        (c) => c.json(updateBill(db, c.req.valid("param").id, c.req.valid("json"), today())),
+      )
+      .delete("/bills/:id", idParam, (c) => {
+        deleteBill(db, c.req.valid("param").id);
+        return c.body(null, 204);
+      })
+      .get(
+        "/forecast",
+        zValidator(
+          "query",
+          forecastQuerySchema,
+          invalid("Pass the book as bookId and days as 30, 60, or 90."),
+        ),
+        (c) => {
+          const { bookId, days } = c.req.valid("query");
+          return c.json(forecast(db, bookId, days, today()));
+        },
       )
   );
 }

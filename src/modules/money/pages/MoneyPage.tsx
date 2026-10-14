@@ -2,6 +2,8 @@ import {
   ArrowLeftRight,
   BadgePercent,
   BookOpen,
+  CalendarDays,
+  ChartLine,
   FileUp,
   List,
   PiggyBank,
@@ -45,10 +47,12 @@ import { FUND_LABELS } from "../../../shared/tithing";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { TithingBadge } from "../../tithing/components/TithingBadge";
 import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
+import { BillsView } from "../components/BillsView";
 import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
 import { FilterSheet } from "../components/FilterSheet";
+import { ForecastView } from "../components/ForecastView";
 import { ImportSheet } from "../components/ImportSheet";
 import { NetWorthView } from "../components/NetWorthView";
 import { ReceiptsSheet } from "../components/ReceiptsSheet";
@@ -78,8 +82,15 @@ import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget" | "rewards" | "net-worth";
-const VIEWS: readonly View[] = ["transactions", "budget", "rewards", "net-worth"];
+type View = "transactions" | "budget" | "bills" | "forecast" | "rewards" | "net-worth";
+const VIEWS: readonly View[] = [
+  "transactions",
+  "budget",
+  "bills",
+  "forecast",
+  "rewards",
+  "net-worth",
+];
 
 function storedView(): View {
   try {
@@ -230,6 +241,8 @@ function BookView({
   useCommand("budget", () => chooseView("budget"));
   useCommand("rewards", () => chooseView("rewards"));
   useCommand("net-worth", () => chooseView("net-worth"));
+  useCommand("bills", () => chooseView("bills"));
+  useCommand("forecast", () => chooseView("forecast"));
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
@@ -252,6 +265,8 @@ function BookView({
             [
               ["transactions", "Transactions", List],
               ["budget", "Budget", PiggyBank],
+              ["bills", "Bills", CalendarDays],
+              ["forecast", "Forecast", ChartLine],
               ["rewards", "Rewards", BadgePercent],
               ["net-worth", "Net worth", TrendingUp],
             ] as const
@@ -351,6 +366,15 @@ function BookView({
           today={today}
           onAddAccount={() => setAccountTarget("new")}
         />
+      ) : view === "bills" ? (
+        <BillsView
+          book={book}
+          accounts={allAccounts}
+          categories={categories.data ?? []}
+          today={today}
+        />
+      ) : view === "forecast" ? (
+        <ForecastView book={book} today={today} />
       ) : view === "net-worth" ? (
         <NetWorthView
           book={book}
