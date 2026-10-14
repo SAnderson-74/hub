@@ -129,3 +129,17 @@ test("the command menu and shortcuts meet WCAG 2.1 AA", async ({ page }) => {
   await menu.getByRole("combobox").press("Enter");
   await checkSheet(page, page.getByRole("dialog", { name: "Keyboard shortcuts" }));
 });
+
+test("templates and planning sheets meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/tasks", "Tasks");
+  await page.getByRole("button", { name: "Templates" }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Templates" }));
+  await page.keyboard.press("Escape");
+
+  await open(page, "/tasks?list=today", "Tasks");
+  await page.getByRole("button", { name: "Plan the day" }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Plan the day" }));
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Shut down" }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Shut down for the day" }));
+});

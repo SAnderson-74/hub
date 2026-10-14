@@ -15,9 +15,10 @@ import { TASK_PRIORITY_LABELS } from "./tasks";
 //   Priority   !high, !medium, !low (or !h, !m, !l, !3, !2, !1)
 //   Tags       #car
 //   Project    @home matches a project whose name starts with "home"
+//   Estimate   ~30m, ~1h, ~1.5h, ~90min
 
 export type QuickAddChip = {
-  kind: "date" | "repeat" | "priority" | "tag" | "project";
+  kind: "date" | "repeat" | "priority" | "tag" | "project" | "estimate";
   /** The words as typed, like "next Fri". Listing them in `keep` leaves them in the title. */
   text: string;
   /** What it sets: "High priority", "#car", a project's name, the words of a repeat, or a date (YYYY-MM-DD). */
@@ -33,6 +34,7 @@ export type QuickAdd = {
   tags: string[];
   projectId: number | null;
   recurrence: Recurrence | null;
+  estimateMinutes: number | null;
   chips: QuickAddChip[];
 };
 
@@ -138,6 +140,7 @@ export function parseQuickAdd(text: string, options: Options): QuickAdd {
   let priority: TaskPriority | null = null;
   let recurrence: Recurrence | null = null;
   let projectId: number | null = null;
+  let estimateMinutes: number | null = null;
   const tags: string[] = [];
 
   // Repeats first, so "every Friday" isn't read as a date.
@@ -278,6 +281,22 @@ export function parseQuickAdd(text: string, options: Options): QuickAdd {
     return { kind: "project", label: found.name };
   });
 
+  take(
+    text,
+    /(?<![^\s])~(\d{1,2}(?:\.\d)?)\s?(h|hr|hrs|hours?|m|min|mins|minutes?)\b/gi,
+    taken,
+    keep,
+    (match) => {
+      const amount = Number(match[1]);
+      const minutes = Math.round(
+        (match[2] ?? "").toLowerCase().startsWith("h") ? amount * 60 : amount,
+      );
+      if (minutes < 1 || minutes > 24 * 60) return null;
+      estimateMinutes = minutes;
+      return { kind: "estimate", label: formatMinutesShort(minutes) };
+    },
+  );
+
   // A repeat needs a first date: today for most, the first matching day for weekdays.
   const rule = recurrence as Recurrence | null;
   if (rule && dueDate === null) {
@@ -296,6 +315,7 @@ export function parseQuickAdd(text: string, options: Options): QuickAdd {
     tags,
     projectId,
     recurrence: rule,
+    estimateMinutes,
     chips: [...taken]
       .sort((a, b) => a.start - b.start)
       .map((item) => item.chip)
@@ -317,4 +337,12 @@ function ymd(text: string): [number, number, number] {
 /** The first of the given weekdays, today or later. */
 function firstDay(today: string, weekdays: number[]): string {
   return weekdays.map((day) => weekdayFrom(today, day)).sort()[0] ?? today;
+}
+
+/** "45 min", "1 h", "1 h 30 min". */
+export function formatMinutesShort(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }

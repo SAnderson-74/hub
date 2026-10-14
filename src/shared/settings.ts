@@ -31,6 +31,19 @@ const hexColor = z
   .transform((value) => value.toLowerCase());
 
 /** Every user setting and its validation. Add new settings here, with a default below. */
+export const dayPlanSchema = z
+  .object({
+    /** Hours for tasks on a usual day, in half hours. */
+    hours: z
+      .number()
+      .min(0, "Use 0 hours or more.")
+      .max(16, "Use 16 hours or fewer.")
+      .multipleOf(0.5, "Use whole or half hours."),
+  })
+  .strict();
+export type DayPlan = z.infer<typeof dayPlanSchema>;
+export const defaultDayPlan: DayPlan = { hours: 6 };
+
 export const settingsSchema = z.object({
   accentColor: hexColor,
   /** Minutes of study a day that keep the study streak going. */
@@ -55,6 +68,8 @@ export const settingsSchema = z.object({
   homeWidgets: homeWidgetsSchema,
   /** The tithing reminder: on or off, and when. */
   tithingReminder: tithingReminderSchema,
+  /** Planning the day: the hours there are for tasks. */
+  dayPlan: dayPlanSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -73,4 +88,5 @@ export const defaultSettings: Settings = {
   setupDone: false,
   homeWidgets: defaultHomeWidgets,
   tithingReminder: defaultTithingReminder,
+  dayPlan: defaultDayPlan,
 };

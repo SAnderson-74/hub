@@ -133,7 +133,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 - [x] 7.1 Quick add in plain English ("Renew registration next Fri !high #car every year"), shown as chips before saving, also in the command menu and the Shortcuts endpoint
 - [x] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
-- [ ] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
+- [x] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
 
 ### Phase 8: Money ahead
 
@@ -158,7 +158,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 ### Phase 10: Plan and review
 
-- [ ] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
+- [x] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
 - [ ] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
 - [ ] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
 - [ ] 10.4 Undo for a few seconds after deleting a task, transaction, or item

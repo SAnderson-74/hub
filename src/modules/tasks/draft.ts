@@ -30,6 +30,8 @@ export type Draft = {
   evening: boolean;
   /** Ids of the tasks it waits on, in order. */
   waitingOn: number[];
+  /** Minutes as a string, or "" for no estimate. */
+  estimate: string;
   /** "" for the inbox, otherwise a project id. */
   projectId: string;
   /** Comma-separated. */
@@ -63,6 +65,7 @@ export function toDraft(task: TaskDetail): Draft {
     someday: task.someday,
     evening: task.evening,
     waitingOn: task.waitingOn.map((other) => other.id),
+    estimate: task.estimateMinutes === null ? "" : String(task.estimateMinutes),
     projectId: task.projectId === null ? "" : String(task.projectId),
     tags: task.tags.map((tag) => tag.name).join(", "),
     repeat: !rule ? "" : yearly ? "yearly" : rule.frequency,
@@ -184,6 +187,9 @@ export function draftChanges(task: TaskDetail, draft: Draft, today = ""): TaskUp
   if (draft.someday !== saved.someday) patch.someday = draft.someday;
   if (draft.evening !== saved.evening) patch.evening = draft.evening;
   if (draft.waitingOn.join() !== saved.waitingOn.join()) patch.waitingOn = draft.waitingOn;
+  if (draft.estimate !== saved.estimate) {
+    patch.estimateMinutes = draft.estimate === "" ? null : Number(draft.estimate);
+  }
   if (draft.projectId !== saved.projectId) {
     patch.projectId = draft.projectId === "" ? null : Number(draft.projectId);
   }

@@ -12,6 +12,7 @@ import {
   secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { formatMinutesShort } from "../../../shared/quickAdd";
 import {
   monthWeekOf,
   nextInSeries,
@@ -51,6 +52,7 @@ import {
   useUpdateTask,
 } from "../queries";
 import { TaskCheckbox } from "./TaskList";
+import { SaveTemplate } from "./TemplatesSheet";
 
 type TaskSheetProps = {
   taskId: number | null;
@@ -390,6 +392,7 @@ function TaskEditor({
 
       <SubjectTime subject={{ type: "task", id: task.id }} />
       {isSubtask ? null : <Subtasks task={task} onOpenTask={onOpenTask} />}
+      {isSubtask ? null : <SaveTemplate from={{ taskId: task.id }} defaultName={task.title} />}
       <DeleteTask task={task} onDeleted={onDeleted} />
     </div>
   );
@@ -761,6 +764,9 @@ function RepeatFields({
   );
 }
 
+/** Estimates offered in the task sheet, in minutes. Others (from quick add) show too. */
+const ESTIMATES = [5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480];
+
 /**
  * When it shows up and what it waits on: a start date ("don't show me until…"),
  * Someday, This evening, and other tasks that have to be done first.
@@ -835,6 +841,27 @@ function PlanFields({
             This evening
           </label>
         </fieldset>
+      </div>
+      <div>
+        <label htmlFor={`${ids}-estimate`} className={labelClass}>
+          Estimate
+        </label>
+        <select
+          id={`${ids}-estimate`}
+          value={draft.estimate}
+          onChange={(event) => onChange("estimate", event.target.value)}
+          className={`${inputClass} max-w-48`}
+        >
+          <option value="">None</option>
+          {ESTIMATES.map((minutes) => (
+            <option key={minutes} value={String(minutes)}>
+              {formatMinutesShort(minutes)}
+            </option>
+          ))}
+          {draft.estimate && !ESTIMATES.includes(Number(draft.estimate)) ? (
+            <option value={draft.estimate}>{formatMinutesShort(Number(draft.estimate))}</option>
+          ) : null}
+        </select>
       </div>
       <p
         id={`${ids}-start-hint`}

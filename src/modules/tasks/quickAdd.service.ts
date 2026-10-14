@@ -25,6 +25,7 @@ export function quickAddTask(
     projectId: parsed.projectId ?? input.projectId ?? null,
     tags: parsed.tags,
     recurrence: parsed.recurrence,
+    estimateMinutes: parsed.estimateMinutes,
     ...(parsed.priority === null ? {} : { priority: parsed.priority }),
   });
   if (!task.success) {

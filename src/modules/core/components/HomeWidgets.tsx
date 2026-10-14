@@ -94,6 +94,9 @@ export function TodayPanel({ today, className }: { today: string; className?: st
               </li>
             ))}
           </ul>
+          <Link to="/tasks?list=today&do=plan" className={`${ghostButton} mt-3 -ml-4`}>
+            Plan the day
+          </Link>
           {open.length > OPEN_SHOWN ? (
             <p className="mt-3 text-sm text-muted">
               {open.length - OPEN_SHOWN} more on the{" "}

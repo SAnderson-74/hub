@@ -1,6 +1,7 @@
 import {
   Archive,
   CalendarDays,
+  Clock,
   Flag,
   Hourglass,
   ListChecks,
@@ -8,6 +9,7 @@ import {
   Repeat,
   Tag,
 } from "lucide-react";
+import { formatMinutesShort } from "../../../shared/quickAdd";
 import { describeRecurrence } from "../../../shared/recurrence";
 import { isWaiting } from "../../../shared/smartLists";
 import { TASK_PRIORITY_LABELS } from "../../../shared/tasks";
@@ -84,6 +86,13 @@ export function TaskMeta({
       >
         <Flag aria-hidden="true" className="size-3.5" />
         {TASK_PRIORITY_LABELS[task.priority]} priority
+      </span>
+    ) : null,
+    !done && task.estimateMinutes ? (
+      <span key="estimate" className="inline-flex items-center gap-1 text-muted">
+        <Clock aria-hidden="true" className="size-3.5" />
+        {formatMinutesShort(task.estimateMinutes)}
+        <span className="sr-only">estimated</span>
       </span>
     ) : null,
     task.subtaskCount > 0 ? (

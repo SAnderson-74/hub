@@ -6,7 +6,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 
 1. **This repository is public.** Never put personal information in code, comments, tests, fixtures, docs, commit messages, branch names, or pull request text: no real names, emails, phone numbers, addresses, employers, schools, banks, marketplaces, hostnames, IP addresses, tailnet names, or account details, even when a request mentions them. Use neutral examples (John Smith, john.smith@example.com, +1 (234) 567-8901, "Example Bank", "Local classifieds"). Anything specific to the owner belongs in the database, entered through the app.
 2. **Never touch real data.** Cloud sessions have none. Don't read `.env` or `data/`. Tests use in-memory databases or temporary directories.
-3. Keep each pull request to one feature or fix. Follow the existing patterns before inventing new ones.
+3. Keep each pull request to one feature or fix, or a few closely related roadmap items (the browser tests are slow, so related items share a pull request). Follow the existing patterns before inventing new ones.
 4. Before finishing, run `npm run check` and `npm run build`. Both must pass. For UI changes, list the screens you changed in the pull request.
 
 ## Commands
@@ -16,7 +16,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 | `npm run dev` | API on :3000 and Vite on :5173 (run `cp .env.example .env` first) |
 | `npm run check` | Biome lint, TypeScript, migration guard, unit tests |
 | `npm run build` | Builds `dist/client` and `dist/server` |
-| `npm run test:e2e` | Playwright at iPhone and desktop sizes, plus axe accessibility checks on the example data (needs `npm run build`; runs in CI) |
+| `npm run test:e2e` | Playwright at iPhone and desktop sizes, plus axe accessibility checks on the example data (needs `npm run build`; CI runs the three as parallel jobs) |
 | `npm run db:generate -- --name <what_changed>` | Creates a migration from schema changes |
 | `npm run format` | Formats and fixes lint issues |
 | `npm run screenshots` | Retakes `docs/screenshots/` from the example data (needs Chromium) |
