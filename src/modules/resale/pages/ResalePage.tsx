@@ -15,6 +15,7 @@ import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
 import { primaryButton, secondaryButton } from "../../../client/components/ui";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { formatCents } from "../../../shared/money";
 import { formatSigned, itemProfit } from "../../../shared/profit";
@@ -56,6 +57,7 @@ export function ResalePage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<View>(storedView);
   const [adding, setAdding] = useState(false);
+  useCommand("add-item", () => setAdding(true));
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pasting, setPasting] = useState(false);

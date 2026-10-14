@@ -11,6 +11,7 @@ import { useState } from "react";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { useSettings } from "../../../client/lib/queries";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { localDate } from "../../tasks/dates";
 import { GearView } from "../components/GearView";
@@ -68,6 +69,9 @@ export function BusinessPage() {
       // Private browsing; the choice still applies to this visit.
     }
   };
+  // Search results for leads and notes switch to their view first.
+  useCommand("leads", () => choose("leads"));
+  useCommand("notes", () => choose("notes"));
 
   return (
     <>

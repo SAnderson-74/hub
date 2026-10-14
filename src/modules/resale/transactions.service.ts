@@ -13,10 +13,11 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
+import { likePattern } from "../../server/db/like";
 import { badRequest, conflict, notFound } from "../../server/errors";
 import { formatSigned } from "../../shared/profit";
 import type { LinkRole, TransactionLink, TransactionRecord } from "../../shared/resale";
-import { checkCategoryFits, likePattern, requireAccount } from "../money/money.service";
+import { checkCategoryFits, requireAccount } from "../money/money.service";
 import { moneyAccounts, moneyBooks, moneyTransactions } from "../money/schema";
 import { getItem, type ItemJson, logItem, requireItem } from "./resale.service";
 import { resaleItemTransactions, resalePlatforms } from "./schema";

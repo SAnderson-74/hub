@@ -128,6 +128,19 @@ export function useTransactions(bookId: number | null, filters: TransactionFilte
   });
 }
 
+/** One transaction, for links that open it (search results). */
+export function useTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ["money", "transaction", id ?? 0],
+    queryFn: async () => {
+      const res = await api.money.transactions[":id"].$get({ param: { id: String(id ?? 0) } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled: id !== null,
+  });
+}
+
 /**
  * Any money write can change balances, counts, and lists across a book, so each
  * refreshes everything under "money". It's one person's data; that's cheap.

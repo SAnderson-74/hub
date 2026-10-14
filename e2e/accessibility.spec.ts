@@ -116,3 +116,16 @@ test("the main sheets meet WCAG 2.1 AA", async ({ page }) => {
   await page.getByRole("button", { name: "Add transaction" }).click();
   await checkSheet(page, page.getByRole("dialog", { name: /transaction/i }));
 });
+
+test("the command menu and shortcuts meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/", /^Good (morning|afternoon|evening)/);
+  await page.getByRole("button", { name: "Search", exact: true }).locator("visible=true").click();
+  const menu = page.getByRole("dialog", { name: "Search and commands" });
+  await checkSheet(page, menu);
+  await menu.getByRole("combobox").fill("run");
+  await expect(menu.getByRole("group", { name: "Goals" })).toBeVisible();
+  await checkSheet(page, menu);
+  await menu.getByRole("combobox").fill("keyboard");
+  await menu.getByRole("combobox").press("Enter");
+  await checkSheet(page, page.getByRole("dialog", { name: "Keyboard shortcuts" }));
+});

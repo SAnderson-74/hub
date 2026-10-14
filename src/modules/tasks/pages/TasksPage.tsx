@@ -1,9 +1,10 @@
 import { ClipboardPaste, FolderPlus, List, Pencil, Plus, SquareKanban } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { iconButton, inputClass, primaryButton } from "../../../client/components/ui";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { MoveSheet } from "../components/MoveSheet";
 import { PasteTasksSheet } from "../components/PasteTasksSheet";
@@ -83,6 +84,8 @@ export function TasksPage() {
   const today = localDate(useNow());
 
   const [title, setTitle] = useState("");
+  const titleInput = useRef<HTMLInputElement>(null);
+  useCommand("add-task", () => titleInput.current?.focus());
   const [announcement, setAnnouncement] = useState("");
   const [moving, setMoving] = useState<TaskItem | null>(null);
   const [projectSheet, setProjectSheet] = useState<"new" | ProjectItem | null>(null);
@@ -277,6 +280,7 @@ export function TasksPage() {
           New task
         </label>
         <input
+          ref={titleInput}
           id="new-task"
           value={title}
           onChange={(event) => setTitle(event.target.value)}

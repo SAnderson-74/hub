@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { primaryButton } from "../../../client/components/ui";
+import { useOpenParam } from "../../../client/lib/useCommand";
 import type { NoteCreate } from "../../../shared/business";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { type Note, useDeleteNote, useSaveNote } from "../queries";
@@ -26,6 +27,8 @@ const firstLine = (body: string) => body.trim().split("\n")[0] ?? "";
 /** Free-form notes: names to consider, pricing ideas, contacts to follow up. */
 export function NotesView({ notes, today }: { notes: Note[]; today: string }) {
   const [editing, setEditing] = useState<number | "new" | null>(null);
+  // A search result (?note=12) opens it.
+  useOpenParam("note", setEditing);
   const save = useSaveNote();
   const remove = useDeleteNote();
   const current = typeof editing === "number" ? notes.find((item) => item.id === editing) : null;

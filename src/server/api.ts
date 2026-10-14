@@ -3,6 +3,7 @@ import { businessRoutes } from "../modules/business/business.routes";
 import { activityRoutes } from "../modules/core/activity.routes";
 import { backupRoutes } from "../modules/core/backups.routes";
 import { linkRoutes } from "../modules/core/links.routes";
+import { searchRoutes } from "../modules/core/search.routes";
 import { settingsRoutes } from "../modules/core/settings.routes";
 import { setupRoutes } from "../modules/core/setup.routes";
 import { systemRoutes } from "../modules/core/system.routes";
@@ -36,6 +37,7 @@ export function createApi(deps: Deps) {
     .route("/tags", tagRoutes(deps))
     .route("/links", linkRoutes(deps))
     .route("/activity", activityRoutes(deps))
+    .route("/search", searchRoutes(deps))
     .route("/time", timeRoutes(deps))
     .route("/goals", goalRoutes(deps))
     .route("/education", educationRoutes(deps))

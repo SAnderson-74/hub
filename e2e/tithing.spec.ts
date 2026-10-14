@@ -222,11 +222,11 @@ test("tithing lists search, sort, and filter, and old income can be marked paid 
   const row = (name: string) => list.getByRole("button", { name: new RegExp(`${name} ${year}`) });
 
   // Search: every word, in both lists.
-  await page.getByLabel("Search").fill("alpha");
+  await page.getByRole("searchbox", { name: "Search" }).fill("alpha");
   await expect(row("Filter Alpha")).toBeVisible();
   await expect(row("Filter Beta")).toBeHidden();
   await expect(open.getByRole("button", { name: /Filter Beta/ })).toBeHidden();
-  await page.getByLabel("Search").fill("");
+  await page.getByRole("searchbox", { name: "Search" }).fill("");
 
   // Sort: smallest first, then largest.
   await page.getByLabel("Sort by").selectOption({ label: "Smallest amount first" });

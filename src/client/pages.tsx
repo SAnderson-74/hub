@@ -33,6 +33,8 @@ export type AppPage = {
   /** "/" for home, otherwise a single segment like "/tasks". */
   path: string;
   icon: LucideIcon;
+  /** The key after G that goes here, like "t" for G then T. */
+  key: string;
   element: ReactElement;
   /** The module it belongs to, which Settings can turn off. Home and Settings have none. */
   module?: ModuleId;
@@ -44,18 +46,28 @@ export type AppPage = {
  * (see src/client/lib/nav.ts).
  */
 export const appPages: AppPage[] = [
-  { id: "home", label: "Home", path: "/", icon: House, element: <DashboardPage /> },
+  { id: "home", key: "h", label: "Home", path: "/", icon: House, element: <DashboardPage /> },
   {
     id: "tasks",
+    key: "t",
     label: "Tasks",
     path: "/tasks",
     icon: ListTodo,
     element: <TasksPage />,
     module: "tasks",
   },
-  { id: "time", label: "Time", path: "/time", icon: Timer, element: <TimePage />, module: "time" },
+  {
+    id: "time",
+    key: "i",
+    label: "Time",
+    path: "/time",
+    icon: Timer,
+    element: <TimePage />,
+    module: "time",
+  },
   {
     id: "goals",
+    key: "g",
     label: "Goals",
     path: "/goals",
     icon: Target,
@@ -64,6 +76,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "courses",
+    key: "c",
     module: "courses",
     label: "Courses",
     path: "/courses",
@@ -72,6 +85,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "resale",
+    key: "r",
     label: "Resale",
     path: "/resale",
     icon: Package,
@@ -80,6 +94,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "money",
+    key: "m",
     label: "Money",
     path: "/money",
     icon: Wallet,
@@ -88,6 +103,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "tithing",
+    key: "d",
     label: "Tithing",
     path: "/tithing",
     icon: HandCoins,
@@ -96,6 +112,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "taxes",
+    key: "x",
     label: "Taxes",
     path: "/taxes",
     icon: Landmark,
@@ -104,6 +121,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "business",
+    key: "b",
     module: "business",
     label: "Business",
     path: "/business",
@@ -112,6 +130,7 @@ export const appPages: AppPage[] = [
   },
   {
     id: "settings",
+    key: "s",
     label: "Settings",
     path: "/settings",
     icon: Settings,
