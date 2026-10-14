@@ -73,7 +73,11 @@ export function MonthlyChart({ year, months }: { year: number; months: MonthRow[
       </ul>
       <div aria-hidden="true" className="h-60 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={months} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <ComposedChart
+            accessibilityLayer={false}
+            data={months}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+          >
             <CartesianGrid vertical={false} stroke={grid} />
             <XAxis
               dataKey="month"

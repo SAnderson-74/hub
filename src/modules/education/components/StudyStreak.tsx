@@ -153,7 +153,7 @@ function DayCell({ day, streak }: { day: StudyDay; streak: StudyStreak }) {
     ? "bg-ok text-crust"
     : day.minutes > 0
       ? "bg-ok/25 text-fg"
-      : "bg-surface-0 text-faint";
+      : "bg-surface-0 text-muted";
   return (
     <td className="p-0">
       <span

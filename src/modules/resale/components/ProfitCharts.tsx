@@ -89,7 +89,11 @@ export function MonthChart({ months, summary }: { months: MonthProfit[]; summary
       <figcaption className="mb-4 text-sm text-muted">{summary}</figcaption>
       <div aria-hidden="true" className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={months} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <BarChart
+            accessibilityLayer={false}
+            data={months}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+          >
             <CartesianGrid vertical={false} stroke={c.grid} />
             <XAxis
               dataKey="month"
@@ -190,6 +194,7 @@ export function PlatformChart({
       <div aria-hidden="true" className="w-full" style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
+            accessibilityLayer={false}
             data={platforms}
             layout="vertical"
             margin={{ top: 0, right: 64, bottom: 0, left: 0 }}

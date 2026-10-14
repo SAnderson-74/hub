@@ -4,7 +4,13 @@
     "sessionUrl": false
   },
   "permissions": {
-    "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./data/**)", "Read(./.e2e-data/**)"]
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./data/**)",
+      "Read(./.e2e-data/**)",
+      "Read(./.e2e-a11y-data/**)"
+    ]
   },
   "hooks": {
     "SessionStart": [
