@@ -38,7 +38,8 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 4. Mount the routes in `src/server/api.ts` with one `.route()` line. Keep the chain intact; it types the browser client.
 5. Pages in `src/modules/<name>/pages/`, registered in `src/client/pages.tsx`. Data hooks in `src/modules/<name>/queries.ts` using `api` from `src/client/lib/api.ts`.
 6. Tests next to the code (`*.test.ts`), using `createTestApp()` from `src/server/testing.ts` (in-memory database, typed client), plus one e2e check for the main flow.
-7. If its records should be taggable, linkable, or on timelines: add the type to `ENTITY_TYPES` in `src/shared/entities.ts` and a lookup in `src/modules/core/entities.ts`, call `recordActivity` on changes, and call `detachEntities` before deleting rows.
+7. If its records should be searchable: add a `search.ts` with its searchers (see `src/modules/tasks/search.ts`), list them in `src/modules/core/search.service.ts`, and have its page open a record from the link each result carries (`useOpenParam` in `src/client/lib/useCommand.ts`).
+8. If its records should be taggable, linkable, or on timelines: add the type to `ENTITY_TYPES` in `src/shared/entities.ts` and a lookup in `src/modules/core/entities.ts`, call `recordActivity` on changes, and call `detachEntities` before deleting rows.
 
 ## Database rules
 

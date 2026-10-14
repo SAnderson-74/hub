@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { primaryButton } from "../../../client/components/ui";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { localDate } from "../../tasks/dates";
 import { GoalCard } from "../components/GoalCard";
@@ -32,6 +33,7 @@ export function GoalsPage() {
   const today = localDate(useNow());
   const [view, setView] = useState<View>(storedView);
   const [creating, setCreating] = useState(false);
+  useCommand("add-goal", () => setCreating(true));
   const openGoalId = Number(params.get("goal")) || null;
 
   // Opening a goal adds a history entry so the phone's back gesture closes the sheet.

@@ -262,6 +262,10 @@ export function moneyRoutes({ db }: Deps) {
           );
         },
       )
+      .get("/transactions/:id", idParam, (c) => {
+        const id = c.req.valid("param").id;
+        return c.json(oneTransaction(db, requireTransaction(db, id)));
+      })
       .patch(
         "/transactions/:id",
         idParam,

@@ -15,6 +15,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
@@ -26,6 +27,7 @@ import {
   secondaryButton,
 } from "../../../client/components/ui";
 import { useModules } from "../../../client/lib/queries";
+import { useCommand, useOpenParam } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { ACCOUNT_KIND_LABELS, CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
 import { cardLabel } from "../../../shared/cards";
@@ -68,6 +70,7 @@ import {
   useCategories,
   useCategorize,
   useRules,
+  useTransaction,
   useTransactions,
   useTransferSuggestions,
 } from "../queries";
@@ -104,6 +107,14 @@ export function MoneyPage() {
       // Private browsing; the choice still applies to this visit.
     }
   };
+  // A search result names its book (?book=2) so its transaction opens in the right one.
+  useOpenParam(
+    "book",
+    (id) => {
+      if (active.some((item) => item.id === id)) choose(id);
+    },
+    books.isSuccess,
+  );
 
   return (
     <>
@@ -185,6 +196,40 @@ function BookView({
       // Private browsing; the choice still applies to this visit.
     }
   };
+
+  // Links from the command menu and search. A transaction link waits until its book
+  // is the one showing.
+  const [params] = useSearchParams();
+  const [linkedId, setLinkedId] = useState<number | null>(null);
+  const linked = useTransaction(linkedId);
+  useOpenParam("transaction", setLinkedId, !params.has("book"));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the linked transaction arrives
+  useEffect(() => {
+    if (linkedId === null || linked.isPending) return;
+    if (linked.data) {
+      chooseView("transactions");
+      setTransactionTarget(linked.data);
+    }
+    setLinkedId(null);
+  }, [linkedId, linked.isPending, linked.data]);
+  const accountsReady = accounts.isSuccess;
+  useCommand(
+    "add-transaction",
+    () => {
+      if (accounts.data?.some((account) => !account.archived)) setTransactionTarget("new");
+    },
+    accountsReady,
+  );
+  useCommand(
+    "import",
+    () => {
+      if (accounts.data?.some((account) => !account.archived)) setImporting(true);
+    },
+    accountsReady,
+  );
+  useCommand("budget", () => chooseView("budget"));
+  useCommand("rewards", () => chooseView("rewards"));
+  useCommand("net-worth", () => chooseView("net-worth"));
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
