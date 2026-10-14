@@ -50,6 +50,12 @@ export const tasks = sqliteTable(
     status: text("status", { enum: TASK_STATUSES }).notNull().default("todo"),
     priority: integer("priority").$type<TaskPriority>().notNull().default(0),
     dueDate: text("due_date"),
+    /** Not shown in Today or Anytime before this day ("don't show me until…"). */
+    startDate: text("start_date"),
+    /** Parked: only in Someday until this is cleared. */
+    someday: integer("someday", { mode: "boolean" }).notNull().default(false),
+    /** In Today's "This evening" section rather than the day's main list. */
+    evening: integer("evening", { mode: "boolean" }).notNull().default(false),
     sortOrder: real("sort_order").notNull().default(0),
     completedAt: integer("completed_at", { mode: "timestamp_ms" }),
     /** Repeat rule. Completing the task creates the next one, which takes the rule over. */

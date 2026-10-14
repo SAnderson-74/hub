@@ -32,6 +32,7 @@ const id = z.number().int().positive();
 const notes = z.string().max(20_000, "Keep notes under 20,000 characters.");
 const sortOrder = z.number();
 const dueDate = z.iso.date("Use a date like 2030-01-31.");
+const waitingOn = z.array(id).max(20, "Wait on at most 20 tasks.");
 const priority = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]);
 
 const projectName = z
@@ -74,6 +75,11 @@ export const taskCreateSchema = z
     status: z.enum(TASK_STATUSES).optional(),
     priority: priority.optional(),
     dueDate: dueDate.nullable().optional(),
+    startDate: dueDate.nullable().optional(),
+    someday: z.boolean().optional(),
+    evening: z.boolean().optional(),
+    /** Tasks this one waits on; it stays out of Today until they're done. */
+    waitingOn: waitingOn.optional(),
     /** Leave out or null for the inbox. Subtasks always use their parent's project. */
     projectId: id.nullable().optional(),
     parentId: id.nullable().optional(),
@@ -91,6 +97,14 @@ export const taskUpdateSchema = z
     status: z.enum(TASK_STATUSES),
     priority,
     dueDate: dueDate.nullable(),
+    /** Not shown in Today or Anytime before this day. */
+    startDate: dueDate.nullable(),
+    /** Parked in Someday. */
+    someday: z.boolean(),
+    /** In Today's "This evening" section. */
+    evening: z.boolean(),
+    /** Replaces the tasks this one waits on. */
+    waitingOn,
     projectId: id.nullable(),
     parentId: id.nullable(),
     /** Replaces the task's tags. */

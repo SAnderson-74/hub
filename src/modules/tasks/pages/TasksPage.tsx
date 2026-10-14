@@ -8,9 +8,11 @@ import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { parseQuickAdd, type QuickAddChip } from "../../../shared/quickAdd";
 import { describeRecurrence } from "../../../shared/recurrence";
+import { SMART_LIST_LABELS, SMART_LISTS, type SmartList } from "../../../shared/smartLists";
 import { MoveSheet } from "../components/MoveSheet";
 import { PasteTasksSheet } from "../components/PasteTasksSheet";
 import { ProjectSheet } from "../components/ProjectSheet";
+import { SmartTaskList } from "../components/SmartList";
 import { TaskBoard, type TaskMove } from "../components/TaskBoard";
 import { TaskList } from "../components/TaskList";
 import { TaskSheet } from "../components/TaskSheet";
@@ -51,6 +53,11 @@ function parseProject(value: string | null): ProjectFilter {
   return Number.isInteger(id) && id > 0 ? id : "all";
 }
 
+/** A smart list from the address, or "all" for the usual list and board. */
+function parseList(value: string | null): SmartList | "all" {
+  return SMART_LISTS.find((list) => list === value) ?? "all";
+}
+
 function projectLabel(filter: ProjectFilter, projects: ProjectItem[]): string {
   if (filter === "all") return "all projects";
   if (filter === "inbox") return "the inbox";
@@ -70,6 +77,13 @@ export function TasksPage() {
   const [requested, setRequested] = useState(urlProject);
   useEffect(() => setRequested(urlProject), [urlProject]);
   const [view, setView] = useState(storedView);
+  const urlList = parseList(params.get("list"));
+  const [list, setList] = useState(urlList);
+  useEffect(() => setList(urlList), [urlList]);
+  const selectList = (value: SmartList | "all") => {
+    setList(value);
+    setParam({ list: value === "all" ? null : value });
+  };
 
   // A deleted or unknown project falls back to everything.
   const project: ProjectFilter =
@@ -279,29 +293,51 @@ export function TasksPage() {
           </button>
         </div>
 
-        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
-          <legend className="sr-only">View</legend>
-          {(
-            [
-              ["list", "List", List],
-              ["board", "Board", SquareKanban],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <label key={value} className="relative">
+        {list === "all" ? (
+          <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+            <legend className="sr-only">View</legend>
+            {(
+              [
+                ["list", "List", List],
+                ["board", "Board", SquareKanban],
+              ] as const
+            ).map(([value, label, Icon]) => (
+              <label key={value} className="relative">
+                <input
+                  type="radio"
+                  name="task-view"
+                  value={value}
+                  checked={view === value}
+                  onChange={() => {
+                    setView(value);
+                    rememberView(value);
+                  }}
+                  className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
+                />
+                <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg">
+                  <Icon aria-hidden="true" className="size-4" />
+                  {label}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        ) : null}
+
+        {/* Many choices for a phone's width; the row scrolls sideways there. */}
+        <fieldset className="flex w-full min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60 sm:w-fit">
+          <legend className="sr-only">Show</legend>
+          {(["all", ...SMART_LISTS] as const).map((value) => (
+            <label key={value} className="relative shrink-0">
               <input
                 type="radio"
-                name="task-view"
+                name="task-list"
                 value={value}
-                checked={view === value}
-                onChange={() => {
-                  setView(value);
-                  rememberView(value);
-                }}
+                checked={list === value}
+                onChange={() => selectList(value)}
                 className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
               />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg">
-                <Icon aria-hidden="true" className="size-4" />
-                {label}
+              <span className="pointer-events-none flex h-10 items-center rounded-full px-3 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text sm:px-4">
+                {value === "all" ? "All" : SMART_LIST_LABELS[value]}
               </span>
             </label>
           ))}
@@ -364,6 +400,16 @@ export function TasksPage() {
         <ErrorNote error={tasks.error} onRetry={() => void tasks.refetch()} />
       ) : tasks.isPending ? (
         <LoadingRows rows={4} />
+      ) : list !== "all" ? (
+        <SmartTaskList
+          {...donePaging}
+          list={list}
+          tasks={taskList}
+          today={today}
+          projectNames={projectNames}
+          onOpen={(task) => openTask(task.id)}
+          onToggleDone={toggleDone}
+        />
       ) : view === "board" ? (
         <TaskBoard
           {...donePaging}

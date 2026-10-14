@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { isWaiting } from "../../../shared/smartLists";
 import { DONE_PAGE_SIZE, TASK_STATUS_LABELS, type TaskStatus } from "../../../shared/tasks";
 import { groupByStatus } from "../ordering";
 import type { TaskItem } from "../queries";
@@ -17,7 +18,7 @@ export type DonePaging = {
   loadMoreDone: () => void;
 };
 
-type TaskListProps = DonePaging & {
+export type TaskListProps = DonePaging & {
   tasks: TaskItem[];
   today: string;
   projectNames?: Map<number, string>;
@@ -62,7 +63,7 @@ export function TaskCheckbox({
   );
 }
 
-function TaskRow({
+export function TaskRow({
   task,
   today,
   projectNames,
@@ -79,7 +80,14 @@ function TaskRow({
         className="min-h-11 min-w-0 flex-1 rounded-control py-2.5 text-left"
       >
         <span
-          className={`block font-semibold break-words ${done ? "text-muted line-through decoration-surface-2" : "text-fg"}`}
+          className={`block font-semibold break-words ${
+            done
+              ? "text-muted line-through decoration-surface-2"
+              : // Waiting tasks are dimmed; the line below says what they wait on.
+                isWaiting(task)
+                ? "text-muted"
+                : "text-fg"
+          }`}
         >
           {task.title}
         </span>
