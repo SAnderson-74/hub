@@ -112,7 +112,12 @@ export function RewardsChart({ report }: { report: RewardsReport }) {
       ) : null}
       <div aria-hidden="true" className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barSize={BAR}>
+          <BarChart
+            accessibilityLayer={false}
+            data={rows}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+            barSize={BAR}
+          >
             <CartesianGrid vertical={false} stroke={grid} />
             <XAxis
               dataKey="month"

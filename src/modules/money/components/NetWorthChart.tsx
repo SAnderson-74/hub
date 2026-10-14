@@ -76,7 +76,11 @@ export function NetWorthChart({ points, summary }: { points: NetWorthPoint[]; su
       <figcaption className="mb-3 text-sm text-muted">{summary}</figcaption>
       <div aria-hidden="true" className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <LineChart
+            accessibilityLayer={false}
+            data={points}
+            margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+          >
             <CartesianGrid vertical={false} stroke={c.grid} />
             <XAxis
               dataKey="month"

@@ -16,7 +16,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 | `npm run dev` | API on :3000 and Vite on :5173 (run `cp .env.example .env` first) |
 | `npm run check` | Biome lint, TypeScript, migration guard, unit tests |
 | `npm run build` | Builds `dist/client` and `dist/server` |
-| `npm run test:e2e` | Playwright at iPhone and desktop sizes (needs `npm run build`; runs in CI) |
+| `npm run test:e2e` | Playwright at iPhone and desktop sizes, plus axe accessibility checks on the example data (needs `npm run build`; runs in CI) |
 | `npm run db:generate -- --name <what_changed>` | Creates a migration from schema changes |
 | `npm run format` | Formats and fixes lint issues |
 | `npm run screenshots` | Retakes `docs/screenshots/` from the example data (needs Chromium) |
@@ -64,7 +64,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 - Reuse `Panel`, `PageHeader`, `StatusDot`, `LoadingRows`, `ErrorNote`, `ProgressBar`, and `Sheet` (a `<dialog>` that is a bottom sheet on phones) plus the control classes in `src/client/components/ui.ts`. Status colors always come with text.
 - The phone tab bar shows five items; with more pages, the first four get tabs and the rest are listed on the More page (`src/client/lib/nav.ts`).
 - Copy: sentence case, plain verbs. Buttons say what happens ("Save accent") and confirmations reuse the verb ("Accent saved"). Errors say what happened and how to fix it. No all-caps labels.
-- Charts: `recharts`, colors from CSS variables, always with a one-line text summary. Put the screen-reader table inside a `<div className="sr-only">`; a table ignores the 1px width and would widen the page.
+- Charts: `recharts`, colors from CSS variables, always with a one-line text summary. Put the screen-reader table inside a `<div className="sr-only">`; a table ignores the 1px width and would widen the page. The chart itself sits in an `aria-hidden` wrapper, so pass `accessibilityLayer={false}` (otherwise it's focusable inside hidden content).
 - The Content-Security-Policy only allows scripts, styles, and fonts from the app itself: no inline scripts, CDNs, injected `<style>` tags, or `data:` fonts.
 - Icons come from `lucide-react`.
 - Server runtime packages go in `dependencies`. Anything bundled into the browser goes in `devDependencies`; the container installs only `dependencies`.

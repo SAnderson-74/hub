@@ -123,7 +123,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 ### Phase 6: Groundwork, Home, and search
 
 - [x] 6.1 Finished tasks load a page at a time (newest first, from `GET /api/tasks/done`) instead of every finished task at once; Home asks only for today's
-- [ ] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
+- [x] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
 - [x] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
 - [ ] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
 - [ ] 6.5 Home widgets for every module, chosen and ordered in Settings, including tithing on Home (5.12)

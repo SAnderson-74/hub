@@ -5,6 +5,7 @@ node_modules
 dist
 data
 .e2e-data
+.e2e-a11y-data
 test-results
 playwright-report
 .env

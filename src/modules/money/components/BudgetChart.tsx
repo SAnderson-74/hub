@@ -111,6 +111,7 @@ export function BudgetHistoryChart({
       <div aria-hidden="true" className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
+            accessibilityLayer={false}
             data={rows}
             margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
             barGap={-BAR}
