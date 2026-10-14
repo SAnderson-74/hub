@@ -85,7 +85,8 @@ export function DayPlanSheet({
       <p role="status" className={message ? "mb-4 text-sm font-semibold text-ok" : "sr-only"}>
         {message}
       </p>
-      {error ? (
+      {/* Nothing inside while closed, so hidden copies of task titles don't linger. */}
+      {!open ? null : error ? (
         <ErrorNote
           error={error}
           onRetry={() => void Promise.all([openTasks.refetch(), doneToday.refetch()])}

@@ -53,7 +53,7 @@ export function TemplatesSheet({
       <p role="status" className={message ? "mb-4 text-sm font-semibold text-ok" : "sr-only"}>
         {message}
       </p>
-      {templates.isPending ? (
+      {!open ? null : templates.isPending ? (
         <LoadingRows rows={2} />
       ) : templates.isError ? (
         <ErrorNote error={templates.error} onRetry={() => void templates.refetch()} />
