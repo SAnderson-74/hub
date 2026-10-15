@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import { deleteLater } from "../../client/lib/undo";
 import type {
   CostCreate,
   ItemCreate,
@@ -75,11 +76,30 @@ export function useUpdateItem() {
   });
 }
 
-export function useDeleteItem() {
-  return useResaleMutation(async (id: number) => {
-    const res = await api.resale.items[":id"].$delete({ param: { id: String(id) } });
-    if (!res.ok) throw await toApiError(res);
-  });
+/** Deletes an item after a few seconds, with Undo until then. It leaves the list at once. */
+export function useDeleteItemLater() {
+  const queryClient = useQueryClient();
+  return (item: { id: number; title: string }) => {
+    const send = (keepalive: boolean) =>
+      api.resale.items[":id"].$delete({ param: { id: String(item.id) } }, { init: { keepalive } });
+    deleteLater(queryClient, {
+      message: `Deleted ${item.title}`,
+      restoredMessage: `Restored ${item.title}`,
+      hide: {
+        keys: [keys.items],
+        remove: (data) => (data as Item[]).filter((entry) => entry.id !== item.id),
+      },
+      commit: async () => {
+        try {
+          const res = await send(false);
+          if (!res.ok) throw await toApiError(res);
+        } finally {
+          void queryClient.invalidateQueries({ queryKey: keys.all });
+        }
+      },
+      flush: () => void send(true),
+    });
+  };
 }
 
 export function useAddCost() {

@@ -1,5 +1,7 @@
 import {
   Briefcase,
+  CalendarDays,
+  ClipboardCheck,
   GraduationCap,
   HandCoins,
   House,
@@ -21,6 +23,8 @@ import { CoursesPage } from "../modules/education/pages/CoursesPage";
 import { GoalsPage } from "../modules/goals/pages/GoalsPage";
 import { HabitsPage } from "../modules/habits/pages/HabitsPage";
 import { MoneyPage } from "../modules/money/pages/MoneyPage";
+import { CalendarPage } from "../modules/planner/pages/CalendarPage";
+import { ReviewPage } from "../modules/planner/pages/ReviewPage";
 import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
 import { TaxesPage } from "../modules/taxes/pages/TaxesPage";
@@ -38,7 +42,7 @@ export type AppPage = {
   /** The key after G that goes here, like "t" for G then T. */
   key: string;
   element: ReactElement;
-  /** The module it belongs to, which Settings can turn off. Home and Settings have none. */
+  /** The module it belongs to, which Settings can turn off. Home, Calendar, Review, and Settings have none. */
   module?: ModuleId;
 };
 
@@ -138,6 +142,23 @@ export const appPages: AppPage[] = [
     path: "/business",
     icon: Briefcase,
     element: <BusinessPage />,
+  },
+  // Across every module, so they belong to none.
+  {
+    id: "calendar",
+    key: "l",
+    label: "Calendar",
+    path: "/calendar",
+    icon: CalendarDays,
+    element: <CalendarPage />,
+  },
+  {
+    id: "review",
+    key: "w",
+    label: "Review",
+    path: "/review",
+    icon: ClipboardCheck,
+    element: <ReviewPage />,
   },
   {
     id: "settings",

@@ -2,6 +2,7 @@ import {
   BadgePercent,
   CalendarDays,
   ChartLine,
+  ClipboardCheck,
   FileUp,
   Hourglass,
   Keyboard,
@@ -194,6 +195,13 @@ const ACTIONS: Array<Omit<Command, "group">> = [
     icon: TrendingUp,
     to: "/money?do=net-worth",
     module: "money",
+  },
+  {
+    id: "weekly-review",
+    label: "Start the weekly review",
+    keywords: "week checklist plan look back",
+    icon: ClipboardCheck,
+    to: "/review",
   },
   {
     id: "home-widgets",

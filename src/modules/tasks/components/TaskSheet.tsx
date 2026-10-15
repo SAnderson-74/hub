@@ -46,7 +46,7 @@ import {
   type ProjectItem,
   type TaskDetail,
   useCreateTask,
-  useDeleteTask,
+  useDeleteTaskLater,
   useTask,
   useTasks,
   useUpdateTask,
@@ -482,46 +482,24 @@ function Subtasks({ task, onOpenTask }: { task: TaskDetail; onOpenTask: (id: num
 }
 
 function DeleteTask({ task, onDeleted }: { task: TaskDetail; onDeleted: () => void }) {
-  const [confirming, setConfirming] = useState(false);
-  const remove = useDeleteTask();
+  const deleteLater = useDeleteTaskLater();
   const count = task.subtasks.length;
-
-  if (!confirming) {
-    return (
-      <div className="border-t border-surface-0/70 pt-4">
-        <button
-          type="button"
-          className={`${dangerButton} -ml-4`}
-          onClick={() => setConfirming(true)}
-        >
-          Delete task
-        </button>
-      </div>
-    );
-  }
   return (
-    <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
-      <p className="font-semibold text-fg">
-        Delete this task
-        {count > 0 ? ` and its ${count === 1 ? "subtask" : `${count} subtasks`}` : ""}? This can't
-        be undone.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={remove.isPending}
-          onClick={() => remove.mutate(task.id, { onSuccess: onDeleted })}
-          className="inline-flex h-11 items-center rounded-full bg-danger px-5 font-bold text-crust disabled:opacity-40"
-        >
-          {remove.isPending ? "Deleting…" : "Delete task"}
-        </button>
-        <button type="button" className={ghostButton} onClick={() => setConfirming(false)}>
-          Keep task
-        </button>
-      </div>
-      {remove.isError ? (
-        <p role="alert" className="text-sm text-danger">
-          {remove.error.message}
+    <div className="border-t border-surface-0/70 pt-4">
+      <button
+        type="button"
+        className={`${dangerButton} -ml-4`}
+        onClick={() => {
+          deleteLater(task);
+          onDeleted();
+        }}
+      >
+        Delete task
+      </button>
+      {count > 0 ? (
+        <p className="text-sm text-muted">
+          Its {count === 1 ? "subtask goes" : `${count} subtasks go`} too. Undo is there for a few
+          seconds.
         </p>
       ) : null}
     </div>

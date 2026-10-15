@@ -1,12 +1,14 @@
 import {
   type InfiniteData,
   type QueryClient,
+  type QueryKey,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import { deleteLater } from "../../client/lib/undo";
 import type { ProjectCreate, ProjectUpdate, TaskCreate, TaskUpdate } from "../../shared/tasks";
 import type { TasksDocument } from "../../shared/tasksImport";
 import type { TemplateFrom, TemplateUse } from "../../shared/templates";
@@ -209,16 +211,60 @@ export function useUpdateTask() {
   });
 }
 
-export function useDeleteTask() {
+/**
+ * Deletes a task and its subtasks after a few seconds, with Undo until then. It leaves
+ * the lists at once.
+ */
+export function useDeleteTaskLater() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.tasks[":id"].$delete({ param: { id: String(id) } });
-      if (!res.ok) throw await toApiError(res);
-    },
-    onSuccess: (_result, id) => queryClient.removeQueries({ queryKey: keys.detail(id) }),
-    onSettled: () => refreshTasks(queryClient),
-  });
+  return (task: { id: number; title: string }) => {
+    const send = (keepalive: boolean) =>
+      api.tasks[":id"].$delete({ param: { id: String(task.id) } }, { init: { keepalive } });
+    deleteLater(queryClient, {
+      message: `Deleted ${task.title}`,
+      restoredMessage: `Restored ${task.title}`,
+      hide: { keys: [keys.tasks], remove: (data, key) => withoutTask(data, key, task.id) },
+      commit: async () => {
+        try {
+          const res = await send(false);
+          if (!res.ok) throw await toApiError(res);
+          queryClient.removeQueries({ queryKey: keys.detail(task.id) });
+        } finally {
+          refreshTasks(queryClient);
+        }
+      },
+      flush: () => void send(true),
+    });
+  };
+}
+
+/** A tasks query's data without the task (or, for a parent's detail, without the subtask). */
+function withoutTask(data: unknown, key: QueryKey, id: number): unknown {
+  const keep = (task: { id: number; parentId: number | null }) =>
+    task.id !== id && task.parentId !== id;
+  switch (key[1]) {
+    case "list":
+      return (data as TaskItem[]).filter(keep);
+    case "done": {
+      const pages = data as InfiniteData<DonePage>;
+      return {
+        ...pages,
+        pages: pages.pages.map((page) => ({ ...page, tasks: page.tasks.filter(keep) })),
+      };
+    }
+    case "done-since": {
+      const page = data as DonePage;
+      return { ...page, tasks: page.tasks.filter(keep) };
+    }
+    case "detail": {
+      const task = data as TaskDetail;
+      return task.subtasks.some((subtask) => subtask.id === id)
+        ? { ...task, subtasks: task.subtasks.filter((subtask) => subtask.id !== id) }
+        : task;
+    }
+    default:
+      return data;
+  }
 }
 
 export function useCreateProject() {

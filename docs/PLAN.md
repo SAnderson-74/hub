@@ -159,9 +159,9 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 ### Phase 10: Plan and review
 
 - [x] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
-- [ ] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
-- [ ] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
-- [ ] 10.4 Undo for a few seconds after deleting a task, transaction, or item
+- [x] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
+- [x] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
+- [x] 10.4 Undo for a few seconds after deleting a task, transaction, or item
 
 ## Import formats
 
