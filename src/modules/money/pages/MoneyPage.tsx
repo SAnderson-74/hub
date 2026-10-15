@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartLine,
   FileUp,
+  Landmark,
   Lightbulb,
   List,
   PiggyBank,
@@ -52,6 +53,7 @@ import { BillsView } from "../components/BillsView";
 import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
+import { DebtsView } from "../components/DebtsView";
 import { FilterSheet } from "../components/FilterSheet";
 import { ForecastView } from "../components/ForecastView";
 import { ImportSheet } from "../components/ImportSheet";
@@ -85,13 +87,22 @@ import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget" | "bills" | "forecast" | "insights" | "rewards" | "net-worth";
+type View =
+  | "transactions"
+  | "budget"
+  | "bills"
+  | "forecast"
+  | "insights"
+  | "debts"
+  | "rewards"
+  | "net-worth";
 const VIEWS: readonly View[] = [
   "transactions",
   "budget",
   "bills",
   "forecast",
   "insights",
+  "debts",
   "rewards",
   "net-worth",
 ];
@@ -248,6 +259,7 @@ function BookView({
   useCommand("bills", () => chooseView("bills"));
   useCommand("forecast", () => chooseView("forecast"));
   useCommand("insights", () => chooseView("insights"));
+  useCommand("debts", () => chooseView("debts"));
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
@@ -273,6 +285,7 @@ function BookView({
               ["bills", "Bills", CalendarDays],
               ["forecast", "Forecast", ChartLine],
               ["insights", "Insights", Lightbulb],
+              ["debts", "Debts", Landmark],
               ["rewards", "Rewards", BadgePercent],
               ["net-worth", "Net worth", TrendingUp],
             ] as const
@@ -383,6 +396,8 @@ function BookView({
         <ForecastView book={book} today={today} />
       ) : view === "insights" ? (
         <InsightsView book={book} today={today} />
+      ) : view === "debts" ? (
+        <DebtsView book={book} today={today} />
       ) : view === "net-worth" ? (
         <NetWorthView
           book={book}

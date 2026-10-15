@@ -225,6 +225,13 @@
       "when": 1792021721998,
       "tag": "0031_budget_settings_and_reimbursements",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1792024126501,
+      "tag": "0032_debt_terms_and_plans",
+      "breakpoints": true
     }
   ]
 }

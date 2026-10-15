@@ -54,6 +54,8 @@ import {
   moneyBudgets,
   moneyCards,
   moneyCategories,
+  moneyDebtPlans,
+  moneyDebtTerms,
   moneyImports,
   moneyRules,
   moneyTransactionSplits,
@@ -268,6 +270,7 @@ export function deleteBook(db: Db, id: number): void {
     // Without accounts there are no transactions, so its rules and categories are unused.
     tx.delete(moneyRules).where(eq(moneyRules.bookId, id)).run();
     tx.delete(moneyBills).where(eq(moneyBills.bookId, id)).run();
+    tx.delete(moneyDebtPlans).where(eq(moneyDebtPlans.bookId, id)).run();
     const categoryIds = tx
       .select({ id: moneyCategories.id })
       .from(moneyCategories)
@@ -505,6 +508,7 @@ export function deleteAccount(db: Db, id: number): void {
     tx.delete(moneyCards).where(eq(moneyCards.accountId, id)).run();
     // Bills paid from it stay, without an account, so the forecast lists them as left out.
     tx.update(moneyBills).set({ accountId: null }).where(eq(moneyBills.accountId, id)).run();
+    tx.delete(moneyDebtTerms).where(eq(moneyDebtTerms.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }

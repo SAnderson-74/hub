@@ -19,6 +19,7 @@ import type { BudgetSet, BudgetSettingsSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
+import type { DebtPlanSet, DebtTerms } from "../../shared/debt";
 import type { Sort } from "../../shared/listFilter";
 import type { OwedCreate } from "../../shared/owed";
 import type { ReceiptImportInput } from "../../shared/receipts";
@@ -902,6 +903,48 @@ export function useMatchOwed() {
 export function useUnmatchOwed() {
   return useMoneyMutation(async (id: number) => {
     const res = await api.money.owed[":id"].repaid.$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+// Debts and money health
+
+export type DebtsData = Awaited<ReturnType<typeof fetchDebts>>;
+export type DebtRow = DebtsData["debts"][number];
+export type Health = Awaited<ReturnType<typeof fetchHealth>>;
+
+async function fetchDebts(bookId: number) {
+  const res = await api.money.debts.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchHealth(bookId: number) {
+  const res = await api.money.health.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useDebts(bookId: number) {
+  return useQuery({ queryKey: ["money", "debts", bookId], queryFn: () => fetchDebts(bookId) });
+}
+
+export function useHealth(bookId: number) {
+  return useQuery({ queryKey: ["money", "health", bookId], queryFn: () => fetchHealth(bookId) });
+}
+
+export function useSetDebtTerms() {
+  return useMoneyMutation(async ({ id, terms }: { id: number; terms: DebtTerms }) => {
+    const res = await api.money.debts[":id"].$put({ param: { id: String(id) }, json: terms });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useSetDebtPlan() {
+  return useMoneyMutation(async (json: DebtPlanSet) => {
+    const res = await api.money["debt-plan"].$put({ json });
     if (!res.ok) throw await toApiError(res);
     return res.json();
   });

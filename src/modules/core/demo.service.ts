@@ -46,6 +46,7 @@ import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service"
 import { createBill, deleteBill, listBills } from "../money/bills.service";
 import { setBudget, setBudgetSettings } from "../money/budget.service";
 import { createCard, deleteCard } from "../money/cards.service";
+import { setDebtPlan, setDebtTerms } from "../money/debts.service";
 import {
   createAccount,
   createBook,
@@ -539,6 +540,24 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       const tickets = spend(day(-3), -12_000, "Example Tickets", entertainment);
       createOwed(db, { transactionId: tickets.id, amountCents: 6_000, who: "John Smith" });
     }
+
+    // A car loan alongside the card, with their rates, paid off highest rate first.
+    const loan = note(
+      "account",
+      createAccount(
+        db,
+        accountCreateSchema.parse({
+          bookId: book.id,
+          name: "Car loan",
+          kind: "loan",
+          institution: "Example Bank",
+          openingBalanceCents: -1_240_000,
+        }),
+      ),
+    );
+    setDebtTerms(db, loan.id, { aprBasisPoints: 690, minimumCents: 35_000 });
+    setDebtTerms(db, rewards.id, { aprBasisPoints: 2_499, minimumCents: 3_500 });
+    setDebtPlan(db, { bookId: book.id, strategy: "avalanche", extraCents: 10_000, order: [] });
 
     // Pay, rent, and the subscription confirmed as bills. The other repeating payments
     // stay suggestions, so Bills shows both.

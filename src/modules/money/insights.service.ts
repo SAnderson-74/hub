@@ -60,10 +60,10 @@ export type YearReviewJson = {
 const STORES = 8;
 const TOP = 5;
 
-type Line = { categoryId: number | null; month: string; inCents: number; outCents: number };
+export type Line = { categoryId: number | null; month: string; inCents: number; outCents: number };
 
 /** Money in and out by category and month, transfers aside, over `from`..`to`. */
-function lines(db: Queryable, bookId: number, from: string, to: string): Line[] {
+export function lines(db: Queryable, bookId: number, from: string, to: string): Line[] {
   const amount = lineAmountCents;
   const monthExpr = sql<string>`substr(${moneyTransactions.date}, 1, 7)`;
   return db
