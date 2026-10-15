@@ -1,4 +1,5 @@
 import { ArrowRight, CircleCheck } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
@@ -114,6 +115,9 @@ export function ReviewPage() {
 
 function StepRow({ step }: { step: ReviewStep }) {
   const tick = useTickStep();
+  // What was just ticked, shown at once while it saves.
+  const [ticking, setTicking] = useState<boolean | null>(null);
+  const done = ticking ?? step.done;
   // A fix step with nothing left is done by itself, with nothing to tick.
   const clear = step.kind === "fix" && step.count === 0;
   return (
@@ -124,16 +128,19 @@ function StepRow({ step }: { step: ReviewStep }) {
         ) : (
           <input
             type="checkbox"
-            checked={step.done}
-            disabled={tick.isPending}
-            onChange={(event) => tick.mutate({ step: step.id, done: event.target.checked })}
+            checked={done}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setTicking(next);
+              tick.mutate({ step: step.id, done: next }, { onSettled: () => setTicking(null) });
+            }}
             aria-label={step.title}
             className="mt-0.5 size-6 shrink-0 accent-accent"
           />
         )}
         <div className="min-w-0 flex-1">
           <p
-            className={`font-semibold break-words ${step.done ? "text-muted line-through" : "text-fg"}`}
+            className={`font-semibold break-words ${done ? "text-muted line-through" : "text-fg"}`}
           >
             {step.title}
           </p>

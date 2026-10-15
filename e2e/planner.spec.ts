@@ -65,7 +65,8 @@ test("the calendar shows what's dated, by month, and opens each thing", async ({
   await link.click();
   await expect(page).toHaveURL(/\/tasks/);
   await expect(page.getByRole("dialog", { name: "Task" }).getByLabel("Title")).toHaveValue(title);
-  expect(task.id).toBeGreaterThan(0);
+  // Home's Today list is short and shared with other tests; leave it as it was.
+  await page.request.delete(`/api/tasks/${task.id}`);
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -79,9 +80,10 @@ test("the weekly review counts what needs a look and ticks off steps", async ({
 }, testInfo) => {
   const id = `${testInfo.project.name} ${Date.now() % 100000}`;
   const errors = trackErrors(page);
-  await page.request.post("/api/tasks", {
+  const late = await page.request.post("/api/tasks", {
     data: { title: `Send the form ${id}`, dueDate: "2020-01-01" },
   });
+  const lateTask = (await late.json()) as { id: number };
 
   await page.goto("/");
   await openFromNav(page, testInfo.project.name === "iphone", "Review");
@@ -115,6 +117,7 @@ test("the weekly review counts what needs a look and ticks off steps", async ({
   // The link goes to the place to fix it.
   await overdue.getByRole("link", { name: "Open Today" }).click();
   await expect(page).toHaveURL(/\/tasks\?list=today/);
+  await page.request.delete(`/api/tasks/${lateTask.id}`);
   expect(errors).toEqual([]);
 });
 
