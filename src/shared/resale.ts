@@ -89,6 +89,17 @@ const itemFields = {
   buyerNotes: z.string().max(2_000, "Keep buyer notes under 2,000 characters."),
   /** false marks an imported item as reviewed. */
   needsReview: z.boolean(),
+  /** A short code for its label: letters, numbers, and dashes. null for none. */
+  sku: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(24, "Keep SKUs under 24 characters.")
+    .regex(/^[A-Z0-9-]*$/, "Use letters, numbers, and dashes in a SKU.")
+    .transform((value) => (value === "" ? null : value))
+    .nullable(),
+  /** Where it's kept. */
+  spot: shortText(60, "storage spots"),
 };
 
 export const itemCreateSchema = z.object(itemFields).partial().required({ title: true }).strict();

@@ -20,6 +20,7 @@ const goal: GoalDetail = {
   progress: { percent: 25, summary: "$1,250.50 of $5,000" },
   milestones: [],
   linkedTaskCount: 0,
+  checkins: [],
   tasks: [],
 };
 

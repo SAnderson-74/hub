@@ -49,10 +49,15 @@ export const resaleItems = sqliteTable(
     /** Set by imports with missing or unreadable values; `review_note` says what. */
     needsReview: integer("needs_review", { mode: "boolean" }).notNull().default(false),
     reviewNote: text("review_note").notNull().default(""),
+    /** A short code for its label, like "R-0042". Unique when set. */
+    sku: text("sku"),
+    /** Where it's kept, like "Garage shelf B". */
+    spot: text("spot").notNull().default(""),
     ...timestamps(),
   },
   (t) => [
     index("resale_items_status_idx").on(t.status),
+    uniqueIndex("resale_items_sku_unique").on(t.sku),
     index("resale_items_platform_idx").on(t.purchasePlatformId),
   ],
 );

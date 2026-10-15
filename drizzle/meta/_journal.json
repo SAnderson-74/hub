@@ -246,6 +246,20 @@
       "when": 1792040446041,
       "tag": "0034_habits",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1792043061198,
+      "tag": "0035_goal_checkins",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1792043442522,
+      "tag": "0036_resale_sku_and_spot",
+      "breakpoints": true
     }
   ]
 }

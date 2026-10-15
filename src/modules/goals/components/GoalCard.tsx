@@ -1,8 +1,31 @@
 import { Flag } from "lucide-react";
 import { ProgressBar } from "../../../client/components/ProgressBar";
+import { StatusDot } from "../../../client/components/StatusDot";
+import { PACE_LABELS } from "../../../shared/goalPace";
 import { GOAL_STATUS_LABELS } from "../../../shared/goals";
 import { type DueTone, describeDue, formatShortDate } from "../../tasks/dates";
+import { PACE_TONES, paceOf } from "../pace";
 import type { GoalItem } from "../queries";
+
+/** "On track · done around Jun 2", or "Behind · needs 8% a week". */
+function PaceLine({ goal, today }: { goal: GoalItem; today: string }) {
+  const pace = paceOf(goal, today);
+  if (pace.state === "unknown" && !pace.projectedDate) return null;
+  const detail = pace.projectedDate
+    ? `done around ${formatShortDate(pace.projectedDate, today)}`
+    : pace.perWeek
+      ? `needs ${pace.perWeek.percent}% a week`
+      : "";
+  return (
+    <span className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+      <StatusDot tone={PACE_TONES[pace.state]} />
+      <span className="min-w-0 truncate">
+        {PACE_LABELS[pace.state]}
+        {detail ? ` · ${detail}` : ""}
+      </span>
+    </span>
+  );
+}
 
 const toneClass: Record<DueTone, string> = {
   danger: "text-danger",
@@ -64,6 +87,7 @@ export function GoalCard({
             ? ` in ${goal.accounts.map((account) => account.name).join(" and ")}`
             : ""}
         </span>
+        {goal.status === "active" ? <PaceLine goal={goal} today={today} /> : null}
         {next && goal.status === "active" ? (
           <span className="mt-1 flex items-center gap-1.5 text-sm text-muted">
             <Flag aria-hidden="true" className="size-3.5 shrink-0" />

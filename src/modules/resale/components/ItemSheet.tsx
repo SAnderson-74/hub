@@ -23,6 +23,7 @@ import {
   type Platform,
   useCreateItem,
   useDeleteItem,
+  useItems,
   usePlatforms,
   useUpdateItem,
 } from "../queries";
@@ -48,7 +49,12 @@ type Draft = {
   salePrice: string;
   salePlatformId: string;
   buyerNotes: string;
+  sku: string;
+  spot: string;
 };
+
+/** A SKU from an item's number: "R-0042". */
+export const suggestedSku = (id: number) => `R-${String(id).padStart(4, "0")}`;
 
 function toDraft(item: Item | null): Draft {
   return {
@@ -65,6 +71,8 @@ function toDraft(item: Item | null): Draft {
     salePrice: item?.saleCents != null ? centsToInput(item.saleCents) : "",
     salePlatformId: item?.salePlatform ? String(item.salePlatform.id) : "",
     buyerNotes: item?.buyerNotes ?? "",
+    sku: item?.sku ?? "",
+    spot: item?.spot ?? "",
   };
 }
 
@@ -115,6 +123,9 @@ function ItemForm({
   onManagePlatforms: () => void;
 }) {
   const [draft, setDraft] = useState(() => toDraft(item));
+  // Places already used, to pick from.
+  const all = useItems();
+  const spots = [...new Set((all.data ?? []).map((row) => row.spot).filter(Boolean))].sort();
   // Adding a listing can change the status on the server (to listed). Follow it,
   // unless the status here was changed and not saved yet.
   const serverStatus = useRef(item?.status);
@@ -174,6 +185,8 @@ function ItemForm({
       saleCents,
       salePlatformId: draft.salePlatformId ? Number(draft.salePlatformId) : null,
       buyerNotes: draft.buyerNotes,
+      sku: draft.sku.trim() || null,
+      spot: draft.spot.trim(),
     };
     if (!item) {
       create.mutate(fields, { onSuccess: onDone });
@@ -283,6 +296,55 @@ function ItemForm({
             placeholder="Used, works"
             className={inputClass}
           />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0">
+            <label htmlFor={`${ids}-spot`} className={labelClass}>
+              Kept at
+            </label>
+            <input
+              id={`${ids}-spot`}
+              value={draft.spot}
+              onChange={(event) => set("spot", event.target.value)}
+              maxLength={60}
+              list={`${ids}-spots`}
+              placeholder="Garage shelf B"
+              className={inputClass}
+            />
+            <datalist id={`${ids}-spots`}>
+              {spots.map((spot) => (
+                <option key={spot} value={spot} />
+              ))}
+            </datalist>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor={`${ids}-sku`} className={labelClass}>
+              SKU
+            </label>
+            <div className="flex gap-2">
+              <input
+                id={`${ids}-sku`}
+                value={draft.sku}
+                onChange={(event) => set("sku", event.target.value.toUpperCase())}
+                maxLength={24}
+                autoComplete="off"
+                aria-describedby={`${ids}-sku-hint`}
+                className={`${inputClass} uppercase`}
+              />
+              {item && !draft.sku ? (
+                <button
+                  type="button"
+                  className={ghostButton}
+                  onClick={() => set("sku", suggestedSku(item.id))}
+                >
+                  Make one
+                </button>
+              ) : null}
+            </div>
+            <p id={`${ids}-sku-hint`} className="mt-1.5 text-sm text-muted">
+              For its label: letters, numbers, and dashes.
+            </p>
+          </div>
         </div>
 
         <fieldset

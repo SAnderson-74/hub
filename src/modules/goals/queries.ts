@@ -142,3 +142,24 @@ export function useUnlinkTask() {
     return undefined;
   });
 }
+
+export function useAddCheckin() {
+  return useGoalMutation(async ({ goalId, note }: { goalId: number; note: string }) => {
+    const res = await api.goals[":id"].checkins.$post({
+      param: { id: String(goalId) },
+      json: { note },
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteCheckin() {
+  return useGoalMutation(async ({ goalId, checkinId }: { goalId: number; checkinId: number }) => {
+    const res = await api.goals[":id"].checkins[":checkinId"].$delete({
+      param: { id: String(goalId), checkinId: String(checkinId) },
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}

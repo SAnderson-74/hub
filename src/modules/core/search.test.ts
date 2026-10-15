@@ -57,7 +57,9 @@ describe("GET /api/search", () => {
       }),
     );
     const item = await body(
-      await t.api.resale.items.$post({ json: { title: "Road bike", category: "Bikes" } }),
+      await t.api.resale.items.$post({
+        json: { title: "Road bike", category: "Bikes", sku: "BIKE-01", spot: "Garage rack" },
+      }),
     );
     const lead = await body(
       await t.api.business.leads.$post({ json: { name: "Example Bakery", notes: "Wants shoes" } }),
@@ -102,6 +104,12 @@ describe("GET /api/search", () => {
       title: "Road bike",
       href: `/resale?item=${item.id}`,
     });
+    // A SKU typed from its label, or where it's kept.
+    expect((await find("bike-01")).groups[0]?.results[0]).toMatchObject({
+      title: "Road bike",
+      detail: "Acquired · Bikes · BIKE-01",
+    });
+    expect(kinds(await find("garage rack"))).toEqual(["resale_item"]);
   });
 
   it("finds transactions by payee or amount, newest first", async () => {
