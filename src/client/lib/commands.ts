@@ -4,6 +4,7 @@ import {
   ChartLine,
   FileUp,
   Keyboard,
+  Landmark,
   LayoutGrid,
   LayoutTemplate,
   Lightbulb,
@@ -141,6 +142,14 @@ const ACTIONS: Array<Omit<Command, "group">> = [
     keywords: "money spending trends month year review compare stores categories",
     icon: Lightbulb,
     to: "/money?do=insights",
+    module: "money",
+  },
+  {
+    id: "debts",
+    label: "Go to Debts",
+    keywords: "money payoff loans credit cards snowball avalanche interest",
+    icon: Landmark,
+    to: "/money?do=debts",
     module: "money",
   },
   {

@@ -40,6 +40,8 @@ import {
   categorizeQuerySchema,
   fillPeopleSchema,
 } from "../../shared/categorize";
+import { debtPlanSchema, debtTermsSchema } from "../../shared/debt";
+import { healthQuerySchema } from "../../shared/health";
 import { insightsQuerySchema, yearReviewQuerySchema } from "../../shared/insights";
 import { netWorthQuerySchema } from "../../shared/netWorth";
 import { owedCreateSchema, owedMatchSchema, owedUpdateSchema } from "../../shared/owed";
@@ -64,6 +66,8 @@ import { budgetMonth, setBudget, setBudgetSettings } from "./budget.service";
 import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
 import { applyCategory, categorizeOverview, fillPeople } from "./categorize.service";
+import { listDebts, setDebtPlan, setDebtTerms } from "./debts.service";
+import { health } from "./health.service";
 import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
 import { insights, yearReview } from "./insights.service";
 import {
@@ -485,6 +489,24 @@ export function moneyRoutes({ db, config }: Deps) {
           const { bookId, year } = c.req.valid("query");
           return c.json(yearReview(db, bookId, year));
         },
+      )
+      // Debts and the plan for paying them off, and money health numbers.
+      .get("/debts", bookQuery, (c) => c.json(listDebts(db, c.req.valid("query").bookId)))
+      .put(
+        "/debts/:id",
+        idParam,
+        zValidator("json", debtTermsSchema, invalid("Give the rate and the minimum payment.")),
+        (c) => c.json(setDebtTerms(db, c.req.valid("param").id, c.req.valid("json"))),
+      )
+      .put(
+        "/debt-plan",
+        zValidator("json", debtPlanSchema, invalid("That payoff plan isn't valid.")),
+        (c) => c.json(setDebtPlan(db, c.req.valid("json"))),
+      )
+      .get(
+        "/health",
+        zValidator("query", healthQuerySchema, invalid("Pass the book as bookId.")),
+        (c) => c.json(health(db, c.req.valid("query").bookId, today())),
       )
       // Money owed back on spending, and the repayments that settle it.
       .get("/owed", bookQuery, (c) => c.json(listOwed(db, c.req.valid("query").bookId)))

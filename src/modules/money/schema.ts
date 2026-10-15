@@ -2,6 +2,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
 import { BILL_FREQUENCIES, BILL_KINDS } from "../../shared/bills";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
+import { DEBT_STRATEGIES } from "../../shared/debt";
 import { RULE_DIRECTIONS } from "../../shared/moneyRules";
 import { REWARD_KINDS } from "../../shared/rewards";
 
@@ -419,3 +420,25 @@ export const moneyReimbursements = sqliteTable(
     index("money_reimbursements_repayment_idx").on(t.repaymentId),
   ],
 );
+
+/** A card's or loan's yearly rate and minimum payment, for planning its payoff. */
+export const moneyDebtTerms = sqliteTable("money_debt_terms", {
+  /** No foreign key; deleting the account deletes this row. */
+  accountId: integer("account_id").primaryKey(),
+  /** Hundredths of a percent: 2499 is 24.99%. */
+  aprBasisPoints: integer("apr_basis_points").notNull().default(0),
+  minimumCents: integer("minimum_cents").notNull().default(0),
+  ...timestamps(),
+});
+
+/** How a book's debts are paid off: in what order, and how much extra each month. */
+export const moneyDebtPlans = sqliteTable("money_debt_plans", {
+  bookId: integer("book_id")
+    .primaryKey()
+    .references(() => moneyBooks.id),
+  strategy: text("strategy", { enum: DEBT_STRATEGIES }).notNull().default("avalanche"),
+  extraCents: integer("extra_cents").notNull().default(0),
+  /** Account ids, first paid first, for "custom". */
+  order: text("order", { mode: "json" }).$type<number[]>().notNull().default([]),
+  ...timestamps(),
+});

@@ -14,6 +14,7 @@ import {
 } from "../../../shared/netWorth";
 import { formatSigned, monthLabel } from "../../../shared/profit";
 import { type Book, type NetWorth, useNetWorth } from "../queries";
+import { HealthPanels } from "./HealthPanels";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
 const NetWorthChart = lazy(() =>
@@ -162,6 +163,7 @@ export function NetWorthView({
           <Panel title="Where it is" className="lg:col-span-4">
             <Breakdown data={worth.data} showBooks={several && !oneBook} />
           </Panel>
+          <HealthPanels book={book} worth={worth.data} showBook={several} />
         </div>
       )}
     </div>
