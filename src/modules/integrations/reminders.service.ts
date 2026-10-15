@@ -22,6 +22,7 @@ import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
 import { billOccurrences } from "../money/bills.service";
+import { hasDevices, pushToDevices } from "../push/push.service";
 import { tasks } from "../tasks/schema";
 import { overview as tithingOverview } from "../tithing/tithing.service";
 import { sendReminder, todayTasks } from "./homeAssistant.service";
@@ -375,6 +376,101 @@ export function tithingReminder(
 
 type Built = { reminder: Reminder; keys: string[] };
 
+/** Where tapping a pushed reminder opens. */
+const OPENS: Record<ReminderKind | "test", string> = {
+  digest: "/",
+  due_soon: "/",
+  streak: "/courses",
+  tithing: "/tithing",
+  test: "/settings",
+};
+
+/**
+ * A reminder without names or amounts, for a phone's lock screen: only counts. Shown
+ * unless the device chose to show what's due by name.
+ */
+function brief(
+  db: Db,
+  config: Pick<Config, "timeZone">,
+  kind: ReminderKind,
+  built: Built,
+  now: Date,
+): { title: string; body: string } {
+  if (kind === "digest") {
+    const today = localClock(now, config.timeZone).date;
+    const settings = readSettings(db);
+    const open = settings.modules.tasks ? todayTasks(db, today, config.timeZone).open : 0;
+    const soon = datedItems(db, addDays(today, 1), addDays(today, DIGEST_AHEAD_DAYS)).length;
+    return {
+      title: "Today in Hub",
+      body: [
+        open > 0 ? `${plural(open, "task")} today.` : "Nothing due today.",
+        soon > 0 ? `${plural(soon, "thing")} coming up.` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    };
+  }
+  if (kind === "due_soon") {
+    const items = built.keys.length;
+    return { title: "Due soon", body: `${plural(items, "thing")} coming due.` };
+  }
+  if (kind === "tithing") {
+    return {
+      title: "Tithing",
+      body: `Tithing is unpaid on ${plural(built.keys.length, "income")}.`,
+    };
+  }
+  return { title: "Study streak", body: "Study today to keep your streak." };
+}
+
+type Delivered = { ok: boolean; detail: string };
+
+/**
+ * Sends a reminder everywhere it goes: Home Assistant when its webhook is set, and each
+ * device with notifications on. It counts as sent when either got it.
+ */
+async function deliver(
+  db: Db,
+  config: Pick<Config, "timeZone">,
+  kind: ReminderKind,
+  built: Built,
+  now: Date,
+): Promise<Delivered> {
+  const results: Delivered[] = [];
+  if (readSettings(db).homeAssistant.reminderUrl) {
+    const delivery = await sendReminder(db, built.reminder, now);
+    if (delivery) results.push(delivery);
+  }
+  if (hasDevices(db)) {
+    const outcome = await pushToDevices(
+      db,
+      {
+        title: built.reminder.title,
+        body: built.reminder.message,
+        brief: brief(db, config, kind, built, now),
+        tag: `hub-${kind}`,
+        url: OPENS[kind],
+      },
+      now,
+    );
+    results.push({ ok: outcome.sent > 0, detail: outcome.detail });
+  }
+  const ok = results.some((result) => result.ok);
+  return {
+    ok,
+    detail: results
+      .filter((result) => result.ok === ok)
+      .map((result) => result.detail)
+      .join(" "),
+  };
+}
+
+/** Whether reminders have anywhere to go. */
+function hasDestination(db: Db): boolean {
+  return readSettings(db).homeAssistant.reminderUrl !== "" || hasDevices(db);
+}
+
 function build(
   db: Db,
   config: Pick<Config, "timeZone">,
@@ -446,7 +542,7 @@ export function resetReminderTries() {
 
 /**
  * Sends each enabled reminder whose time has come today and that hasn't gone out
- * yet. Does nothing without a reminder webhook address.
+ * yet. Does nothing without a reminder webhook address or a device with notifications on.
  */
 export async function runReminders(
   db: Db,
@@ -454,7 +550,7 @@ export async function runReminders(
   now = new Date(),
 ): Promise<ReminderOutcome[]> {
   const settings = readSettings(db);
-  if (!settings.homeAssistant.reminderUrl) return [];
+  if (!hasDestination(db)) return [];
   const clock = localClock(now, config.timeZone);
   const outcomes: ReminderOutcome[] = [];
   for (const kind of kindsFor(settings)) {
@@ -465,15 +561,15 @@ export async function runReminders(
     if (now.getTime() - (lastTry.get(tryKey) ?? 0) < RETRY_MS) continue;
     const built = build(db, config, kind, settings, now);
     if (!built) continue;
-    const delivery = await sendReminder(db, built.reminder, now);
-    if (delivery?.ok) {
+    const delivery = await deliver(db, config, kind, built, now);
+    if (delivery.ok) {
       record(db, kind, clock.date, built, now);
       lastTry.delete(tryKey);
       log.info("Reminder sent", { kind });
     } else {
       lastTry.set(tryKey, now.getTime());
     }
-    outcomes.push({ kind, ok: delivery?.ok ?? false, detail: delivery?.detail ?? "" });
+    outcomes.push({ kind, ok: delivery.ok, detail: delivery.detail });
   }
   return outcomes;
 }
@@ -484,13 +580,18 @@ export async function sendReminderNow(
   config: Pick<Config, "timeZone">,
   kind: ReminderKind,
   now = new Date(),
-): Promise<{ built: Built | null; delivery: Awaited<ReturnType<typeof sendReminder>> }> {
+): Promise<{ built: Built | null; delivery: Delivered | null }> {
   const settings = readSettings(db);
   const built = build(db, config, kind, settings, now);
   if (!built) return { built: null, delivery: null };
-  const delivery = await sendReminder(db, built.reminder, now);
-  if (delivery?.ok) record(db, kind, localClock(now, config.timeZone).date, built, now);
+  const delivery = await deliver(db, config, kind, built, now);
+  if (delivery.ok) record(db, kind, localClock(now, config.timeZone).date, built, now);
   return { built, delivery };
+}
+
+/** Whether reminders have a webhook or a device to go to. */
+export function remindersConfigured(db: Db): boolean {
+  return hasDestination(db);
 }
 
 export type ReminderPreview = {

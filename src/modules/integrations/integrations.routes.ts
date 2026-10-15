@@ -15,7 +15,12 @@ import {
   readFeedToken,
 } from "./calendar.service";
 import { deliveryStatus, sendReminder, sendSummary, summaryPayload } from "./homeAssistant.service";
-import { previewReminders, recentReminders, sendReminderNow } from "./reminders.service";
+import {
+  previewReminders,
+  recentReminders,
+  remindersConfigured,
+  sendReminderNow,
+} from "./reminders.service";
 
 /**
  * Home Assistant: what the summary holds, and sending it or a test reminder now.
@@ -59,7 +64,7 @@ export function integrationRoutes({ db, config }: Deps) {
       })
       .get("/reminders", (c) =>
         c.json({
-          configured: readSettings(db).homeAssistant.reminderUrl !== "",
+          configured: remindersConfigured(db),
           previews: previewReminders(db, config),
           recent: recentReminders(db),
         }),
@@ -73,9 +78,9 @@ export function integrationRoutes({ db, config }: Deps) {
         ),
         async (c) => {
           const { kind } = c.req.valid("param");
-          if (readSettings(db).homeAssistant.reminderUrl === "") {
+          if (!remindersConfigured(db)) {
             throw badRequest(
-              "Add the reminder webhook address under Home Assistant first, then send.",
+              "Add the reminder webhook address under Home Assistant, or turn on notifications on a device, then send.",
             );
           }
           const { built, delivery } = await sendReminderNow(db, config, kind);
@@ -84,7 +89,7 @@ export function integrationRoutes({ db, config }: Deps) {
               `${REMINDER_LABELS[kind]} has nothing to say right now, so nothing was sent.`,
             );
           }
-          if (!delivery?.ok) throw badGateway(delivery?.detail ?? "Couldn't reach Home Assistant.");
+          if (!delivery?.ok) throw badGateway(delivery?.detail || "Couldn't send the reminder.");
           return c.json(delivery);
         },
       )

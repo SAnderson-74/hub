@@ -12,6 +12,7 @@ import { educationRoutes } from "../modules/education/education.routes";
 import { goalRoutes } from "../modules/goals/goals.routes";
 import { integrationRoutes } from "../modules/integrations/integrations.routes";
 import { moneyRoutes } from "../modules/money/money.routes";
+import { pushRoutes } from "../modules/push/push.routes";
 import { resaleRoutes } from "../modules/resale/resale.routes";
 import { projectRoutes } from "../modules/tasks/projects.routes";
 import { taskRoutes } from "../modules/tasks/tasks.routes";
@@ -47,7 +48,8 @@ export function createApi(deps: Deps) {
     .route("/money", moneyRoutes(deps))
     .route("/tithing", tithingRoutes(deps))
     .route("/business", businessRoutes(deps))
-    .route("/integrations", integrationRoutes(deps));
+    .route("/integrations", integrationRoutes(deps))
+    .route("/push", pushRoutes(deps));
 }
 
 export type Api = ReturnType<typeof createApi>;

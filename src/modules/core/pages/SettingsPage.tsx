@@ -16,6 +16,8 @@ import { streakKey } from "../../education/queries";
 import { CalendarPanel } from "../../integrations/components/CalendarPanel";
 import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
 import { RemindersPanel } from "../../integrations/components/RemindersPanel";
+import { PushPanel } from "../../push/components/PushPanel";
+import { usePushStatus } from "../../push/queries";
 import { BackupsPanel } from "../components/BackupsPanel";
 import { ClaudeProjectPanel } from "../components/ClaudeProjectPanel";
 import { HomeWidgetsPanel } from "../components/HomeWidgetsPanel";
@@ -267,6 +269,7 @@ function StudyMinimum({ saved }: { saved: number }) {
 
 export function SettingsPage() {
   const settings = useSettings();
+  const push = usePushStatus();
   const system = useSystem();
   const info = system.data;
   const { hash } = useLocation();
@@ -369,7 +372,7 @@ export function SettingsPage() {
 
         <Panel
           title="Reminders"
-          description="A morning digest, things coming due, and a nudge before your study streak breaks, sent through Home Assistant."
+          description="A morning digest, things coming due, and a nudge before your study streak breaks, sent as notifications or through Home Assistant."
           className="lg:col-span-7 lg:row-start-6"
         >
           {settings.data ? (
@@ -377,7 +380,10 @@ export function SettingsPage() {
               saved={settings.data.reminders}
               savedTithing={settings.data.tithingReminder}
               tithingOn={settings.data.modules.tithing}
-              configured={settings.data.homeAssistant.reminderUrl !== ""}
+              configured={
+                settings.data.homeAssistant.reminderUrl !== "" ||
+                (push.data?.devices.length ?? 0) > 0
+              }
             />
           ) : settings.isError ? (
             <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
@@ -387,9 +393,17 @@ export function SettingsPage() {
         </Panel>
 
         <Panel
+          title="Notifications"
+          description="Reminders on this phone or computer, turned on device by device."
+          className="lg:col-span-7 lg:row-start-7"
+        >
+          <PushPanel />
+        </Panel>
+
+        <Panel
           title="Calendar feed"
           description="Hub's due dates in your phone or computer calendar."
-          className="lg:col-span-7 lg:row-start-7"
+          className="lg:col-span-7 lg:row-start-8"
         >
           <CalendarPanel />
         </Panel>
@@ -397,7 +411,7 @@ export function SettingsPage() {
         <Panel
           title="Imports"
           description="Bring in files and listings from other apps. Each import is also on its own page."
-          className="lg:col-span-7 lg:row-start-8"
+          className="lg:col-span-7 lg:row-start-9"
         >
           <ImportsPanel />
         </Panel>
@@ -405,7 +419,7 @@ export function SettingsPage() {
         <Panel
           title="Claude Project"
           description="One Claude Project reads receipts, listings, and study plans from photos and documents, and answers in a form Hub can import."
-          className="lg:col-span-7 lg:row-start-9"
+          className="lg:col-span-7 lg:row-start-10"
         >
           <ClaudeProjectPanel />
         </Panel>
@@ -413,7 +427,7 @@ export function SettingsPage() {
         <Panel
           title="Backups"
           description="Hub saves a copy of everything each night and before updates. Restore one to go back to it."
-          className="lg:col-span-7 lg:row-start-10"
+          className="lg:col-span-7 lg:row-start-11"
         >
           <BackupsPanel startedAt={info?.startedAt ?? null} />
         </Panel>

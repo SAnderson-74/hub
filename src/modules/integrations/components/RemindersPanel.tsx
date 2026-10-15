@@ -107,8 +107,9 @@ export function RemindersPanel({
     <div className="space-y-6">
       {!configured ? (
         <p className="rounded-tile bg-base/80 p-4 text-sm text-fg ring-1 ring-surface-0/50">
-          Reminders go to Home Assistant, which sends them to your phone. Add the reminder webhook
-          under Home Assistant to turn them on. Until then, you can see what they'd say below.
+          Reminders go out as notifications on devices that turn them on (Notifications, below), or
+          through Home Assistant's reminder webhook. Until one is set up, you can see what they'd
+          say below.
         </p>
       ) : null}
 
