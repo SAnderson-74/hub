@@ -13,6 +13,7 @@ const PAGES = [
   { path: "/time", heading: "Time" },
   { path: "/goals", heading: "Goals" },
   { path: "/courses", heading: "Courses" },
+  { path: "/habits", heading: "Habits" },
   { path: "/resale", heading: "Resale" },
   { path: "/money", heading: "Money" },
   { path: "/tithing", heading: "Tithing" },
@@ -162,4 +163,13 @@ test("budget options and money owed back meet WCAG 2.1 AA", async ({ page }) => 
   await expect(sheet.getByText("Not paid back yet")).toBeVisible();
   await sheet.getByRole("button", { name: "Someone owes me part of this" }).click();
   await checkSheet(page, sheet);
+});
+
+test("the habit sheet meets WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/habits", "Habits");
+  await page
+    .getByRole("region", { name: "All habits" })
+    .getByRole("button", { name: /^Read 20 pages(?!:)/ })
+    .click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Habit" }));
 });

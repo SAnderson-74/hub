@@ -7,6 +7,7 @@ import {
   ListTodo,
   type LucideIcon,
   Package,
+  Repeat,
   Settings,
   Target,
   Timer,
@@ -18,6 +19,7 @@ import { DashboardPage } from "../modules/core/pages/DashboardPage";
 import { SettingsPage } from "../modules/core/pages/SettingsPage";
 import { CoursesPage } from "../modules/education/pages/CoursesPage";
 import { GoalsPage } from "../modules/goals/pages/GoalsPage";
+import { HabitsPage } from "../modules/habits/pages/HabitsPage";
 import { MoneyPage } from "../modules/money/pages/MoneyPage";
 import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
@@ -82,6 +84,15 @@ export const appPages: AppPage[] = [
     path: "/courses",
     icon: GraduationCap,
     element: <CoursesPage />,
+  },
+  {
+    id: "habits",
+    key: "a",
+    label: "Habits",
+    path: "/habits",
+    icon: Repeat,
+    element: <HabitsPage />,
+    module: "habits",
   },
   {
     id: "resale",

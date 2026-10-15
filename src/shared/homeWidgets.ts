@@ -21,6 +21,12 @@ export const HOME_WIDGETS = [
   },
   { id: "tithing", label: "Tithing", description: "Unpaid or paid up", module: "tithing" },
   { id: "streak", label: "Study streak", description: "Days in a row", module: "courses" },
+  {
+    id: "habits",
+    label: "Habits",
+    description: "What's on today, with check-offs",
+    module: "habits",
+  },
   { id: "term", label: "Term progress", description: "Credits and pacing", module: "courses" },
   {
     id: "time",

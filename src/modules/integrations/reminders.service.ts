@@ -21,6 +21,7 @@ import { readSettings } from "../core/settings.service";
 import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
+import { habitsToRemind } from "../habits/habits.service";
 import { billOccurrences } from "../money/bills.service";
 import { hasDevices, pushToDevices } from "../push/push.service";
 import { tasks } from "../tasks/schema";
@@ -377,7 +378,8 @@ export function tithingReminder(
 type Built = { reminder: Reminder; keys: string[] };
 
 /** Where tapping a pushed reminder opens. */
-const OPENS: Record<ReminderKind | "test", string> = {
+const OPENS: Record<ReminderKind | "habit" | "test", string> = {
+  habit: "/habits",
   digest: "/",
   due_soon: "/",
   streak: "/courses",
@@ -392,10 +394,11 @@ const OPENS: Record<ReminderKind | "test", string> = {
 function brief(
   db: Db,
   config: Pick<Config, "timeZone">,
-  kind: ReminderKind,
+  kind: ReminderKind | "habit",
   built: Built,
   now: Date,
 ): { title: string; body: string } {
+  if (kind === "habit") return { title: "Habit", body: "A habit to check off today." };
   if (kind === "digest") {
     const today = localClock(now, config.timeZone).date;
     const settings = readSettings(db);
@@ -433,7 +436,7 @@ type Delivered = { ok: boolean; detail: string };
 async function deliver(
   db: Db,
   config: Pick<Config, "timeZone">,
-  kind: ReminderKind,
+  kind: ReminderKind | "habit",
   built: Built,
   now: Date,
 ): Promise<Delivered> {
@@ -449,7 +452,7 @@ async function deliver(
         title: built.reminder.title,
         body: built.reminder.message,
         brief: brief(db, config, kind, built, now),
-        tag: `hub-${kind}`,
+        tag: kind === "habit" ? `hub-habit-${built.keys[0] ?? ""}` : `hub-${kind}`,
         url: OPENS[kind],
       },
       now,
@@ -530,7 +533,7 @@ function record(db: Db, kind: ReminderKind, date: string, built: Built, now: Dat
     .run();
 }
 
-export type ReminderOutcome = { kind: ReminderKind; ok: boolean; detail: string };
+export type ReminderOutcome = { kind: ReminderKind | "habit"; ok: boolean; detail: string };
 
 /** Last failed try per reminder and day, so a Home Assistant outage isn't retried every minute. */
 const lastTry = new Map<string, number>();
@@ -570,6 +573,64 @@ export async function runReminders(
       lastTry.set(tryKey, now.getTime());
     }
     outcomes.push({ kind, ok: delivery.ok, detail: delivery.detail });
+  }
+  if (settings.modules.habits) outcomes.push(...(await runHabitReminders(db, config, now)));
+  return outcomes;
+}
+
+/**
+ * Each habit's own reminder, at its time, once a day, while it's meant for today and
+ * not yet done. Tried again like the others when it doesn't go through.
+ */
+async function runHabitReminders(
+  db: Db,
+  config: Pick<Config, "timeZone">,
+  now: Date,
+): Promise<ReminderOutcome[]> {
+  const clock = localClock(now, config.timeZone);
+  const outcomes: ReminderOutcome[] = [];
+  for (const habit of habitsToRemind(db, { now, timeZone: config.timeZone })) {
+    if (!habit.remindAt || !inWindow(habit.remindAt, clock.minutes)) continue;
+    const key = `habit:${habit.id}:${clock.date}`;
+    const sent = db
+      .select({ id: reminderSends.id })
+      .from(reminderSends)
+      .where(eq(reminderSends.key, key))
+      .get();
+    if (sent) continue;
+    if (now.getTime() - (lastTry.get(key) ?? 0) < RETRY_MS) continue;
+    const reminder: Reminder = {
+      kind: "habit",
+      title: `Time for ${habit.name}`,
+      message:
+        habit.schedule.kind === "weekly"
+          ? `${habit.weekCount} of ${habit.weekTarget} this week so far.`
+          : "Not checked off yet today.",
+    };
+    const delivery = await deliver(
+      db,
+      config,
+      "habit",
+      { reminder, keys: [String(habit.id)] },
+      now,
+    );
+    if (delivery.ok) {
+      db.insert(reminderSends)
+        .values({
+          kind: "habit",
+          key,
+          title: reminder.title,
+          message: reminder.message,
+          sentAt: now,
+        })
+        .onConflictDoNothing()
+        .run();
+      lastTry.delete(key);
+      log.info("Reminder sent", { kind: "habit" });
+    } else {
+      lastTry.set(key, now.getTime());
+    }
+    outcomes.push({ kind: "habit", ok: delivery.ok, detail: delivery.detail });
   }
   return outcomes;
 }

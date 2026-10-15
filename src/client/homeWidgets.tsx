@@ -7,6 +7,7 @@ import {
   TodayPanel,
 } from "../modules/core/components/HomeWidgets";
 import { SystemPanel } from "../modules/core/components/SystemPanel";
+import { HabitsWidget } from "../modules/habits/components/HabitsWidget";
 import { MoneyWidget } from "../modules/money/components/MoneyWidget";
 import { ResaleWidget } from "../modules/resale/components/ResaleWidget";
 import { TimeWidget } from "../modules/time/components/TimeWidget";
@@ -29,6 +30,7 @@ export const homeWidgetViews: Record<HomeWidgetId, WidgetView> = {
   money: { render: (props) => <MoneyWidget {...props} /> },
   tithing: { render: ({ className }) => <TithingWidget className={className} /> },
   streak: { render: ({ className }) => <StreakPanel className={className} /> },
+  habits: { render: ({ className }) => <HabitsWidget className={className} /> },
   term: { render: (props) => <TermPanel {...props} /> },
   time: { render: (props) => <TimeWidget {...props} /> },
   resale: { render: (props) => <ResaleWidget {...props} /> },
