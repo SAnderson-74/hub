@@ -9,6 +9,7 @@ export const MODULES = [
   { id: "time", label: "Time", description: "Timers and time logged" },
   { id: "goals", label: "Goals", description: "Goals, milestones, and savings goals" },
   { id: "courses", label: "Courses", description: "Terms, courses, and a study streak" },
+  { id: "habits", label: "Habits", description: "Habits on a schedule, and how strong each is" },
   { id: "resale", label: "Resale", description: "Items bought to sell, and profit" },
   { id: "money", label: "Money", description: "Accounts, budgets, and cash flow" },
   { id: "tithing", label: "Tithing", description: "Tithing owed, paid, and what's left" },

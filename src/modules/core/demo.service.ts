@@ -43,6 +43,8 @@ import {
   listTerms,
 } from "../education/education.service";
 import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service";
+import { createHabit, deleteHabit, setCheckin } from "../habits/habits.service";
+import { habits } from "../habits/schema";
 import { createBill, deleteBill, listBills } from "../money/bills.service";
 import { setBudget, setBudgetSettings } from "../money/budget.service";
 import { createCard, deleteCard } from "../money/cards.service";
@@ -79,6 +81,7 @@ const DEMO_KINDS = [
   "goal",
   "term",
   "time_entry",
+  "habit",
   "platform",
   "resale_item",
   "book",
@@ -587,6 +590,27 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       );
     }
 
+    // Habits: study from the course time above, a daily one, and a weekly one, with six
+    // weeks of history and a few misses.
+    const clock = { now, timeZone: "UTC" };
+    const sixWeeksAgo = day(-41);
+    const habit = (input: Parameters<typeof createHabit>[1]) => {
+      const made = note("habit", createHabit(db, input, clock));
+      db.update(habits).set({ startDate: sixWeeksAgo }).where(eq(habits.id, made.id)).run();
+      return made;
+    };
+    habit({ name: "Study", kind: "study" });
+    const reading = habit({ name: "Read 20 pages", remindAt: "21:00" });
+    const running = habit({ name: "Run", schedule: { kind: "weekly", times: 3 } });
+    for (let offset = -41; offset <= -1; offset += 1) {
+      if (offset % 5 !== 0 && offset !== -9) setCheckin(db, reading.id, day(offset), true, clock);
+      if (
+        [-41, -39, -37, -34, -32, -29, -27, -25, -20, -18, -15, -13, -11, -6, -4].includes(offset)
+      ) {
+        setCheckin(db, running.id, day(offset), true, clock);
+      }
+    }
+
     // Business
     const phase = note("phase", createPhase(db, phaseCreateSchema.parse({ name: "Set up" })));
     for (const [title, offset] of [
@@ -650,6 +674,7 @@ const DELETERS: Record<DemoKind, (db: Db, id: number, actor: string) => void> = 
   goal: deleteGoal,
   term: deleteTerm,
   time_entry: (db, id) => deleteEntry(db, id),
+  habit: (db, id) => deleteHabit(db, id),
   platform: (db, id) => void deletePlatform(db, id),
   resale_item: deleteItem,
   book: (db, id) => deleteBook(db, id),

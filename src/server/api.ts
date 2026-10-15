@@ -10,6 +10,7 @@ import { systemRoutes } from "../modules/core/system.routes";
 import { tagRoutes } from "../modules/core/tags.routes";
 import { educationRoutes } from "../modules/education/education.routes";
 import { goalRoutes } from "../modules/goals/goals.routes";
+import { habitRoutes } from "../modules/habits/habits.routes";
 import { integrationRoutes } from "../modules/integrations/integrations.routes";
 import { moneyRoutes } from "../modules/money/money.routes";
 import { pushRoutes } from "../modules/push/push.routes";
@@ -43,6 +44,7 @@ export function createApi(deps: Deps) {
     .route("/search", searchRoutes(deps))
     .route("/time", timeRoutes(deps))
     .route("/goals", goalRoutes(deps))
+    .route("/habits", habitRoutes(deps))
     .route("/education", educationRoutes(deps))
     .route("/resale", resaleRoutes(deps))
     .route("/money", moneyRoutes(deps))

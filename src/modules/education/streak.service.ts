@@ -15,6 +15,28 @@ export function studyStreak(
   { now, timeZone, minimum }: { now: Date; timeZone: string; minimum: number },
 ): StudyStreak {
   const today = localDateParts(now, timeZone).date;
+  const minutesByDate = studyMinutesByDate(db, now, timeZone);
+
+  const first = addDays(today, -(weekdayIndex(today) + 21));
+  const days = [];
+  for (let date = first; date <= today; date = addDays(date, 1)) {
+    days.push({ date, minutes: minutesByDate.get(date) ?? 0 });
+  }
+  return {
+    minimum,
+    today,
+    todayMinutes: minutesByDate.get(today) ?? 0,
+    ...countStreak(minutesByDate, today, minimum),
+    days,
+  };
+}
+
+/** Minutes logged on courses each day, as the streak counts them. */
+export function studyMinutesByDate(
+  db: Queryable,
+  now: Date,
+  timeZone: string,
+): Map<string, number> {
   const minutesByDate = new Map<string, number>();
   const rows = db
     .select({
@@ -30,17 +52,5 @@ export function studyStreak(
     const date = localDateParts(row.startedAt, timeZone).date;
     minutesByDate.set(date, (minutesByDate.get(date) ?? 0) + minutes);
   }
-
-  const first = addDays(today, -(weekdayIndex(today) + 21));
-  const days = [];
-  for (let date = first; date <= today; date = addDays(date, 1)) {
-    days.push({ date, minutes: minutesByDate.get(date) ?? 0 });
-  }
-  return {
-    minimum,
-    today,
-    todayMinutes: minutesByDate.get(today) ?? 0,
-    ...countStreak(minutesByDate, today, minimum),
-    days,
-  };
+  return minutesByDate;
 }

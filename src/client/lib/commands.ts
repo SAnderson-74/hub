@@ -13,6 +13,7 @@ import {
   PackagePlus,
   PiggyBank,
   Plus,
+  Repeat,
   Sunrise,
   Target,
   Timer,
@@ -79,6 +80,14 @@ const ACTIONS: Array<Omit<Command, "group">> = [
     icon: Timer,
     to: "/time?do=start-timer",
     module: "time",
+  },
+  {
+    id: "add-habit",
+    label: "Add a habit",
+    keywords: "habit routine daily check off",
+    icon: Repeat,
+    to: "/habits?do=add-habit",
+    module: "habits",
   },
   {
     id: "add-goal",

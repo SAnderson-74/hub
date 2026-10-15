@@ -286,7 +286,8 @@ export function RemindersPanel({
               <li key={`${entry.sentAt}-${entry.kind}`} className="py-2">
                 <p className="font-semibold break-words text-fg">{entry.title}</p>
                 <p className="text-muted">
-                  {REMINDER_LABELS[entry.kind]} · {sentLabel(entry.sentAt)}
+                  {entry.kind === "habit" ? "Habit" : REMINDER_LABELS[entry.kind]} ·{" "}
+                  {sentLabel(entry.sentAt)}
                 </p>
               </li>
             ))}

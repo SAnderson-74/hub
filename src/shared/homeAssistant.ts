@@ -44,5 +44,5 @@ export const defaultHomeAssistant: HomeAssistantSettings = {
 export type Reminder = {
   title: string;
   message: string;
-  kind?: "digest" | "due_soon" | "streak" | "tithing" | "test";
+  kind?: "digest" | "due_soon" | "streak" | "tithing" | "habit" | "test";
 };
