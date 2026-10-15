@@ -62,7 +62,7 @@ test("reminders show what they'd say, and their times save", async ({ page }, te
 
   await page.goto("/settings");
   const panel = page.getByRole("region", { name: "Reminders" });
-  await expect(panel).toContainText("Add the reminder webhook under Home Assistant");
+  await expect(panel).toContainText("Until one is set up, you can see what they'd say below.");
   await expect(panel).toContainText(title);
 
   const time = testInfo.project.name === "iphone" ? "06:45" : "08:15";

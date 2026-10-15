@@ -148,7 +148,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 
 ### Phase 9: Habits, focus, resale, and goals
 
-- [ ] 9.1 Push notifications on the phone's Home Screen app (Web Push): encrypted end to end, sent only to Apple's and other browsers' push services, counts only on the lock screen unless chosen, off until turned on per device
+- [x] 9.1 Push notifications on the phone's Home Screen app (Web Push): encrypted end to end, sent only to Apple's and other browsers' push services, counts only on the lock screen unless chosen, off until turned on per device
 - [ ] 9.2 Habits: flexible schedules, check-ins, and a strength score that dips for a miss instead of resetting
 - [ ] 9.3 Habits on Home, a heat map, reminders, and the study streak linked as a habit
 - [ ] 9.4 Focus timer: work and break blocks on a task or course, saved as time entries

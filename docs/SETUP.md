@@ -110,7 +110,17 @@ If `apps/hub` was created without encryption (Datasets shows no lock icon on it 
    3. **Get Dictionary Value**: `title` from Contents of URL, then **Show Notification** "Added" with it. If something's wrong, Hub answers with `error` instead.
 
    Dates are read in the time zone set in Settings. Words Hub doesn't recognize stay in the title, and `@name` picks a project whose name starts with it.
-5. Optional: a Claude Project that reads receipts, listings, and study plans for Hub. Copy its instructions from **Settings > Claude Project**; [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has the rest.
+5. Optional: notifications. Open Hub from the Home Screen (not a Safari tab; iOS allows web notifications only there), go to Settings > **Notifications**, and tap **Turn on notifications**, then **Allow**. **Send a test notification** checks it. Reminders (Settings > Reminders) then come as notifications on this phone, on their own or alongside Home Assistant. See [How notifications stay private](#how-notifications-stay-private) below.
+6. Optional: a Claude Project that reads receipts, listings, and study plans for Hub. Copy its instructions from **Settings > Claude Project**; [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has the rest.
+
+### How notifications stay private
+
+- **Nothing new is open to the internet.** Push is outbound only: Hub sends each message to the push service the device's browser uses (Apple's for an iPhone), and that service delivers it. Nothing connects to Hub from outside, and every Hub page and API stays behind Tailscale as before. The only new network need is outbound HTTPS from the container to those push services.
+- **Only known push services.** Hub sends only to `web.push.apple.com`, `fcm.googleapis.com` (Chrome and Android), `updates.push.services.mozilla.com` (Firefox), and `*.notify.windows.com` (Edge on Windows), over HTTPS on the standard port, without following redirects. A subscription for any other address is refused, and the check runs again before every send.
+- **Encrypted for one device.** Each message is encrypted for the device that will show it (RFC 8291), so the push service carries only ciphertext. Each request is signed with Hub's own key (VAPID, RFC 8292), so a push service delivers only Hub's messages to a device that subscribed with Hub. The signing key is made on the server the first time a device turns notifications on, stays in Hub's database (and its backups), and is never sent to a browser. The encryption uses Node's own crypto; no third-party push library is involved.
+- **Counts only on the lock screen.** By default a notification says "2 things coming due" or "1 task today", never what they are, and never an amount. A device can choose **Show what's due by name** in its own Settings > Notifications.
+- **Off until turned on, device by device.** No device gets notifications until it turns them on itself. Settings lists every device that has them, and any of them can be turned off from there. A device that turns them off in its browser is removed the next time Hub tries it.
+- **Nothing kept on the phone.** The service worker (`/sw.js`) only shows notifications and opens Hub when one is tapped. It caches nothing.
 
 ## 6. Home Assistant (optional)
 
@@ -167,7 +177,7 @@ Hub can send Home Assistant a summary (study streak, today's tasks, and dates co
 
 4. In Hub, open Settings > **Home Assistant** and enter `http://<HOME_ASSISTANT_IP>:8123/api/webhook/<SUMMARY_WEBHOOK_ID>` and the same with the reminder ID. Save, then use **Send summary now** and **Send a test reminder**. The sensors show up in Home Assistant under Developer tools > States, and the test reminder on your phone.
 
-**Reminders.** Settings > **Reminders** chooses what Hub sends to the reminder webhook, and when (in Hub's time zone):
+**Reminders.** Settings > **Reminders** chooses what Hub sends, and when (in Hub's time zone). Reminders go to the reminder webhook, to devices with notifications on (section 5), or both; a reminder counts as sent when either gets it:
 
 - **Daily digest**: today's tasks, what's due in the next three days, and the study streak. Skipped when nothing is due.
 - **Due soon**: tasks, goals, milestones, assessments, bills and income, business steps, and lead follow-ups due today or within the days you pick. Each is reminded once per due date.

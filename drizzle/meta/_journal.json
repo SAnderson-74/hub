@@ -232,6 +232,13 @@
       "when": 1792024126501,
       "tag": "0032_debt_terms_and_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1792025984349,
+      "tag": "0033_push_notifications",
+      "breakpoints": true
     }
   ]
 }
