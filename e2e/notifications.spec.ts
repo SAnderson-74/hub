@@ -57,13 +57,21 @@ async function checkSettings(
 
   await page.goto("/settings");
   const panel = page.getByRole("region", { name: "Notifications" });
-  // A desktop browser can turn it on here, unless it has no push at all (like a headless one).
+  // What this browser can do decides what the panel says. On an iPhone, push needs the
+  // Home Screen app; a headless browser may have no push, or deny notifications.
+  const browser = await page.evaluate(() => ({
+    push: "serviceWorker" in navigator && "PushManager" in window && "Notification" in window,
+    permission: "Notification" in window ? Notification.permission : "default",
+  }));
   if (project.startsWith("iphone")) {
     await expect(panel).toContainText("tap Share, then Add to Home Screen");
+  } else if (!browser.push) {
+    await expect(panel).toContainText("This browser can't show notifications from Hub.");
+  } else if (browser.permission === "denied") {
+    await expect(panel).toContainText("Notifications are blocked for Hub in this browser.");
   } else {
-    await expect(panel).toContainText(
-      /Off on this device|This browser can't show notifications from Hub/,
-    );
+    await expect(panel.getByText("Off on this device")).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Turn on notifications" })).toBeVisible();
   }
 
   const others = panel.getByRole("region", { name: "Other devices" });
