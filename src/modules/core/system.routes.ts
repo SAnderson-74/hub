@@ -25,6 +25,7 @@ export function systemRoutes({ config, startedAt }: Deps) {
       startedAt: startedAt.toISOString(),
       uptimeSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       timeZone: config.timeZone,
+      serverTimeZone: config.serverTimeZone,
       database: {
         sizeBytes: fileSize(config.dbFile) + fileSize(`${config.dbFile}-wal`),
       },

@@ -55,6 +55,8 @@ function useTimeMutation<Input, Output>(mutationFn: (input: Input) => Promise<Ou
       // Time counts toward the study streak and each resale item's time spent.
       void queryClient.invalidateQueries({ queryKey: streakKey });
       void queryClient.invalidateQueries({ queryKey: resaleItemsKey });
+      // And toward the study habit.
+      void queryClient.invalidateQueries({ queryKey: ["habits"] });
     },
   });
 }

@@ -30,20 +30,26 @@ const loose = (text: string) =>
     .replace(/[^a-z0-9&]+/g, " ")
     .trim();
 
+/**
+ * Whether `needle` is in `text`, ignoring case, and also ignoring punctuation: "trader
+ * joes" is in "TRADER JOE'S #123". An empty needle is in nothing.
+ */
+export function textHas(text: string, needle: string): boolean {
+  const lowered = needle.trim().toLowerCase();
+  if (lowered === "") return false;
+  if (text.toLowerCase().includes(lowered)) return true;
+  const looseNeedle = loose(lowered);
+  return looseNeedle !== "" && ` ${loose(text)} `.includes(looseNeedle);
+}
+
 /** The first rule (in order) that fits a transaction, or null. */
 export function matchRule<R extends RuleLike>(
   rules: readonly R[],
   transaction: { payee: string; amountCents: number; counterparty?: string | null },
 ): R | null {
-  const text = [transaction.payee, transaction.counterparty ?? ""].join(" ").toLowerCase();
-  const looseText = ` ${loose(text)} `;
+  const text = [transaction.payee, transaction.counterparty ?? ""].join(" ");
   for (const rule of rules) {
-    const needle = rule.contains.trim().toLowerCase();
-    if (needle === "") continue;
-    const looseNeedle = loose(needle);
-    if (!text.includes(needle) && (looseNeedle === "" || !looseText.includes(looseNeedle))) {
-      continue;
-    }
+    if (!textHas(text, rule.contains)) continue;
     if (rule.direction === "out" && transaction.amountCents >= 0) continue;
     if (rule.direction === "in" && transaction.amountCents <= 0) continue;
     return rule;

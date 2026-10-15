@@ -108,3 +108,70 @@ export const budgetQuerySchema = z.object({
   bookId: z.coerce.number().int().positive(),
   month: monthSchema,
 });
+
+// Carrying unspent money over, and sinking funds: saving a bit each month for a cost
+// that comes once or twice a year.
+
+export const GOAL_REPEATS = [null, 6, 12] as const;
+
+export const budgetSettingsSchema = z
+  .object({
+    categoryId: z.number().int().positive(),
+    /** The month the change is made from: carrying over starts here when turned on. */
+    month: monthSchema,
+    rollover: z.boolean(),
+    /** A sinking fund's target. Saving up needs carrying over, so it turns that on. */
+    goal: z
+      .object({
+        cents: z
+          .number()
+          .int("Use whole cents.")
+          .min(100, "Save up for at least $1.")
+          .max(10_000_000_000, "Use an amount under $100,000,000."),
+        dueDate: z.iso.date("Use a date like 2030-01-31."),
+        /** Comes again every 6 or 12 months, or null for once. */
+        everyMonths: z.union([z.literal(6), z.literal(12)]).nullable(),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type BudgetSettingsSet = z.infer<typeof budgetSettingsSchema>;
+
+/** Whole months from `from` to `to` (YYYY-MM), 0 when the same. */
+export function monthsBetween(from: string, to: string): number {
+  const [fromYear = 0, fromIndex = 1] = from.split("-").map(Number);
+  const [toYear = 0, toIndex = 1] = to.split("-").map(Number);
+  return (toYear - fromYear) * 12 + (toIndex - fromIndex);
+}
+
+/**
+ * When a sinking fund's cost is next due as seen from `month`: its date, or for one
+ * that repeats, the first of its dates that isn't in a month before this one.
+ */
+export function goalDueDate(dueDate: string, everyMonths: number | null, month: string): string {
+  if (!everyMonths || monthOf(dueDate) >= month) return dueDate;
+  const behind = monthsBetween(monthOf(dueDate), month);
+  const steps = Math.ceil(behind / everyMonths);
+  const target = shiftMonth(monthOf(dueDate), steps * everyMonths);
+  // Keep the day, or the month's last day when it has fewer.
+  const day = Math.min(Number(dueDate.slice(8, 10)), Number(monthBounds(target).to.slice(8, 10)));
+  return `${target}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * What to set aside each month, from `month` through the due month, to have `goalCents`
+ * by then with `savedCents` already put by. Rounded up to whole dollars; 0 when it's
+ * already saved. A goal whose month has passed needs the rest now.
+ */
+export function neededMonthlyCents(
+  goalCents: number,
+  savedCents: number,
+  month: string,
+  dueDate: string,
+): number {
+  const rest = Math.max(0, goalCents - savedCents);
+  if (rest === 0) return 0;
+  const months = Math.max(1, monthsBetween(month, monthOf(dueDate)) + 1);
+  return Math.ceil(rest / months / 100) * 100;
+}

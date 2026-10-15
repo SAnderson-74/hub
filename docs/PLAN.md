@@ -100,11 +100,100 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 4.1 Business prep: phased checklist with costs, gear inventory, skills and certifications, rate calculator, leads, notes
 - [x] 4.2 Home Assistant: push a summary (study streak, today's tasks, upcoming dates) and reminders to Home Assistant webhooks
 - [x] 4.3 Reminder scheduler: daily digest, due soon, streak at risk
-- [ ] 4.4 Optional token-protected calendar feed (ICS)
-- [ ] 4.5 First-run setup (modules, time zone), module on/off setting, demo data with neutral examples
-- [ ] 4.6 Screenshots from demo data, docs polish, v1.0 release
+- [x] 4.4 Optional token-protected calendar feed (ICS)
+- [x] 4.5 First-run setup (modules, time zone), module on/off setting, demo data with neutral examples
+- [x] 4.6 Screenshots from demo data, docs polish, v1.0 release
+
+### Phase 5: Cards, rewards, and receipts
+
+- [x] 5.1 Cards: credit and debit cards on their accounts (last 4 digits only), the card each transaction was paid with, guessed from the account and the bank's text, and a card filter
+- [x] 5.2 Cash flow by payment method: which cards and accounts the spending went through
+- [x] 5.3 Rewards estimates: each card's earn rates (cash back or points) by category and by store, with optional dates and caps, and what it earned per month and year
+- [x] 5.4 Points and "worth it": point balances and redemptions for a real value per point, annual fees, and a comparison with a flat-rate card and with using the best card for each purchase
+- [x] 5.5 Split transactions: one charge in several categories, counted that way in budgets, cash flow, and rewards
+- [x] 5.6 Receipts: a `hub-receipt/v1` format from a Claude Project (see [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)), pasted into Hub, split by category, matched to the bank's transaction, and kept from counting twice when the bank file arrives
+- [x] 5.7 One Claude Project for every import: one paste box in Hub (Paste from Claude) that sends each format to its import, and the Project's instructions in Settings with a Copy button and a version, kept equal to [CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) by a test
+- [x] 5.8 Bank statements and transactions from the Claude Project: a `hub-statement/v1` format read from statements or app screenshots, imported like a bank file (duplicates by day and amount, receipt matching, the closing balance checked, undo), with long numbers hidden down to their last 4 digits
+- [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
+- [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
+- [x] 5.11 Tithing: a Tithing page (money in is tithed on by default, switchable per transaction or on a partial amount like a sale's profit or gross pay; donations are money-out transactions linked to the income they pay for; red until paid, green once paid), charts of owed and paid by month and income by source, a year summary, other funds (fast offering, other donations) kept apart, and a `hub-tithing/v1` format from the Claude Project for donation history and paychecks
+- [x] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
+- [x] 5.13 Search, sort, and filters on the Money transaction list and the Tithing lists (newest, oldest, largest or smallest amount; a range of amounts with a slider; dates with presets like 1 month and 1 year or a custom range; several categories), and income marked as paid without a payment, in bulk or through a date, for tithing paid before Hub tracked it
+
+### Phase 6: Groundwork, Home, and search
+
+- [x] 6.1 Finished tasks load a page at a time (newest first, from `GET /api/tasks/done`) instead of every finished task at once; Home asks only for today's
+- [x] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
+- [x] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
+- [x] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
+- [x] 6.5 Home widgets for every module (money this month, tithing unpaid or paid up, time today, resale stock and listings that have sat, business follow-ups), chosen and ordered in Settings
+- [x] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
+
+### Phase 7: Tasks and planning
+
+- [x] 7.1 Quick add in plain English ("Renew registration next Fri !high #car every year"), shown as chips before saving, also in the command menu and the Shortcuts endpoint
+- [x] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
+- [x] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
+
+### Phase 8: Money ahead
+
+- [x] 8.1 Bills, subscriptions, and repeating income: found from repeating transactions, confirmed, listed with the next date and amount, and the yearly cost of subscriptions
+- [x] 8.2 Bills on a calendar, alerts when one changes price or doesn't arrive, and reminders before each is due
+- [x] 8.3 Cash-flow forecast: each account's expected balance 30, 60, or 90 days ahead, with a warning before it runs low
+- [x] 8.4 Sinking funds for costs that come once or twice a year, and budgets that carry unspent money into the next month
+- [x] 8.5 Reimbursements and shared costs: the part owed back is matched to the repayment, counts only your share, and stays out of tithing
+- [x] 8.6 Spending insights: month over month and year over year by category and store, a year in review, and alerts when a category runs well above its usual
+- [x] 8.7 Debt payoff planner: snowball, avalanche, or your own order, with payoff dates, interest, and what extra payments change
+- [x] 8.8 Money health numbers (months of spending covered, savings rate) and a net-worth projection with what-if sliders
+
+### Phase 9: Habits, focus, resale, and goals
+
+- [x] 9.1 Push notifications on the phone's Home Screen app (Web Push): encrypted end to end, sent only to Apple's and other browsers' push services, counts only on the lock screen unless chosen, off until turned on per device
+- [x] 9.2 Habits: flexible schedules, check-ins, and a strength score that dips for a miss instead of resetting
+- [x] 9.3 Habits on Home, a heat map, reminders, and the study streak linked as a habit
+- [x] 9.4 Focus timer: work and break blocks on a task or course, saved as time entries
+- [x] 9.5 Inventory aging and stale listings: age groups, sell-through, days to sell, and suggestions to reprice or relist
+- [x] 9.6 Storage spots and SKUs for resale items, with printable labels
+- [x] 9.7 Goal pace: on track or behind, a projected finish date, what's needed each week, and check-in notes
+
+### Phase 10: Plan and review
+
+- [x] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
+- [x] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
+- [x] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
+- [x] 10.4 Undo for a few seconds after deleting a task, transaction, or item
 
 ## Import formats
+
+### `hub-tasks/v1`
+
+Produced by the Claude Project from notes, a to-do list, or a plan, and pasted into Tasks (the paste button) or Settings > Imports > Paste from Claude.
+
+```json
+{
+  "format": "hub-tasks/v1",
+  "projects": [{ "name": "Garage cleanup", "notes": "Before winter." }],
+  "tasks": [
+    {
+      "title": "Sort the shelves",
+      "project": "Garage cleanup",
+      "due": "2030-04-01",
+      "priority": "high",
+      "status": "todo",
+      "subtasks": ["Empty the top shelf", "Label the bins"]
+    }
+  ],
+  "goals": [
+    {
+      "title": "Run a 10K",
+      "targetDate": "2030-09-01",
+      "milestones": [{ "title": "Run 5K without stopping", "targetDate": "2030-05-01" }]
+    }
+  ]
+}
+```
+
+Up to 20 projects, 200 tasks (20 subtasks each), and 20 goals (20 milestones each). `priority` is `none`, `low`, `medium`, or `high`; `status` is `backlog`, `todo` (the default), or `doing`. A task's `project` is found by name (ignoring case) among projects that aren't archived, or made; left out, the task goes to the inbox. It's sent to `POST /api/tasks/import` (add `?dryRun=true` to preview), which adds everything in one transaction through the same services as adding by hand. An open task with the same title in the same project (or the inbox) and an active goal with the same title are skipped. Unreadable dates are left off, and text with a run of 9 or more digits is flagged in the preview but not changed.
 
 ### `hub-education/v1`
 
@@ -126,7 +215,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
           "plannedStart": "2030-01-01",
           "plannedEnd": "2030-03-15",
           "assessments": [
-            { "kind": "exam", "label": "Exam" },
+            { "kind": "exam", "label": "Exam", "dueOn": "2030-03-10" },
             { "kind": "project", "label": "Project" }
           ]
         }
@@ -136,11 +225,35 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 }
 ```
 
-`status` is one of `not_started`, `in_progress`, `passed`, `transferred`. `kind` is `exam`, `project`, or `other`; `label` is free text.
+`status` is one of `not_started`, `in_progress`, `passed`, `transferred`. `kind` is `exam`, `project`, or `other`; `label` is free text; `dueOn` (optional) is the due date. Assessments are matched by label within their course: new ones are added, and a date fills in one that has none (a date already in Hub stays).
+
+### `hub-inventory/v1`
+
+Produced by the Claude Project from photos or a list of things to sell, and pasted into Resale > Paste items (or Settings > Imports > Paste from Claude).
+
+```json
+{
+  "format": "hub-inventory/v1",
+  "items": [
+    {
+      "title": "Phone, 128 GB, blue",
+      "brand": "Example",
+      "model": "X1",
+      "condition": "used, small scratch on the back",
+      "category": "Phones",
+      "status": "acquired",
+      "purchase": { "price": 40, "date": "2030-01-10", "from": "Garage sale" },
+      "notes": "Charger included."
+    }
+  ]
+}
+```
+
+Up to 100 items. Only `title` is required; `status` is `acquired` (the default) or `repairing`. The browser turns each item into a row for `POST /api/resale/import` (brand and model go into the notes), so the server checks them like a spreadsheet's rows: an item with the same title, purchase date, and price as one in Hub is skipped, and one without a price paid or purchase date is flagged to review. Labeled serial, IMEI, and MEID numbers are removed from every field, and other runs of 9 or more digits are hidden down to their last 4.
 
 ### `hub-listing/v1`
 
-Produced by a writing assistant at the end of a listing, pasted into the app (or sent by a Shortcut).
+Produced by the Claude Project ([CLAUDE_PROJECT.md](CLAUDE_PROJECT.md)) or another writing assistant at the end of a listing, pasted into the app (or sent by a Shortcut).
 
 ```json
 {
@@ -155,6 +268,90 @@ Prices are in dollars in this format and stored as cents. Missing fields are all
 
 It's sent to `POST /api/resale/listing-import` (add `?dryRun=true` to preview). If exactly one unsold item has the same title, ignoring case, the listing is added to it; otherwise a new item is made. The answer includes a `message` sentence for a Shortcut to show.
 
+### `hub-receipt/v1`
+
+Produced by the Claude Project ([CLAUDE_PROJECT.md](CLAUDE_PROJECT.md) has its instructions) from receipt photos, and pasted into Money > Paste receipts.
+
+```json
+{
+  "format": "hub-receipt/v1",
+  "receipts": [
+    {
+      "store": "Example Store",
+      "date": "2030-03-10",
+      "total": 22.79,
+      "type": "purchase",
+      "cardLast4": "1234",
+      "items": [
+        { "name": "Bananas", "amount": 1.30, "category": "Groceries" },
+        { "name": "Paper towels", "amount": 20.00, "category": "Shopping" }
+      ],
+      "note": ""
+    }
+  ]
+}
+```
+
+Up to 50 receipts of up to 300 lines each. Amounts are dollars (numbers, or text like `"$12.50"`); a line's amount is negative for a coupon. `type` is `purchase` or `return`. `category` on the receipt is for one without lines. Unknown fields are ignored, and nothing is stored as pasted. A receipt is refused when `cardLast4` isn't exactly 4 digits, or its store, lines, or note have a run of 9 or more digits (the shape of a card or account number).
+
+It's sent to `POST /api/money/receipts` with the book, an account for receipts without a known card, a category for each name the book doesn't have, and receipts to leave out (add `?dryRun=true` to preview).
+
+### `hub-tithing/v1`
+
+Produced by the Claude Project from a church donation history, a donation receipt, or pay stubs, and pasted into Tithing (Paste from Claude) or Settings > Imports > Paste from Claude.
+
+```json
+{
+  "format": "hub-tithing/v1",
+  "payments": [
+    { "date": "2030-03-15", "amount": 250, "fund": "tithing" },
+    { "date": "2030-03-15", "amount": 40, "fund": "fast offering", "note": "Online" }
+  ],
+  "income": [
+    { "date": "2030-03-15", "source": "Example Employer", "deposit": 2000, "gross": 2600 }
+  ]
+}
+```
+
+Up to 200 payments and 200 paychecks. `fund` is read as tithing, fast offering, or other (the fund's own name is kept in the note). A payment is matched to a money-out transaction of the same amount from 2 days before to 7 days after its date, which then becomes the donation; with none, it's added to the account chosen in the preview, in a "Tithing and offerings" category. A payment Hub already has is skipped, counted, so two identical gifts both import once. A paycheck is matched to the money-in transaction of the same `deposit` within 2 days before to 4 days after, and its tithing base becomes `gross` (or ten times `tithing`); a paycheck with no deposit yet is listed so the statement can be imported first. Sent to `POST /api/tithing/imports` with the account and rows to leave out (add `?dryRun=true` to preview).
+
+### Transaction list filters
+
+`GET /api/money/transactions` also takes `sort` (`newest`, `oldest`, `largest`, `smallest`; size ignores money in or out), `minCents` and `maxCents` (an amount's size), `from` and `to` (both days included), and `categories` (ids, `none`, or `transfer`, separated by commas; `categoryId` still works for one). The answer's `largestCents` is the biggest amount in the book, for the slider's scale. The Tithing lists apply the same filters in the browser.
+
+### Repeat rules
+
+A task's `recurrence` (and later a bill's or a habit's schedule) is a JSON rule, worked out in `src/shared/recurrence.ts`:
+
+```json
+{ "frequency": "weekly", "interval": 1, "weekdays": [1, 3, 5], "until": "2030-12-31" }
+```
+
+`frequency` is `daily`, `weekly`, or `monthly`, and `interval` is every how many (1 to 99); yearly is `monthly` every 12. Optional: `weekdays` (weekly, 0 is Sunday), `monthWeek` (1 to 4, or -1 for the last) with `weekday` for "the 2nd Tuesday" (monthly), `onLastDay: true` (monthly), `from: "completion"` to count the next one from the day this one is done (not with set days), `until` (no repeats due after that date), and `left` (how many more after this one; 0 is the last). The next one is the first date in the schedule after the later of the due date and today, so finishing late never piles up copies. A build from before these fields still repeats every `interval` days, weeks, or months.
+
+### How tithing is figured
+
+Tithing is 10% of money in. A money-in transaction is tithed on by default, except transfers between accounts, money back into a spending category (a refund), and a repayment matched to money owed back. A sale linked to resale items is tithed on its profit: the sale less the items' prices and costs. Income can be marked as paid without a payment (`POST /api/tithing/settle` with `incomeIds`, or `through` a date, and `settled: false` to undo): it counts as paid, shows as "marked as paid", and nothing is added to Money, so balances stay as they are. A choice on a transaction (`PUT /api/tithing/income/:id`, or `tithing` with `POST`/`PATCH /api/money/transactions`) turns it off or sets the amount it's figured on. A donation is a money-out transaction with a fund (`donation` on a transaction, or `POST /api/tithing/payments`); tithing payments are linked to income with an amount each (`PUT /api/tithing/payments/:id`), and income is unpaid, partly paid, or paid by what's linked to it.
+
+### `hub-statement/v1`
+
+Produced by the Claude Project from a bank or card statement, or a screenshot of recent transactions, and pasted into Money > Import (or Settings > Imports > Paste from Claude).
+
+```json
+{
+  "format": "hub-statement/v1",
+  "account": { "last4": "1234" },
+  "period": { "start": "2030-03-01", "end": "2030-03-31" },
+  "closingBalance": -1520.40,
+  "transactions": [
+    { "date": "2030-03-02", "description": "EXAMPLE STORE 12", "amount": -64.80 },
+    { "date": "2030-03-05", "description": "PAYMENT THANK YOU", "amount": 500.00 }
+  ]
+}
+```
+
+Up to 1,000 transactions. Amounts are signed dollars as the account sees them (negative for money out); `closingBalance` is negative for money owed. `account.last4` picks the account when a card in the book has those digits, and is otherwise ignored. Runs of 9 or more digits in descriptions and memos are hidden down to their last 4 (`••6789`). The transactions go to `POST /api/money/imports` with `source: "statement"`, where a duplicate is the same day and amount (the Project's wording isn't the bank's), and the closing balance is checked when the period's end is given.
+
 ### Bank and card files
 
 Money > Import reads a file in the browser and sends clean transactions to `POST /api/money/imports` (add `?dryRun=true` to preview).
@@ -164,7 +361,17 @@ Money > Import reads a file in the browser and sends clean transactions to `POST
 - **Duplicates:** a transaction with the bank's id (OFX `FITID`) is skipped when the account already has that id, or has a matching transaction entered without one. Otherwise a match is the same day, amount, and payee (ignoring case and spacing), counted, so two identical purchases on one day both import once.
 - **Undo:** each import is listed under Recent imports; undoing it removes the transactions it added, including any edited since.
 - **Rules:** "payee contains X → category Y", optionally only for money in or out, optionally renaming the payee. Imports apply them in order (first match wins) to rows the file didn't categorize, and duplicate matching accepts either the file's payee or the rule's cleaner one.
-- **Budgets:** a spending category's monthly budget applies from the month it's set and carries on until a later month changes it (0 ends it), so past months keep the budget they had. Spending is money out in the category, less refunds; transfers never count.
+- **Budgets:** a spending category's monthly budget applies from the month it's set and carries on until a later month changes it (0 ends it), so past months keep the budget they had. Spending is money out in the category, less refunds; transfers never count. A category can carry what's left into the next month, counted from the month that was turned on; overspending doesn't carry. A sinking fund is a category saving up for a cost by a date (once, or again every 6 or 12 months): what's carried over is what's saved, and it suggests the monthly budget to get there, rounded up to whole dollars.
+- **Owed back:** part of a spending transaction can be marked as owed back by someone. Money in near it (a week before to six months after) is suggested as the repayment when it's within $1 of what's owed, or names the person and covers it. Matching puts the repayment in the original's category (its largest part's, when split) as a refund, so spending counts only your share, and keeps it out of tithing. One repayment can settle several claims, up to what it brought in.
+- **Habits:** a habit is meant for every day, some days of the week, or a number of times a week, and is checked off at most once a day. Strength is a running average that moves toward 100 for each scheduled day done and toward 0 for each one missed, so a miss dips it instead of resetting it: half of an old result fades in 13 checks for a daily habit, proportionally fewer for one on some days, and 4 weeks for a weekly one. Today never counts as a miss before it's over, and neither does a week before it ends. The study habit is checked off by itself on days with at least the study minimum on courses, the same days the study streak counts. A habit with a reminder time gets one reminder that day, at that time, while it's still to do.
+- **Focus:** work and break blocks run in the browser and survive a reload. Each finished work block is saved as a time entry (noted "Focus") on what was picked, so it counts toward the week and, on a course, the study streak. Stopping early saves what was done; breaks aren't logged.
+- **Debts:** credit cards and loans that owe money, each with its yearly rate and minimum payment. A plan pays every minimum, then the extra to the first debt in its order (smallest balance first, highest rate first, or your own); each debt paid off passes its minimum on, so the monthly total stays the same. Interest is added monthly at a twelfth of the rate. The plan is worked out in the browser, so moving the extra answers right away, and it stops at 50 years or when payments stop covering the interest.
+- **Money health:** months covered is checking, savings, and cash over average monthly spending; the savings rate is income less spending, over income. Both use the last six full months (fewer for a newer book), with spending and income figured as Insights does. The projection grows investment accounts at the chosen yearly return, compounded monthly, adds each month's saving to them, and leaves everything else as it is.
+- **Insights:** spending is money out less refunds in spending categories, plus uncategorized money out. Each category's usual is the middle of its six months before; it's running high at half again its usual and at least $50 more, with spending in at least three of those months. Stores are payee groups, the same as sorting uses.
+- **Cards:** a card belongs to the account it spends from (a credit card to its credit card account, a debit card to checking), and only its last 4 digits are kept. Imports pick a transaction's card from card digits in the bank's text ("x1234", "card ending in 1234"), or, when the account has one card, from the account itself (credit cards, except payments) or from card words like "debit card" and "POS" (checking). Adding a card or its digits matches past transactions the same way. Transfers never have a card. Cash flow can show money out by payment method: the card that paid, or the account when no card did, with refunds coming off the card or account they went back to, so the total matches the category view.
+- **Rewards:** a card's program is cash back (a percent) or points (per dollar, with a value per point), a base rate, and bonus rates. A bonus rate is for a store (text found in the payee or the bank's text, ignoring case and punctuation; commas separate spellings) or a spending category, and can have dates (a rotating quarterly bonus) and a cap (only the first so much spent, in its dates or each calendar year; past it, the base rate). Store rates are tried before category rates. Purchases earn and refunds take back; transfers and money in to income categories (like a statement credit) don't count. These are estimates from the card's transactions; the statement is the final word. Each card's annual fee is weighed against what it earned, and against a flat-rate card (2% unless changed) on the same spending. For points, statement balances and redemptions (points used and what they were worth) give the real value per point, which replaces the set value once there are any; between the last two statement balances, the change plus points used is checked against Hub's estimate. "Use the best card" compares each card purchase with the book's card that would have earned the most on it, ignoring caps.
+- **Splits:** one charge in several categories, like a store run that was partly groceries and partly household things. The parts each have a spending or income category and add up to the transaction, which shows its largest part's category (so lists, rules, and an older build after a rollback still see a sensible one). Budgets, cash flow, rewards, and the category filter count each part in its own category. Changing the amount means changing the parts with it; picking one category, or linking the transaction as a transfer, takes the split away.
+- **Receipts:** a receipt goes on the card with its last 4 digits (or the chosen account), and on a transaction there with the same amount dated from 2 days before to 7 days after it, closest first, that isn't a transfer and has no receipt. It adds the store's name (unless the payee was renamed), a memo listing the lines, the card, and the split by category (tax and discounts shared out in proportion). Without a match it adds a new transaction, which a bank file later fills in (the bank's date, id, and text) instead of adding again. The same store, date, and total twice in a book is a duplicate. Removing a receipt puts its transaction back how it was, or deletes the one it added unless a bank file has found it since.
 - **Transfers:** two linked transactions (money leaving one account, arriving in another) with no category, left out of money in and out. Hub suggests pairs from imports: the same amount out of one account and into another within four days, both uncategorized.
 
 ## Integrations
@@ -177,7 +384,7 @@ Money > Import reads a file in the browser and sends clean transactions to `POST
 
 - No personal details anywhere in the repository, commit metadata, or pull requests (see CLAUDE.md).
 - Commit with a GitHub-provided no-reply email.
-- Owner-specific settings (login, time zone, paths, keys) live only in the server's app configuration.
+- Owner-specific settings live in the server's app configuration (login, paths, keys) or in the database through Settings (time zone, modules), never in the repository.
 - Personal data files (imports, exports) never go in the repository; `private/` is ignored as a safety net.
 
 ## Known issues

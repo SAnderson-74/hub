@@ -7,9 +7,16 @@ import type {
   BankTransaction,
   StatementBalance,
 } from "../../shared/bankImport";
+import { guessCard } from "../../shared/cards";
 import { matchRule } from "../../shared/moneyRules";
 import { findPerson, memoWithPerson } from "../../shared/payees";
+import { maskLongNumbers } from "../../shared/statement";
+import { dropTithing } from "../tithing/transactionLinks";
+import { cardsOfAccount } from "./cards.service";
+import { dropSplits } from "./lines";
 import { requireAccount } from "./money.service";
+import { dropReimbursements } from "./owedLinks";
+import { dropReceipts, fitsReceipt, waitingReceipts } from "./receiptLinks";
 import { rulesForBook } from "./rules.service";
 import {
   moneyAccounts,
@@ -17,6 +24,7 @@ import {
   moneyCategories,
   moneyImportLayouts,
   moneyImports,
+  moneyReceipts,
   moneyTransactions,
 } from "./schema";
 
@@ -25,7 +33,7 @@ type ImportRow = typeof moneyImports.$inferSelect;
 export type ImportJson = {
   id: number;
   account: { id: number; name: string };
-  source: "csv" | "ofx";
+  source: "csv" | "ofx" | "statement";
   fileName: string;
   created: number;
   duplicates: number;
@@ -39,7 +47,7 @@ export type LayoutJson = BankLayout & { accountId: number | null };
 
 export type ImportInput = {
   accountId: number;
-  source: "csv" | "ofx";
+  source: "csv" | "ofx" | "statement";
   fileName: string;
   transactions: BankTransaction[];
   layout?: BankLayout;
@@ -49,6 +57,12 @@ export type ImportInput = {
 /** Same day, same amount, and the same payee ignoring case and spacing. */
 const matchKey = (row: { date: string; amountCents: number; payee: string }) =>
   `${row.date}|${row.amountCents}|${row.payee.trim().toLowerCase().replace(/\s+/g, " ")}`;
+
+/**
+ * Same day and amount. A statement read by the Claude Project words payees its own way,
+ * so they can't be compared with a bank file's.
+ */
+const looseKey = (row: { date: string; amountCents: number }) => `${row.date}|${row.amountCents}`;
 
 const take = (counts: Map<string, number>, key: string): boolean => {
   const left = counts.get(key) ?? 0;
@@ -76,14 +90,34 @@ const idKey = (externalId: string, amountCents: number) => `${externalId}|${amou
  * different transactions the same id, so an id alone never makes a duplicate. A dry
  * run says what would happen and changes nothing.
  */
-export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): BankImportResult {
+export function importBankFile(db: Db, given: ImportInput, dryRun: boolean): BankImportResult {
+  const pasted = given.source === "statement";
+  // Pasted text gets the same masking the browser gives it, in case it was skipped.
+  const input = pasted
+    ? {
+        ...given,
+        transactions: given.transactions.map((row) => ({
+          ...row,
+          payee: maskLongNumbers(row.payee),
+          memo: maskLongNumbers(row.memo),
+        })),
+      }
+    : given;
+  const keyOf = (row: { date: string; amountCents: number; payee: string }) =>
+    pasted ? looseKey(row) : matchKey(row);
   return db.transaction((tx) => {
     const account = requireAccount(tx, input.accountId, "body");
     const dates = input.transactions.map((row) => row.date).sort();
     const first = dates[0] ?? "";
     const last = dates.at(-1) ?? "";
+    // Transactions added from receipts before the bank had them: a row that fits one is
+    // the same purchase, so it fills in the bank's details instead of adding another.
+    // They're found that way rather than as duplicates.
+    const waiting = waitingReceipts(tx, account.id);
+    const fromReceipts = new Set(waiting.map((entry) => entry.transactionId));
     const nearby = tx
       .select({
+        id: moneyTransactions.id,
         date: moneyTransactions.date,
         amountCents: moneyTransactions.amountCents,
         payee: moneyTransactions.payee,
@@ -98,7 +132,8 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
           lte(moneyTransactions.date, last),
         ),
       )
-      .all();
+      .all()
+      .filter((row) => !fromReceipts.has(row.id));
     const knownIds = tally(
       tx
         .select({
@@ -115,7 +150,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     // A stored transaction matches by the bank's own payee when it has one, so renaming
     // it since doesn't make the same row import again.
     const storedKey = (row: (typeof nearby)[number]) =>
-      matchKey({ ...row, payee: row.bankPayee ?? row.payee });
+      keyOf({ ...row, payee: row.bankPayee ?? row.payee });
     const anyMatch = tally(nearby.map(storedKey));
     const matchWithoutId = tally(nearby.filter((row) => row.externalId === null).map(storedKey));
 
@@ -129,7 +164,16 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     );
     const unknownCategories = new Map<string, string>();
     const rules = rulesForBook(tx, account.bookId);
+    const cards = cardsOfAccount(tx, account.id);
     let categorizedByRules = 0;
+
+    const receiptMatches: Array<{
+      receiptId: number;
+      transactionId: number;
+      date: string;
+      externalId: string | null;
+      bankPayee: string;
+    }> = [];
 
     const rows: BankImportResult["rows"] = [];
     const toCreate: Array<typeof moneyTransactions.$inferInsert> = [];
@@ -138,8 +182,8 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       const person = findPerson(row.payee, row.memo, row.amountCents);
       const rule = matchRule(rules, { ...row, counterparty: person?.name ?? null });
       // An earlier import may have stored the rule's cleaner payee, so match either.
-      const keys = [matchKey(row)];
-      if (rule?.renameTo) keys.push(matchKey({ ...row, payee: rule.renameTo }));
+      const keys = [keyOf(row)];
+      if (rule?.renameTo) keys.push(keyOf({ ...row, payee: rule.renameTo }));
       const duplicate = row.externalId
         ? take(knownIds, idKey(row.externalId, row.amountCents)) ||
           keys.some((key) => take(matchWithoutId, key))
@@ -151,14 +195,31 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       // The file's own category wins; rules fill in the rest.
       const byRule = fileCategory === null && rule !== null && !duplicate;
       const payee = (byRule && rule?.renameTo ? rule.renameTo : row.payee).trim();
+      const receipt = duplicate
+        ? undefined
+        : waiting.find(
+            (entry) =>
+              fitsReceipt(row, entry) &&
+              !receiptMatches.some((match) => match.receiptId === entry.receiptId),
+          );
       rows.push({
         row: index + 1,
         date: row.date,
         amountCents: row.amountCents,
         payee,
-        outcome: duplicate ? "duplicate" : "create",
+        outcome: duplicate ? "duplicate" : receipt ? "receipt" : "create",
       });
       if (duplicate) return;
+      if (receipt) {
+        receiptMatches.push({
+          receiptId: receipt.receiptId,
+          transactionId: receipt.transactionId,
+          date: row.date,
+          externalId: row.externalId ?? null,
+          bankPayee: row.payee.trim(),
+        });
+        return;
+      }
 
       if (categoryName && fileCategory === null) {
         unknownCategories.set(categoryName.toLowerCase(), categoryName);
@@ -175,6 +236,7 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
         externalId: row.externalId ?? null,
         bankPayee: row.payee.trim(),
         counterparty: person?.name ?? null,
+        cardId: guessCard(account.kind, cards, row),
       });
     });
 
@@ -182,7 +244,8 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
     const result: BankImportResult = {
       importId: null,
       created: toCreate.length,
-      duplicates: rows.length - toCreate.length,
+      duplicates: rows.filter((row) => row.outcome === "duplicate").length,
+      matchedReceipts: receiptMatches.length,
       unknownCategories: [...unknownCategories.values()].sort(),
       categorizedByRules,
       rows,
@@ -207,6 +270,23 @@ export function importBankFile(db: Db, input: ImportInput, dryRun: boolean): Ban
       })
       .returning()
       .get();
+    for (const match of receiptMatches) {
+      tx.update(moneyTransactions)
+        // The bank's date and text, as if this file had added it, so the same file
+        // again finds it as a duplicate. The receipt keeps the day of the purchase.
+        .set({
+          date: match.date,
+          externalId: match.externalId,
+          bankPayee: match.bankPayee,
+          updatedAt: new Date(),
+        })
+        .where(eq(moneyTransactions.id, match.transactionId))
+        .run();
+      tx.update(moneyReceipts)
+        .set({ bankMatched: true, updatedAt: new Date() })
+        .where(eq(moneyReceipts.id, match.receiptId))
+        .run();
+    }
     // In batches, to stay under SQLite's limit on values in one statement.
     for (let start = 0; start < toCreate.length; start += 500) {
       tx.insert(moneyTransactions)
@@ -329,6 +409,10 @@ export function undoImport(db: Db, id: number): ImportJson {
         .where(inArray(moneyTransactions.transferPeerId, removing))
         .run();
     }
+    dropSplits(tx, removing);
+    dropReceipts(tx, removing);
+    dropTithing(tx, removing);
+    dropReimbursements(tx, removing);
     tx.delete(moneyTransactions).where(eq(moneyTransactions.importId, id)).run();
     const undone = tx
       .update(moneyImports)

@@ -110,7 +110,8 @@ export function pruneBackups(dir: string, keepDays: number, today: string): stri
 type SchedulerOptions = {
   sqlite: Sqlite;
   dir: string;
-  timeZone: string;
+  /** A function when it can change while running, like the time zone chosen in Settings. */
+  timeZone: string | (() => string);
   hour: number;
   keepDays: number;
   intervalMs?: number;
@@ -129,7 +130,8 @@ export function startBackupScheduler(options: SchedulerOptions): () => void {
 
   const tick = async () => {
     if (running) return;
-    const { date, hour: currentHour } = localDateParts(now(), timeZone);
+    const zone = typeof timeZone === "function" ? timeZone() : timeZone;
+    const { date, hour: currentHour } = localDateParts(now(), zone);
     if (currentHour < hour) return;
     const name = nightlyBackupName(date);
     if (listBackups(dir).some((b) => b.name === name)) return;

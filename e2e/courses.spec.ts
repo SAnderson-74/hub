@@ -97,7 +97,24 @@ test("a study plan imports and shows pacing", async ({ page }, testInfo) => {
   await expect(course.getByRole("status")).toHaveText("Course saved");
   await course.getByRole("checkbox", { name: "Exam" }).check();
   await expect(course.getByText("1 of 2 done")).toBeVisible();
+
+  // Dates: one for the project, and a new quiz added with its own.
+  await course.getByRole("button", { name: /change the date for Lab project/ }).click();
+  await course.getByLabel("Due date for Lab project").fill(day(5));
+  await course.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(
+    course.getByRole("button", { name: /change the date for Lab project/ }),
+  ).toContainText("Due");
+  await course.getByLabel("New assessment").fill("Quiz 1");
+  await course.getByLabel("Due date (optional)").fill(day(-1));
+  await course.getByRole("button", { name: "Add assessment" }).click();
+  await expect(course.getByRole("button", { name: /change the date for Quiz 1/ })).toContainText(
+    "Overdue",
+  );
   await course.getByRole("button", { name: "Close" }).click();
+  await expect(pacing.getByRole("button", { name: /Introduction to Networks/ })).toContainText(
+    "Quiz 1: Overdue",
+  );
 
   await expect(credits).toContainText("On pace: 3 of 6 credits, as planned.");
   await expect(pacing.getByRole("button", { name: /Introduction to Networks/ })).toContainText(

@@ -1,17 +1,29 @@
-import { ChevronRight, ClipboardPaste, FileUp, GraduationCap, Landmark } from "lucide-react";
+import {
+  ChevronRight,
+  ClipboardPaste,
+  FileUp,
+  GraduationCap,
+  HandCoins,
+  Landmark,
+  ReceiptText,
+  Sparkles,
+} from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { useNavigate } from "react-router";
 import { inputClass } from "../../../client/components/ui";
 import { useNow } from "../../../client/lib/useNow";
 import { ImportSheet as CoursesImportSheet } from "../../education/components/ImportSheet";
 import { ImportSheet as BankImportSheet } from "../../money/components/ImportSheet";
-import { useAccounts, useBooks } from "../../money/queries";
+import { ReceiptsSheet } from "../../money/components/ReceiptsSheet";
+import { useAccounts, useBooks, useCategories } from "../../money/queries";
 import { storedBookId } from "../../money/storedBook";
 import { ImportCsvSheet } from "../../resale/components/ImportCsvSheet";
 import { PasteListingSheet } from "../../resale/components/PasteListingSheet";
 import { localDate } from "../../tasks/dates";
+import { PasteTithingSheet } from "../../tithing/components/PasteTithingSheet";
+import { PasteSheet } from "./PasteSheet";
 
-type Open = "bank" | "resale" | "listing" | "courses" | null;
+type Open = "claude" | "bank" | "receipts" | "tithing" | "resale" | "listing" | "courses" | null;
 
 /** One import: what it takes and where it goes. Opens the same sheet as on its page. */
 function ImportRow({
@@ -65,6 +77,7 @@ export function ImportsPanel() {
   const [chosenId, setChosenId] = useState<number | null>(storedBookId);
   const book = active.find((item) => item.id === chosenId) ?? active[0] ?? null;
   const accounts = useAccounts(book?.id ?? null);
+  const categories = useCategories(book?.id ?? null);
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
   const close = () => setOpen(null);
@@ -76,10 +89,20 @@ export function ImportsPanel() {
       : accounts.isSuccess && openAccounts.length === 0
         ? `Add an account to ${book.name} in Money first.`
         : `CSV, OFX, or QFX from your bank or card, into ${book.name}.`;
+  const receiptsDetail =
+    book === null || (accounts.isSuccess && openAccounts.length === 0)
+      ? "Paste receipts from your Claude Project once Money has an account."
+      : `Paste receipts from your Claude Project, into ${book?.name ?? "Money"}.`;
 
   return (
     <>
       <ul className="space-y-2">
+        <ImportRow
+          icon={<Sparkles className="size-5" />}
+          title="Paste from Claude"
+          detail="Any answer from your Claude Project. Hub finds where it goes."
+          onOpen={() => setOpen("claude")}
+        />
         <ImportRow
           icon={<Landmark className="size-5" />}
           title="Bank or card transactions"
@@ -111,6 +134,19 @@ export function ImportsPanel() {
           ) : null}
         </ImportRow>
         <ImportRow
+          icon={<ReceiptText className="size-5" />}
+          title="Receipts"
+          detail={receiptsDetail}
+          disabled={book === null || openAccounts.length === 0}
+          onOpen={() => setOpen("receipts")}
+        />
+        <ImportRow
+          icon={<HandCoins className="size-5" />}
+          title="Tithing"
+          detail="Paste donations and paychecks from your Claude Project, into Tithing."
+          onOpen={() => setOpen("tithing")}
+        />
+        <ImportRow
           icon={<FileUp className="size-5" />}
           title="Resale items"
           detail="A CSV spreadsheet of items, into Resale."
@@ -140,6 +176,18 @@ export function ImportsPanel() {
           onClose={close}
         />
       ) : null}
+      {book ? (
+        <ReceiptsSheet
+          book={book}
+          accounts={allAccounts}
+          categories={categories.data ?? []}
+          today={today}
+          open={open === "receipts"}
+          onClose={close}
+        />
+      ) : null}
+      <PasteSheet open={open === "claude"} onClose={close} />
+      <PasteTithingSheet open={open === "tithing"} onClose={close} />
       <ImportCsvSheet open={open === "resale"} onClose={close} />
       <PasteListingSheet
         open={open === "listing"}

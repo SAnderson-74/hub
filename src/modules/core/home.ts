@@ -1,15 +1,13 @@
-import type { TaskStatus } from "../../shared/tasks";
+import { inToday, type Plannable } from "../../shared/smartLists";
 import { localDate } from "../tasks/dates";
 
 /** Plain string order. localeCompare would sort "~" (our "no date") before digits. */
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const NO_DATE = "~";
 
-type TaskLike = {
+type TaskLike = Plannable & {
   id: number;
-  status: TaskStatus;
   priority: number;
-  dueDate: string | null;
   completedAt: string | null;
   sortOrder: number;
 };
@@ -19,22 +17,19 @@ const dueBy = (task: TaskLike, today: string) =>
   task.dueDate !== null && task.dueDate <= today ? task.dueDate : NO_DATE;
 
 /**
- * What's on for today: open tasks that are due by today or in progress, then tasks
- * finished today. A task just ticked off has no completion time until the server
- * answers, so it counts as finished today.
+ * What's on for today, by the Today list's rule (src/shared/smartLists.ts), with
+ * "This evening" tasks last, then tasks finished today. A task just ticked off has no
+ * completion time until the server answers, so it counts as finished today.
  */
 export function todaysTasks<T extends TaskLike>(
   tasks: readonly T[],
   today: string,
 ): { open: T[]; done: T[] } {
   const open = tasks
-    .filter(
-      (task) =>
-        task.status !== "done" &&
-        ((task.dueDate !== null && task.dueDate <= today) || task.status === "doing"),
-    )
+    .filter((task) => inToday(task, today))
     .sort(
       (a, b) =>
+        Number(a.evening ?? false) - Number(b.evening ?? false) ||
         byText(dueBy(a, today), dueBy(b, today)) ||
         b.priority - a.priority ||
         a.sortOrder - b.sortOrder ||

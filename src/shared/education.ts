@@ -99,12 +99,21 @@ export const courseUpdateSchema = z
 export type CourseUpdate = z.infer<typeof courseUpdateSchema>;
 
 export const assessmentCreateSchema = z
-  .object({ kind: z.enum(ASSESSMENT_KINDS).optional(), label: name("assessment") })
+  .object({
+    kind: z.enum(ASSESSMENT_KINDS).optional(),
+    label: name("assessment"),
+    dueOn: date.nullable().optional(),
+  })
   .strict();
 export type AssessmentCreate = z.infer<typeof assessmentCreateSchema>;
 
 export const assessmentUpdateSchema = z
-  .object({ kind: z.enum(ASSESSMENT_KINDS), label: name("assessment"), done: z.boolean() })
+  .object({
+    kind: z.enum(ASSESSMENT_KINDS),
+    label: name("assessment"),
+    dueOn: date.nullable(),
+    done: z.boolean(),
+  })
   .partial()
   .strict();
 export type AssessmentUpdate = z.infer<typeof assessmentUpdateSchema>;
@@ -137,6 +146,7 @@ export const educationImportSchema = z.object({
                       z.object({
                         kind: z.enum(ASSESSMENT_KINDS).optional(),
                         label: name("assessment"),
+                        dueOn: date.optional(),
                       }),
                     )
                     .max(50)
@@ -166,6 +176,8 @@ export type ImportSummary = {
   coursesCreated: number;
   coursesUpdated: number;
   assessmentsAdded: number;
+  /** Assessments already in Hub without a date that the file gave one. */
+  assessmentsDated: number;
 };
 
 export type PacingState = "reached" | "ahead" | "on_pace" | "behind" | "early";

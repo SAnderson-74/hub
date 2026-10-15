@@ -1,5 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { defaultModules, type ModuleSettings } from "../../shared/modules";
+import { SEARCH_MIN_LENGTH } from "../../shared/search";
 import type { SettingsPatch } from "../../shared/settings";
+import type { SetupInput } from "../../shared/setup";
 import { api, toApiError } from "./api";
 
 export function useSystem() {
@@ -65,5 +68,63 @@ export function useRestoreBackup() {
       if (!res.ok) throw await toApiError(res);
       return (await res.json()) as { message: string };
     },
+  });
+}
+
+/** Whether first-run setup is needed, the server's time zone, and whether example data is in. */
+export function useSetup() {
+  return useQuery({
+    queryKey: ["setup"],
+    queryFn: async () => {
+      const res = await api.setup.$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+export function useFinishSetup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (json: SetupInput) => {
+      const res = await api.setup.$post({ json });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    // Everything may have changed: settings, the time zone, and example data.
+    onSuccess: () => void queryClient.invalidateQueries(),
+  });
+}
+
+export function useRemoveDemo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (_: undefined) => {
+      const res = await api.setup.demo.remove.$post();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: () => void queryClient.invalidateQueries(),
+  });
+}
+
+/** Which modules are on. All of them until settings load. */
+export function useModules(): ModuleSettings {
+  return useSettings().data?.modules ?? defaultModules;
+}
+
+/** Matches across modules for the command menu. Keeps the last results while typing. */
+export function useSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["search", q],
+    queryFn: async () => {
+      const res = await api.search.$get({ query: { q } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled: q.length >= SEARCH_MIN_LENGTH,
+    placeholderData: keepPreviousData,
+    staleTime: 10_000,
   });
 }

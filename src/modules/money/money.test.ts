@@ -306,3 +306,17 @@ describe("transactions", () => {
     expect((await t.api.money.transactions[":id"].$delete(param(spent.id))).status).toBe(404);
   });
 });
+
+describe("one transaction", () => {
+  it("comes back by id, so a link can open it", async () => {
+    const book = await addBook({ name: "Personal", kind: "personal" });
+    const account = await addAccount(book.id, "Checking");
+    const added = await addTransaction(account.id, -4218, { payee: "Corner Market" });
+    const found = await body(await t.api.money.transactions[":id"].$get(param(added.id)));
+    expect(found).toEqual(added);
+    expect(await failure(await t.api.money.transactions[":id"].$get(param(999)))).toEqual({
+      status: 404,
+      error: "That transaction doesn't exist. It may have been deleted.",
+    });
+  });
+});

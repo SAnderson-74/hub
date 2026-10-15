@@ -88,7 +88,7 @@ function nextSortOrder(db: Queryable): number {
   return (row?.last ?? 0) + 1;
 }
 
-export function createProject(db: Db, input: ProjectCreate, actor: string): ProjectJson {
+export function createProject(db: Queryable, input: ProjectCreate, actor: string): ProjectJson {
   return db.transaction((tx) => {
     const row = tx
       .insert(projects)

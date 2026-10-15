@@ -1,11 +1,15 @@
 import {
   Briefcase,
+  CalendarDays,
+  ClipboardCheck,
   GraduationCap,
+  HandCoins,
   House,
   Landmark,
   ListTodo,
   type LucideIcon,
   Package,
+  Repeat,
   Settings,
   Target,
   Timer,
@@ -17,11 +21,16 @@ import { DashboardPage } from "../modules/core/pages/DashboardPage";
 import { SettingsPage } from "../modules/core/pages/SettingsPage";
 import { CoursesPage } from "../modules/education/pages/CoursesPage";
 import { GoalsPage } from "../modules/goals/pages/GoalsPage";
+import { HabitsPage } from "../modules/habits/pages/HabitsPage";
 import { MoneyPage } from "../modules/money/pages/MoneyPage";
+import { CalendarPage } from "../modules/planner/pages/CalendarPage";
+import { ReviewPage } from "../modules/planner/pages/ReviewPage";
 import { ResalePage } from "../modules/resale/pages/ResalePage";
 import { TasksPage } from "../modules/tasks/pages/TasksPage";
 import { TaxesPage } from "../modules/taxes/pages/TaxesPage";
 import { TimePage } from "../modules/time/pages/TimePage";
+import { TithingPage } from "../modules/tithing/pages/TithingPage";
+import type { ModuleId } from "../shared/modules";
 
 export type AppPage = {
   id: string;
@@ -30,7 +39,11 @@ export type AppPage = {
   /** "/" for home, otherwise a single segment like "/tasks". */
   path: string;
   icon: LucideIcon;
+  /** The key after G that goes here, like "t" for G then T. */
+  key: string;
   element: ReactElement;
+  /** The module it belongs to, which Settings can turn off. Home, Calendar, Review, and Settings have none. */
+  module?: ModuleId;
 };
 
 /**
@@ -39,29 +52,117 @@ export type AppPage = {
  * (see src/client/lib/nav.ts).
  */
 export const appPages: AppPage[] = [
-  { id: "home", label: "Home", path: "/", icon: House, element: <DashboardPage /> },
-  { id: "tasks", label: "Tasks", path: "/tasks", icon: ListTodo, element: <TasksPage /> },
-  { id: "time", label: "Time", path: "/time", icon: Timer, element: <TimePage /> },
-  { id: "goals", label: "Goals", path: "/goals", icon: Target, element: <GoalsPage /> },
+  { id: "home", key: "h", label: "Home", path: "/", icon: House, element: <DashboardPage /> },
+  {
+    id: "tasks",
+    key: "t",
+    label: "Tasks",
+    path: "/tasks",
+    icon: ListTodo,
+    element: <TasksPage />,
+    module: "tasks",
+  },
+  {
+    id: "time",
+    key: "i",
+    label: "Time",
+    path: "/time",
+    icon: Timer,
+    element: <TimePage />,
+    module: "time",
+  },
+  {
+    id: "goals",
+    key: "g",
+    label: "Goals",
+    path: "/goals",
+    icon: Target,
+    element: <GoalsPage />,
+    module: "goals",
+  },
   {
     id: "courses",
+    key: "c",
+    module: "courses",
     label: "Courses",
     path: "/courses",
     icon: GraduationCap,
     element: <CoursesPage />,
   },
-  { id: "resale", label: "Resale", path: "/resale", icon: Package, element: <ResalePage /> },
-  { id: "money", label: "Money", path: "/money", icon: Wallet, element: <MoneyPage /> },
-  { id: "taxes", label: "Taxes", path: "/taxes", icon: Landmark, element: <TaxesPage /> },
+  {
+    id: "habits",
+    key: "a",
+    label: "Habits",
+    path: "/habits",
+    icon: Repeat,
+    element: <HabitsPage />,
+    module: "habits",
+  },
+  {
+    id: "resale",
+    key: "r",
+    label: "Resale",
+    path: "/resale",
+    icon: Package,
+    element: <ResalePage />,
+    module: "resale",
+  },
+  {
+    id: "money",
+    key: "m",
+    label: "Money",
+    path: "/money",
+    icon: Wallet,
+    element: <MoneyPage />,
+    module: "money",
+  },
+  {
+    id: "tithing",
+    key: "d",
+    label: "Tithing",
+    path: "/tithing",
+    icon: HandCoins,
+    element: <TithingPage />,
+    module: "tithing",
+  },
+  {
+    id: "taxes",
+    key: "x",
+    label: "Taxes",
+    path: "/taxes",
+    icon: Landmark,
+    element: <TaxesPage />,
+    module: "taxes",
+  },
   {
     id: "business",
+    key: "b",
+    module: "business",
     label: "Business",
     path: "/business",
     icon: Briefcase,
     element: <BusinessPage />,
   },
+  // Across every module, so they belong to none.
+  {
+    id: "calendar",
+    key: "l",
+    label: "Calendar",
+    path: "/calendar",
+    icon: CalendarDays,
+    element: <CalendarPage />,
+  },
+  {
+    id: "review",
+    key: "w",
+    label: "Review",
+    path: "/review",
+    icon: ClipboardCheck,
+    element: <ReviewPage />,
+  },
   {
     id: "settings",
+    key: "s",
     label: "Settings",
     path: "/settings",
     icon: Settings,

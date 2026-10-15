@@ -1,10 +1,17 @@
 import {
   ArrowLeftRight,
+  BadgePercent,
   BookOpen,
+  CalendarDays,
+  ChartLine,
   FileUp,
+  Landmark,
+  Lightbulb,
   List,
   PiggyBank,
   Plus,
+  ReceiptText,
+  SlidersHorizontal,
   Sparkles,
   Tags,
   TrendingUp,
@@ -12,26 +19,49 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
+  ghostButton,
   inputClass,
   labelClass,
   primaryButton,
   secondaryButton,
 } from "../../../client/components/ui";
+import { useModules } from "../../../client/lib/queries";
+import { useCommand, useOpenParam } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { ACCOUNT_KIND_LABELS, CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
+import { cardLabel } from "../../../shared/cards";
+import {
+  filterCount,
+  type ListFilters,
+  noFilters,
+  SORT_LABELS,
+  SORTS,
+  type Sort,
+} from "../../../shared/listFilter";
 import { formatCents } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
+import { FUND_LABELS } from "../../../shared/tithing";
 import { formatShortDate, localDate } from "../../tasks/dates";
+import { TithingBadge } from "../../tithing/components/TithingBadge";
 import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
+import { BillsView } from "../components/BillsView";
 import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
+import { DebtsView } from "../components/DebtsView";
+import { FilterSheet } from "../components/FilterSheet";
+import { ForecastView } from "../components/ForecastView";
 import { ImportSheet } from "../components/ImportSheet";
+import { InsightsView } from "../components/InsightsView";
 import { NetWorthView } from "../components/NetWorthView";
+import { OwedPanel } from "../components/OwedBack";
+import { ReceiptsSheet } from "../components/ReceiptsSheet";
+import { RewardsView } from "../components/RewardsView";
 import { RulesSheet } from "../components/RulesSheet";
 import { SortSheet } from "../components/SortSheet";
 import { TransactionSheet, type TransactionTarget } from "../components/TransactionSheet";
@@ -39,14 +69,17 @@ import { TransfersSheet } from "../components/TransfersSheet";
 import {
   type Account,
   type Book,
+  type Card,
   type Category,
   type Transaction,
   type TransactionFilters,
   useAccounts,
   useBooks,
+  useCards,
   useCategories,
   useCategorize,
   useRules,
+  useTransaction,
   useTransactions,
   useTransferSuggestions,
 } from "../queries";
@@ -54,8 +87,25 @@ import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget" | "net-worth";
-const VIEWS: readonly View[] = ["transactions", "budget", "net-worth"];
+type View =
+  | "transactions"
+  | "budget"
+  | "bills"
+  | "forecast"
+  | "insights"
+  | "debts"
+  | "rewards"
+  | "net-worth";
+const VIEWS: readonly View[] = [
+  "transactions",
+  "budget",
+  "bills",
+  "forecast",
+  "insights",
+  "debts",
+  "rewards",
+  "net-worth",
+];
 
 function storedView(): View {
   try {
@@ -83,6 +133,14 @@ export function MoneyPage() {
       // Private browsing; the choice still applies to this visit.
     }
   };
+  // A search result names its book (?book=2) so its transaction opens in the right one.
+  useOpenParam(
+    "book",
+    (id) => {
+      if (active.some((item) => item.id === id)) choose(id);
+    },
+    books.isSuccess,
+  );
 
   return (
     <>
@@ -142,10 +200,12 @@ function BookView({
   const today = localDate(useNow());
   const accounts = useAccounts(book.id);
   const categories = useCategories(book.id);
+  const cards = useCards(book.id);
   const [accountTarget, setAccountTarget] = useState<AccountTarget>(null);
   const [transactionTarget, setTransactionTarget] = useState<TransactionTarget>(null);
   const [managingCategories, setManagingCategories] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [pastingReceipts, setPastingReceipts] = useState(false);
   const [managingRules, setManagingRules] = useState(false);
   const [reviewingTransfers, setReviewingTransfers] = useState(false);
   const rules = useRules(book.id);
@@ -163,6 +223,49 @@ function BookView({
     }
   };
 
+  // Links from the command menu and search. A transaction link waits until its book
+  // is the one showing.
+  const [params] = useSearchParams();
+  const [linkedId, setLinkedId] = useState<number | null>(null);
+  const linked = useTransaction(linkedId);
+  useOpenParam("transaction", setLinkedId, !params.has("book"));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the linked transaction arrives
+  useEffect(() => {
+    if (linkedId === null || linked.isPending) return;
+    if (linked.data) {
+      chooseView("transactions");
+      setTransactionTarget(linked.data);
+    }
+    setLinkedId(null);
+  }, [linkedId, linked.isPending, linked.data]);
+  const accountsReady = accounts.isSuccess;
+  useCommand(
+    "add-transaction",
+    () => {
+      if (accounts.data?.some((account) => !account.archived)) setTransactionTarget("new");
+    },
+    accountsReady,
+  );
+  useCommand(
+    "import",
+    () => {
+      if (accounts.data?.some((account) => !account.archived)) setImporting(true);
+    },
+    accountsReady,
+  );
+  useCommand("budget", () => chooseView("budget"));
+  useCommand("rewards", () => chooseView("rewards"));
+  useCommand("net-worth", () => chooseView("net-worth"));
+  useCommand("bills", () => chooseView("bills"));
+  useCommand("forecast", () => chooseView("forecast"));
+  useCommand("insights", () => chooseView("insights"));
+  useCommand("debts", () => chooseView("debts"));
+  // From the weekly review: sort the uncategorized transactions.
+  useCommand("sort", () => {
+    chooseView("transactions");
+    setSortingOpen(true);
+  });
+
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
   // New transactions and imports go to the filtered account, or the first open one.
@@ -177,16 +280,22 @@ function BookView({
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+        {/* Four views can be wider than a phone; they scroll sideways there. */}
+        <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
           <legend className="sr-only">View</legend>
           {(
             [
               ["transactions", "Transactions", List],
               ["budget", "Budget", PiggyBank],
+              ["bills", "Bills", CalendarDays],
+              ["forecast", "Forecast", ChartLine],
+              ["insights", "Insights", Lightbulb],
+              ["debts", "Debts", Landmark],
+              ["rewards", "Rewards", BadgePercent],
               ["net-worth", "Net worth", TrendingUp],
             ] as const
           ).map(([value, label, Icon]) => (
-            <label key={value} className="relative">
+            <label key={value} className="relative shrink-0">
               <input
                 type="radio"
                 name="money-view"
@@ -195,8 +304,8 @@ function BookView({
                 onChange={() => chooseView(value)}
                 className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
               />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-                {/* Three views fit on a phone without icons. */}
+              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-2.5 text-[13px] font-semibold whitespace-nowrap text-muted sm:px-4 sm:text-sm peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                {/* Icons only where there's room for them. */}
                 <Icon aria-hidden="true" className="hidden size-4 sm:block" />
                 {label}
               </span>
@@ -241,6 +350,15 @@ function BookView({
           <FileUp aria-hidden="true" className="size-4" />
           Import
         </button>
+        <button
+          type="button"
+          className={secondaryButton}
+          disabled={openAccounts.length === 0}
+          onClick={() => setPastingReceipts(true)}
+        >
+          <ReceiptText aria-hidden="true" className="size-4" />
+          Paste receipts
+        </button>
         <button type="button" className={secondaryButton} onClick={() => setAccountTarget("new")}>
           <WalletCards aria-hidden="true" className="size-4" />
           Add account
@@ -265,6 +383,26 @@ function BookView({
 
       {view === "budget" ? (
         <BudgetView book={book} today={today} />
+      ) : view === "rewards" ? (
+        <RewardsView
+          book={book}
+          categories={categories.data ?? []}
+          today={today}
+          onAddAccount={() => setAccountTarget("new")}
+        />
+      ) : view === "bills" ? (
+        <BillsView
+          book={book}
+          accounts={allAccounts}
+          categories={categories.data ?? []}
+          today={today}
+        />
+      ) : view === "forecast" ? (
+        <ForecastView book={book} today={today} />
+      ) : view === "insights" ? (
+        <InsightsView book={book} today={today} />
+      ) : view === "debts" ? (
+        <DebtsView book={book} today={today} />
       ) : view === "net-worth" ? (
         <NetWorthView
           book={book}
@@ -288,14 +426,18 @@ function BookView({
         </Panel>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-          <AccountsPanel
-            accounts={allAccounts}
-            today={today}
-            onOpen={(account) => setAccountTarget(account)}
-          />
+          <div className="space-y-4 lg:col-span-4 lg:space-y-6">
+            <AccountsPanel
+              accounts={allAccounts}
+              today={today}
+              onOpen={(account) => setAccountTarget(account)}
+            />
+            <OwedPanel book={book} today={today} />
+          </div>
           <TransactionsPanel
             book={book}
             accounts={allAccounts}
+            cards={cards.data ?? []}
             categories={categories.data ?? []}
             today={today}
             accountFilter={accountFilter}
@@ -319,6 +461,7 @@ function BookView({
       <TransactionSheet
         target={transactionTarget}
         accounts={allAccounts}
+        cards={cards.data ?? []}
         categories={categories.data ?? []}
         rules={rules.data ?? []}
         defaultAccountId={defaultAccountId}
@@ -352,6 +495,14 @@ function BookView({
         open={importing}
         onClose={() => setImporting(false)}
       />
+      <ReceiptsSheet
+        book={book}
+        accounts={allAccounts}
+        categories={categories.data ?? []}
+        today={today}
+        open={pastingReceipts}
+        onClose={() => setPastingReceipts(false)}
+      />
       <CategoriesSheet
         book={book}
         open={managingCategories}
@@ -372,7 +523,7 @@ function AccountsPanel({
 }) {
   const net = netBalance(accounts);
   return (
-    <Panel title="Accounts" className="lg:col-span-4">
+    <Panel title="Accounts">
       <ul className="space-y-2">
         {accounts.map((account) => (
           <li key={account.id}>
@@ -426,6 +577,15 @@ function transferLabel(transaction: Transaction): string {
   return transaction.payee === label ? "Transfer" : label;
 }
 
+/** "Split: Groceries, Shopping", or "Split: Groceries, Shopping, and 2 more". */
+function splitLabel(transaction: Transaction): string {
+  const names = [
+    ...new Set(transaction.splits.map((part) => part.category?.name ?? "Uncategorized")),
+  ];
+  const shown = names.slice(0, 2).join(", ");
+  return names.length > 2 ? `Split: ${shown}, and ${names.length - 2} more` : `Split: ${shown}`;
+}
+
 /** "Resale: Desk lamp", or "Resale: 3 items" for a bulk lot. */
 function resaleLabel(transaction: Transaction): string {
   const [first, ...rest] = transaction.resaleItems;
@@ -465,6 +625,7 @@ function sortLine(toSort: {
 function TransactionsPanel({
   book,
   accounts,
+  cards,
   categories,
   today,
   accountFilter,
@@ -478,6 +639,7 @@ function TransactionsPanel({
 }: {
   book: Book;
   accounts: Account[];
+  cards: Card[];
   categories: Category[];
   today: string;
   accountFilter: number | undefined;
@@ -495,22 +657,47 @@ function TransactionsPanel({
   } | null;
   onSort: () => void;
 }) {
+  const tithingOn = useModules().tithing;
   const [categoryFilter, setCategoryFilter] = useState<TransactionFilters["categoryId"]>(undefined);
+  const [cardFilter, setCardFilter] = useState<TransactionFilters["cardId"]>(undefined);
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim());
+  const [sort, setSort] = useState<Sort>("newest");
+  const [listFilters, setListFilters] = useState<ListFilters>(noFilters);
+  const [filtering, setFiltering] = useState(false);
+  const extra = filterCount(listFilters);
   // "Show more" grows the page; a new filter starts from the first page again.
-  const filterKey = JSON.stringify([accountFilter, categoryFilter, q]);
+  const filterKey = JSON.stringify([
+    accountFilter,
+    cardFilter,
+    categoryFilter,
+    q,
+    sort,
+    listFilters,
+  ]);
   const [paging, setPaging] = useState({ key: filterKey, limit: PAGE_SIZE });
   const limit = paging.key === filterKey ? paging.limit : PAGE_SIZE;
   const filters: TransactionFilters = {
     accountId: accountFilter,
+    cardId: cardFilter,
     categoryId: categoryFilter,
     q: q || undefined,
+    categories: listFilters.categories,
+    from: listFilters.from || undefined,
+    to: listFilters.to || undefined,
+    minCents: listFilters.minDollars === null ? undefined : listFilters.minDollars * 100,
+    maxCents: listFilters.maxDollars === null ? undefined : listFilters.maxDollars * 100,
+    sort,
     limit,
   };
   const transactions = useTransactions(book.id, filters);
   const ids = useId();
-  const filtered = accountFilter !== undefined || categoryFilter !== undefined || q !== "";
+  const filtered =
+    accountFilter !== undefined ||
+    cardFilter !== undefined ||
+    categoryFilter !== undefined ||
+    q !== "" ||
+    extra > 0;
 
   const page = transactions.data;
   const count = (n: number) => `${n} ${n === 1 ? "transaction" : "transactions"}`;
@@ -520,22 +707,53 @@ function TransactionsPanel({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="min-w-0">
           <label htmlFor={`${ids}-account`} className={labelClass}>
-            Account
+            {cards.length > 0 ? "Account or card" : "Account"}
           </label>
           <select
             id={`${ids}-account`}
-            value={accountFilter ?? ""}
-            onChange={(event) =>
-              onAccountFilter(event.target.value === "" ? undefined : Number(event.target.value))
+            value={
+              cardFilter !== undefined
+                ? `card:${cardFilter}`
+                : accountFilter === undefined
+                  ? ""
+                  : `account:${accountFilter}`
             }
+            onChange={(event) => {
+              // "account:3", "card:5", or "card:none"; one replaces the other.
+              const [kind, value = ""] = event.target.value.split(":");
+              onAccountFilter(kind === "account" ? Number(value) : undefined);
+              setCardFilter(
+                kind === "card" ? (value === "none" ? "none" : Number(value)) : undefined,
+              );
+            }}
             className={inputClass}
           >
             <option value="">All accounts</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.archived ? `${account.name} (archived)` : account.name}
-              </option>
-            ))}
+            {cards.length > 0 ? (
+              <optgroup label="Accounts">
+                {accounts.map((account) => (
+                  <option key={account.id} value={`account:${account.id}`}>
+                    {account.archived ? `${account.name} (archived)` : account.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : (
+              accounts.map((account) => (
+                <option key={account.id} value={`account:${account.id}`}>
+                  {account.archived ? `${account.name} (archived)` : account.name}
+                </option>
+              ))
+            )}
+            {cards.length > 0 ? (
+              <optgroup label="Cards">
+                {cards.map((card) => (
+                  <option key={card.id} value={`card:${card.id}`}>
+                    {card.archived ? `${cardLabel(card)} (archived)` : cardLabel(card)}
+                  </option>
+                ))}
+                <option value="card:none">No card</option>
+              </optgroup>
+            ) : null}
           </select>
         </div>
         <div className="min-w-0">
@@ -544,9 +762,11 @@ function TransactionsPanel({
           </label>
           <select
             id={`${ids}-category`}
-            value={categoryFilter ?? ""}
+            value={listFilters.categories.length > 0 ? "many" : (categoryFilter ?? "")}
             onChange={(event) => {
               const value = event.target.value;
+              // Picking one category replaces any several picked in the filters.
+              setListFilters((current) => ({ ...current, categories: [] }));
               setCategoryFilter(
                 value === ""
                   ? undefined
@@ -558,6 +778,9 @@ function TransactionsPanel({
             className={inputClass}
           >
             <option value="">All categories</option>
+            {listFilters.categories.length > 0 ? (
+              <option value="many">{listFilters.categories.length} categories</option>
+            ) : null}
             <option value="none">Uncategorized</option>
             <option value="transfer">Transfers</option>
             {CATEGORY_KINDS.map((kind) => {
@@ -589,6 +812,58 @@ function TransactionsPanel({
           />
         </div>
       </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="min-w-0">
+          <label htmlFor={`${ids}-sort`} className={labelClass}>
+            Sort by
+          </label>
+          <select
+            id={`${ids}-sort`}
+            value={sort}
+            onChange={(event) => setSort(event.target.value as Sort)}
+            className={inputClass}
+          >
+            {SORTS.map((value) => (
+              <option key={value} value={value}>
+                {SORT_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end gap-2 sm:col-span-2">
+          <button type="button" className={secondaryButton} onClick={() => setFiltering(true)}>
+            <SlidersHorizontal aria-hidden="true" className="size-4" />
+            {extra > 0 ? `More filters (${extra})` : "More filters"}
+          </button>
+          {filtered ? (
+            <button
+              type="button"
+              className={ghostButton}
+              onClick={() => {
+                onAccountFilter(undefined);
+                setCardFilter(undefined);
+                setCategoryFilter(undefined);
+                setSearch("");
+                setSort("newest");
+                setListFilters(noFilters);
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <FilterSheet
+        open={filtering}
+        onClose={() => setFiltering(false)}
+        filters={listFilters}
+        onChange={setListFilters}
+        categories={categories}
+        largestCents={page?.largestCents ?? 0}
+        today={today}
+        matching={page?.total ?? null}
+      />
 
       {possibleTransfers > 0 ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
@@ -668,13 +943,37 @@ function TransactionsPanel({
                             : "",
                           transaction.transfer
                             ? transferLabel(transaction)
-                            : (transaction.category?.name ?? "Uncategorized"),
-                          accountFilter === undefined ? transaction.account.name : "",
+                            : transaction.splits.length > 0
+                              ? splitLabel(transaction)
+                              : (transaction.category?.name ?? "Uncategorized"),
+                          transaction.card
+                            ? transaction.card.name
+                            : accountFilter === undefined
+                              ? transaction.account.name
+                              : "",
                           resaleLabel(transaction),
+                          transaction.receipt ? "Receipt" : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
+                      {tithingOn &&
+                      transaction.tithing?.kind === "income" &&
+                      transaction.tithing.status ? (
+                        <span className="mt-0.5 block">
+                          <TithingBadge
+                            status={transaction.tithing.status}
+                            owedCents={transaction.tithing.owedCents}
+                            paidCents={transaction.tithing.paidCents}
+                            settled={transaction.tithing.settled}
+                          />
+                        </span>
+                      ) : null}
+                      {tithingOn && transaction.tithing?.kind === "payment" ? (
+                        <span className="mt-0.5 block text-sm font-semibold text-ok">
+                          {FUND_LABELS[transaction.tithing.fund]} payment
+                        </span>
+                      ) : null}
                     </span>
                     <span
                       className={`shrink-0 font-semibold tabular-nums ${

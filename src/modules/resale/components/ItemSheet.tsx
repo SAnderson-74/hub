@@ -22,7 +22,8 @@ import {
   type Item,
   type Platform,
   useCreateItem,
-  useDeleteItem,
+  useDeleteItemLater,
+  useItems,
   usePlatforms,
   useUpdateItem,
 } from "../queries";
@@ -48,7 +49,12 @@ type Draft = {
   salePrice: string;
   salePlatformId: string;
   buyerNotes: string;
+  sku: string;
+  spot: string;
 };
+
+/** A SKU from an item's number: "R-0042". */
+export const suggestedSku = (id: number) => `R-${String(id).padStart(4, "0")}`;
 
 function toDraft(item: Item | null): Draft {
   return {
@@ -65,6 +71,8 @@ function toDraft(item: Item | null): Draft {
     salePrice: item?.saleCents != null ? centsToInput(item.saleCents) : "",
     salePlatformId: item?.salePlatform ? String(item.salePlatform.id) : "",
     buyerNotes: item?.buyerNotes ?? "",
+    sku: item?.sku ?? "",
+    spot: item?.spot ?? "",
   };
 }
 
@@ -115,6 +123,9 @@ function ItemForm({
   onManagePlatforms: () => void;
 }) {
   const [draft, setDraft] = useState(() => toDraft(item));
+  // Places already used, to pick from.
+  const all = useItems();
+  const spots = [...new Set((all.data ?? []).map((row) => row.spot).filter(Boolean))].sort();
   // Adding a listing can change the status on the server (to listed). Follow it,
   // unless the status here was changed and not saved yet.
   const serverStatus = useRef(item?.status);
@@ -127,12 +138,11 @@ function ItemForm({
     );
   }, [item]);
   const [message, setMessage] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [tried, setTried] = useState(false);
   const platforms = usePlatforms();
   const create = useCreateItem();
   const update = useUpdateItem();
-  const remove = useDeleteItem();
+  const deleteLater = useDeleteItemLater();
   const ids = useId();
 
   const titleMissing = draft.title.trim() === "";
@@ -141,7 +151,7 @@ function ItemForm({
   const saleCents = draft.salePrice.trim() === "" ? null : parseDollars(draft.salePrice);
   const salePriceInvalid = draft.salePrice.trim() !== "" && saleCents === null;
   const blocked = titleMissing || priceInvalid || salePriceInvalid;
-  const error = create.error ?? update.error ?? remove.error;
+  const error = create.error ?? update.error;
   // Archived platforms stay selectable only for the item that already uses one.
   const choices = (platforms.data ?? []).filter(
     (platform: Platform) => !platform.archived || String(platform.id) === draft.platformId,
@@ -174,6 +184,8 @@ function ItemForm({
       saleCents,
       salePlatformId: draft.salePlatformId ? Number(draft.salePlatformId) : null,
       buyerNotes: draft.buyerNotes,
+      sku: draft.sku.trim() || null,
+      spot: draft.spot.trim(),
     };
     if (!item) {
       create.mutate(fields, { onSuccess: onDone });
@@ -283,6 +295,55 @@ function ItemForm({
             placeholder="Used, works"
             className={inputClass}
           />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0">
+            <label htmlFor={`${ids}-spot`} className={labelClass}>
+              Kept at
+            </label>
+            <input
+              id={`${ids}-spot`}
+              value={draft.spot}
+              onChange={(event) => set("spot", event.target.value)}
+              maxLength={60}
+              list={`${ids}-spots`}
+              placeholder="Garage shelf B"
+              className={inputClass}
+            />
+            <datalist id={`${ids}-spots`}>
+              {spots.map((spot) => (
+                <option key={spot} value={spot} />
+              ))}
+            </datalist>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor={`${ids}-sku`} className={labelClass}>
+              SKU
+            </label>
+            <div className="flex gap-2">
+              <input
+                id={`${ids}-sku`}
+                value={draft.sku}
+                onChange={(event) => set("sku", event.target.value.toUpperCase())}
+                maxLength={24}
+                autoComplete="off"
+                aria-describedby={`${ids}-sku-hint`}
+                className={`${inputClass} uppercase`}
+              />
+              {item && !draft.sku ? (
+                <button
+                  type="button"
+                  className={ghostButton}
+                  onClick={() => set("sku", suggestedSku(item.id))}
+                >
+                  Make one
+                </button>
+              ) : null}
+            </div>
+            <p id={`${ids}-sku-hint`} className="mt-1.5 text-sm text-muted">
+              For its label: letters, numbers, and dashes.
+            </p>
+          </div>
         </div>
 
         <fieldset
@@ -484,36 +545,21 @@ function ItemForm({
       {item ? <ItemTransactions item={item} /> : null}
       {item ? <SubjectTime subject={{ type: "resale_item", id: item.id }} /> : null}
       {item ? (
-        confirmDelete ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
-            <p className="font-semibold text-fg">
-              Delete this item? Its links and tags go with it. This can't be undone.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(item.id, { onSuccess: onDone })}
-                className="inline-flex h-11 items-center rounded-full bg-danger px-5 font-bold text-crust disabled:opacity-40"
-              >
-                Delete item
-              </button>
-              <button type="button" className={ghostButton} onClick={() => setConfirmDelete(false)}>
-                Keep item
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="border-t border-surface-0/70 pt-4">
-            <button
-              type="button"
-              className={`${dangerButton} -ml-4`}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete item
-            </button>
-          </div>
-        )
+        <div className="border-t border-surface-0/70 pt-4">
+          <button
+            type="button"
+            className={`${dangerButton} -ml-4`}
+            onClick={() => {
+              deleteLater(item);
+              onDone();
+            }}
+          >
+            Delete item
+          </button>
+          <p className="text-sm text-muted">
+            Its links and tags go with it. Undo is there for a few seconds.
+          </p>
+        </div>
       ) : null}
     </div>
   );

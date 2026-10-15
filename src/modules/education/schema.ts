@@ -45,7 +45,10 @@ export const courses = sqliteTable(
   (t) => [index("courses_term_idx").on(t.termId)],
 );
 
-/** Exams, projects, and other work a course needs. Deleted with their course. */
+/**
+ * Exams, projects, and other work a course needs, with an optional due date. Deleted
+ * with their course.
+ */
 export const assessments = sqliteTable(
   "assessments",
   {
@@ -55,6 +58,8 @@ export const assessments = sqliteTable(
       .references(() => courses.id, { onDelete: "cascade" }),
     kind: text("kind", { enum: ASSESSMENT_KINDS }).notNull().default("other"),
     label: text("label").notNull(),
+    /** When it's due, if it has a date. */
+    dueOn: text("due_on"),
     doneAt: integer("done_at", { mode: "timestamp_ms" }),
     ...timestamps(),
   },

@@ -250,3 +250,48 @@ describe("savings goals", () => {
     expect(await body(await getGoal(goal.id))).toMatchObject({ accounts: [], currentCents: 0 });
   });
 });
+
+describe("goal check-ins", () => {
+  it("note progress with a comment, for the goal's pace, and go with it", async () => {
+    const goal = await newGoal({
+      title: "Read 12 books",
+      progressMode: "manual",
+      manualPercent: 25,
+    });
+    const param = { param: { id: String(goal.id) } };
+    const checked = await body(
+      await t.api.goals[":id"].checkins.$post({ ...param, json: { note: "  Three done.  " } }),
+    );
+    expect(checked.checkins).toEqual([
+      {
+        id: expect.any(Number),
+        date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        percent: 25,
+        note: "Three done.",
+      },
+    ]);
+    const listed = await body(await t.api.goals.$get());
+    expect(listed.find((row) => row.id === goal.id)?.checkins).toHaveLength(1);
+    const checkinId = String(checked.checkins[0]?.id);
+    expect(
+      (
+        await body(
+          await t.api.goals[":id"].checkins[":checkinId"].$delete({
+            param: { id: String(goal.id), checkinId },
+          }),
+        )
+      ).checkins,
+    ).toEqual([]);
+    expect(
+      (
+        await failure(
+          await t.api.goals[":id"].checkins[":checkinId"].$delete({
+            param: { id: String(goal.id), checkinId },
+          }),
+        )
+      ).status,
+    ).toBe(404);
+    await t.api.goals[":id"].checkins.$post({ ...param, json: { note: "" } });
+    expect((await t.api.goals[":id"].$delete(param)).status).toBe(204);
+  });
+});

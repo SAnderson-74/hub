@@ -3,9 +3,12 @@ import {
   ChartColumn,
   ClipboardPaste,
   FileUp,
+  Hourglass,
   Package,
+  PackagePlus,
   Plus,
   Store,
+  Tag,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -14,15 +17,19 @@ import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
 import { primaryButton, secondaryButton } from "../../../client/components/ui";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { formatCents } from "../../../shared/money";
 import { formatSigned, itemProfit } from "../../../shared/profit";
 import { ITEM_STATUS_LABELS, ITEM_STATUSES, type ItemStatus } from "../../../shared/resale";
 import { formatMinutes } from "../../../shared/time";
 import { formatShortDate, localDate } from "../../tasks/dates";
+import { AgingView } from "../components/AgingView";
 import { BuyCalculator } from "../components/BuyCalculator";
 import { ImportCsvSheet } from "../components/ImportCsvSheet";
 import { ItemSheet } from "../components/ItemSheet";
+import { LabelsView } from "../components/LabelsView";
+import { PasteItemsSheet } from "../components/PasteItemsSheet";
 import { PasteListingSheet } from "../components/PasteListingSheet";
 import { PlatformsSheet } from "../components/PlatformsSheet";
 import { ProfitView } from "../components/ProfitView";
@@ -31,8 +38,8 @@ import { heldFor, STATUS_TONES, stockSummary } from "../stock";
 
 /** A status, everything, or the imported items flagged to review. */
 type Filter = "all" | "review" | ItemStatus;
-type View = "items" | "profit" | "calculator";
-const VIEWS: readonly View[] = ["items", "profit", "calculator"];
+type View = "items" | "aging" | "labels" | "profit" | "calculator";
+const VIEWS: readonly View[] = ["items", "aging", "labels", "profit", "calculator"];
 
 const VIEW_KEY = "hub.resale.view";
 
@@ -54,9 +61,13 @@ export function ResalePage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<View>(storedView);
   const [adding, setAdding] = useState(false);
+  useCommand("add-item", () => setAdding(true));
+  useCommand("resale-aging", () => setView("aging"));
+  useCommand("resale-labels", () => setView("labels"));
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const [pastingItems, setPastingItems] = useState(false);
   const openItemId = Number(params.get("item")) || null;
 
   const all = items.data ?? [];
@@ -93,16 +104,19 @@ export function ResalePage() {
       <PageHeader title="Resale" subtitle={items.data ? stockSummary(all) : undefined} />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+        {/* Five views are wider than a phone; they scroll sideways there. */}
+        <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
           <legend className="sr-only">View</legend>
           {(
             [
               ["items", "Items", Package],
+              ["aging", "Aging", Hourglass],
+              ["labels", "Labels", Tag],
               ["profit", "Profit", ChartColumn],
               ["calculator", "Calculator", Calculator],
             ] as const
           ).map(([value, label, Icon]) => (
-            <label key={value} className="relative">
+            <label key={value} className="relative shrink-0">
               <input
                 type="radio"
                 name="resale-view"
@@ -141,6 +155,10 @@ export function ResalePage() {
           <ClipboardPaste aria-hidden="true" className="size-4" />
           Paste listing
         </button>
+        <button type="button" className={secondaryButton} onClick={() => setPastingItems(true)}>
+          <PackagePlus aria-hidden="true" className="size-4" />
+          Paste items
+        </button>
       </div>
 
       {view === "calculator" ? (
@@ -168,10 +186,18 @@ export function ResalePage() {
               <FileUp aria-hidden="true" className="size-4" />
               Import a spreadsheet
             </button>
+            <button type="button" className={secondaryButton} onClick={() => setPastingItems(true)}>
+              <PackagePlus aria-hidden="true" className="size-4" />
+              Paste items from Claude
+            </button>
           </div>
         </Panel>
       ) : view === "profit" ? (
         <ProfitView items={all} today={today} onOpen={openItemSheet} />
+      ) : view === "aging" ? (
+        <AgingView items={all} today={today} onOpen={openItemSheet} />
+      ) : view === "labels" ? (
+        <LabelsView items={all} />
       ) : (
         <>
           <StatusFilter items={all} value={filter} onChange={setFilter} />
@@ -201,6 +227,7 @@ export function ResalePage() {
       />
       <PlatformsSheet open={managing} onClose={() => setManaging(false)} />
       <ImportCsvSheet open={importing} onClose={() => setImporting(false)} />
+      <PasteItemsSheet open={pastingItems} onClose={() => setPastingItems(false)} />
       <PasteListingSheet
         open={pasting}
         onClose={() => setPasting(false)}

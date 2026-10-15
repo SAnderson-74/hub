@@ -9,6 +9,7 @@ import {
 } from "../../../client/components/ui";
 import { PROJECT_KIND_LABELS, PROJECT_KINDS, type ProjectKind } from "../../../shared/tasks";
 import { type ProjectItem, useCreateProject, useDeleteProject, useUpdateProject } from "../queries";
+import { SaveTemplate } from "./TemplatesSheet";
 
 type ProjectSheetProps = {
   /** "new" to create a project, a project to edit it, or null when closed. */
@@ -118,6 +119,10 @@ function ProjectForm({
           {project ? "Save project" : "Create project"}
         </button>
       </form>
+
+      {project ? (
+        <SaveTemplate from={{ projectId: project.id }} defaultName={project.name} />
+      ) : null}
 
       {project ? (
         <div className="space-y-3 border-t border-surface-0/70 pt-5">

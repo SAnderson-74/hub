@@ -23,8 +23,15 @@ function format(isoDate: string, options: Intl.DateTimeFormatOptions): string {
 
 export type DueTone = "danger" | "warn" | "muted";
 
-/** A short due-date label, like "Due today", "Due Friday", or "Overdue, Sep 20". */
-export function describeDue(dueDate: string, today: string): { label: string; tone: DueTone } {
+/**
+ * A short due-date label, like "Due today", "Due Friday", or "Overdue, Sep 20". Something
+ * already done isn't overdue: it reads "Was due Sep 20".
+ */
+export function describeDue(
+  dueDate: string,
+  today: string,
+  options: { done?: boolean } = {},
+): { label: string; tone: DueTone } {
   const days = daysBetween(today, dueDate);
   const sameYear = dueDate.slice(0, 4) === today.slice(0, 4);
   const short = format(dueDate, {
@@ -32,6 +39,7 @@ export function describeDue(dueDate: string, today: string): { label: string; to
     day: "numeric",
     year: sameYear ? undefined : "numeric",
   });
+  if (days < 0 && options.done) return { label: `Was due ${short}`, tone: "muted" };
   if (days < 0) return { label: `Overdue, ${short}`, tone: "danger" };
   if (days === 0) return { label: "Due today", tone: "warn" };
   if (days === 1) return { label: "Due tomorrow", tone: "muted" };

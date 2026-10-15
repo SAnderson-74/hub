@@ -143,5 +143,65 @@ test("a repeating task comes back when it's completed", async ({ page }, testInf
   await expect(row).toContainText("Due");
   await page.locator("summary", { hasText: "Done" }).click();
   await expect(page.getByRole("checkbox", { name: "Water plants" })).toHaveCount(2);
+
+  // Set days, and a series that ends.
+  await newTask.fill("Take out the bins");
+  await newTask.press("Enter");
+  await todo.getByRole("button", { name: /^Take out the bins/ }).click();
+  await sheet.getByLabel("Repeat").selectOption({ label: "Weekly" });
+  await sheet.getByRole("button", { name: "Monday" }).click();
+  await sheet.getByRole("button", { name: "Thursday" }).click();
+  await expect(sheet.getByRole("button", { name: "Thursday" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await sheet.getByLabel("Ends").selectOption({ label: "After a number more" });
+  await sheet.getByLabel("How many more").fill("0");
+  await expect(
+    sheet.getByText("This is the last one; completing it ends the series."),
+  ).toBeVisible();
+  await sheet.getByRole("button", { name: "Save task" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Task saved");
+  await sheet.getByRole("button", { name: "Close" }).click();
+  const bins = todo.getByRole("button", { name: /^Take out the bins/ });
+  await expect(bins).toContainText("Weekly on Mon and Thu, last one");
+  await page.getByRole("checkbox", { name: "Take out the bins" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "That was the last “Take out the bins”" }),
+  ).toHaveCount(1);
+  await expect(todo.getByRole("button", { name: /^Take out the bins/ })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("finished tasks load a page at a time", async ({ page }, testInfo) => {
+  const res = await page.request.post("/api/projects", {
+    data: { name: `Chores ${testInfo.project.name} ${Date.now()}` },
+  });
+  const project = await res.json();
+  for (let n = 1; n <= 22; n += 1) {
+    const created = await page.request.post("/api/tasks", {
+      data: { title: `Chore ${n}`, projectId: project.id, status: "done" },
+    });
+    expect(created.ok()).toBe(true);
+  }
+  const errors = trackErrors(page);
+
+  await page.goto(`/tasks?project=${project.id}`);
+  await page.getByRole("radio", { name: "List" }).check();
+  const done = page.locator("details", { has: page.locator("summary", { hasText: "Done" }) });
+  await expect(done.locator("summary")).toContainText("22");
+  await done.locator("summary").click();
+  // The newest come first, 20 to a page.
+  await expect(done.getByRole("checkbox")).toHaveCount(20);
+  await expect(done.getByRole("checkbox").first()).toHaveAccessibleName("Chore 22");
+  await done.getByRole("button", { name: "Show 2 more" }).click();
+  await expect(done.getByRole("checkbox")).toHaveCount(22);
+  await expect(done.getByRole("button", { name: /Show \d+ more/ })).toBeHidden();
+
+  // Reopening one moves it back to To do right away.
+  await done.getByRole("checkbox", { name: "Chore 1", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "To do" }).getByRole("checkbox", { name: "Chore 1" }),
+  ).not.toBeChecked();
   expect(errors).toEqual([]);
 });

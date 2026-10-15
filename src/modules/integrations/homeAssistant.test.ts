@@ -60,6 +60,20 @@ describe("the summary", () => {
     await t.api.business.leads.$post({
       json: { name: "Closed one", status: "lost", nextStepOn: addDays(day, 2) },
     });
+    const [term] = await body(
+      await t.api.education.terms.$post({
+        json: { name: "Term 1", startDate: addDays(day, -30), endDate: addDays(day, 60) },
+      }),
+    );
+    const [withCourse] = await body(
+      await t.api.education.courses.$post({
+        json: { termId: term?.id ?? 0, title: "Statistics" },
+      }),
+    );
+    await t.api.education.courses[":id"].assessments.$post({
+      param: { id: String(withCourse?.courses[0]?.id) },
+      json: { kind: "exam", label: "Midterm", dueOn: addDays(day, 4) },
+    });
 
     const summary = summaryPayload(t.db, { timeZone: "UTC" });
     expect(summary).toMatchObject({
@@ -78,6 +92,7 @@ describe("the summary", () => {
       { date: addDays(day, 1), kind: "business_step", title: "Register the name" },
       { date: addDays(day, 2), kind: "lead", title: "Send a quote: Example Bakery" },
       { date: addDays(day, 3), kind: "task", title: "Book a dentist visit" },
+      { date: addDays(day, 4), kind: "assessment", title: "Midterm (Statistics)" },
       { date: addDays(day, 5), kind: "milestone", title: "First $500 (Emergency fund)" },
       { date: addDays(day, 10), kind: "goal", title: "Emergency fund" },
     ]);

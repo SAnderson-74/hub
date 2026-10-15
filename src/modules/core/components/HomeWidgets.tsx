@@ -13,7 +13,8 @@ import { useGoals } from "../../goals/queries";
 import { TaskCheckbox } from "../../tasks/components/TaskList";
 import { TaskMeta } from "../../tasks/components/TaskMeta";
 import { describeDue, formatShortDate } from "../../tasks/dates";
-import { type TaskItem, useTasks, useUpdateTask } from "../../tasks/queries";
+import { mergeTasks } from "../../tasks/ordering";
+import { type TaskItem, useTasks, useTasksDoneSince, useUpdateTask } from "../../tasks/queries";
 import { nextMilestones, todaySummary, todaysTasks } from "../home";
 
 /** How many open tasks and milestones Home shows before pointing to the full page. */
@@ -28,10 +29,16 @@ const rowClass =
 
 /** Open tasks due by today or in progress, with the ones finished today below. */
 export function TodayPanel({ today, className }: { today: string; className?: string }) {
-  const tasks = useTasks("all");
+  const openTasks = useTasks("all");
+  // Midnight on this device's calendar, the same day todaysTasks uses.
+  const doneToday = useTasksDoneSince(new Date(`${today}T00:00:00`).toISOString());
   const update = useUpdateTask();
   const [announcement, setAnnouncement] = useState("");
-  const { open, done } = todaysTasks(tasks.data ?? [], today);
+  const loaded =
+    openTasks.data && doneToday.data ? mergeTasks(openTasks.data, doneToday.data.tasks) : null;
+  const { open, done } = todaysTasks(loaded ?? [], today);
+  const error = openTasks.error ?? doneToday.error;
+  const retry = () => void Promise.all([openTasks.refetch(), doneToday.refetch()]);
 
   const toggle = (task: TaskItem, isDone: boolean) =>
     update
@@ -42,7 +49,7 @@ export function TodayPanel({ today, className }: { today: string; className?: st
   return (
     <Panel
       title="Today"
-      description={tasks.data ? todaySummary(open, done.length, today) : undefined}
+      description={loaded ? todaySummary(open, done.length, today) : undefined}
       action={
         <Link to="/tasks" className={ghostButton}>
           All tasks
@@ -50,10 +57,10 @@ export function TodayPanel({ today, className }: { today: string; className?: st
       }
       className={className}
     >
-      {tasks.isPending ? (
+      {error ? (
+        <ErrorNote error={error} onRetry={retry} />
+      ) : !loaded ? (
         <LoadingRows rows={3} />
-      ) : tasks.isError ? (
-        <ErrorNote error={tasks.error} onRetry={() => void tasks.refetch()} />
       ) : open.length === 0 && done.length === 0 ? (
         <p className="text-muted">
           Nothing due today. Tasks due today or earlier, and tasks in progress, show here.
@@ -87,6 +94,9 @@ export function TodayPanel({ today, className }: { today: string; className?: st
               </li>
             ))}
           </ul>
+          <Link to="/tasks?list=today&do=plan" className={`${ghostButton} mt-3 -ml-4`}>
+            Plan the day
+          </Link>
           {open.length > OPEN_SHOWN ? (
             <p className="mt-3 text-sm text-muted">
               {open.length - OPEN_SHOWN} more on the{" "}

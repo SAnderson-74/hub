@@ -1,15 +1,15 @@
-import { and, asc, count, eq, inArray, isNull, lte, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, lte, type SQL, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, notFound } from "../../server/errors";
 import {
   addDays,
   daysBetween,
   describeRecurrence,
-  nextDueDate,
+  nextInSeries,
   type Recurrence,
-  type RecurrenceFrequency,
 } from "../../shared/recurrence";
 import type {
+  DoneTaskQuery,
   TaskCreate,
   TaskListQuery,
   TaskPriority,
@@ -18,7 +18,7 @@ import type {
 } from "../../shared/tasks";
 import { changedFields, recordActivity } from "../core/activity.service";
 import { detachEntities } from "../core/entities";
-import { taggings, tags } from "../core/schema";
+import { links, taggings, tags } from "../core/schema";
 import { setTags, type TagJson, tagsFor } from "../core/tags.service";
 import { projects, tasks } from "./schema";
 
@@ -33,9 +33,18 @@ export type TaskJson = {
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string | null;
+  /** Not shown in Today or Anytime before this day. */
+  startDate: string | null;
+  someday: boolean;
+  evening: boolean;
+  /** Minutes it should take, for planning the day. */
+  estimateMinutes: number | null;
+  /** Tasks this one waits on, done ones included. While any is open, it's waiting. */
+  waitingOn: Array<{ id: number; title: string; done: boolean }>;
   sortOrder: number;
   completedAt: string | null;
-  recurrence: { frequency: RecurrenceFrequency; interval: number } | null;
+  /** The repeat rule as set; the server's own bookkeeping (the day of the month) left out. */
+  recurrence: Omit<Recurrence, "monthDay"> | null;
   createdAt: string;
   updatedAt: string;
   tags: TagJson[];
@@ -47,10 +56,117 @@ export type TaskDetailJson = TaskJson & { subtasks: TaskJson[] };
 
 const inOrder = [asc(tasks.sortOrder), asc(tasks.id)];
 
-/** Adds tags and subtask counts to task rows. */
+function withoutMonthDay({ monthDay: _kept, ...rule }: Recurrence): Omit<Recurrence, "monthDay"> {
+  return rule;
+}
+
+/** "A waits on B" is a link from B to A with this relation: B blocks A. */
+export const BLOCKS = "blocks";
+
+const blocksTask = and(
+  eq(links.relation, BLOCKS),
+  eq(links.fromType, "task"),
+  eq(links.toType, "task"),
+) as SQL;
+
+/** The tasks each of these waits on, in the order they were added. */
+function waitingOnFor(db: Queryable, ids: number[]): Map<number, TaskJson["waitingOn"]> {
+  const map = new Map<number, TaskJson["waitingOn"]>();
+  if (ids.length === 0) return map;
+  const rows = db
+    .select({ waiting: links.toId, id: tasks.id, title: tasks.title, status: tasks.status })
+    .from(links)
+    .innerJoin(tasks, eq(tasks.id, links.fromId))
+    .where(and(blocksTask, inArray(links.toId, ids)))
+    .orderBy(asc(links.id))
+    .all();
+  for (const row of rows) {
+    const list = map.get(row.waiting) ?? [];
+    list.push({ id: row.id, title: row.title, done: row.status === "done" });
+    map.set(row.waiting, list);
+  }
+  return map;
+}
+
+/**
+ * Replaces the tasks this one waits on. Returns their titles before and after, for
+ * the activity log.
+ */
+function setWaitingOn(
+  tx: Queryable,
+  id: number,
+  blockerIds: number[],
+): { before: string[]; after: string[] } {
+  const wanted = [...new Set(blockerIds)];
+  if (wanted.includes(id)) throw badRequest("A task can't wait on itself. Pick a different task.");
+  const found = new Map(
+    (wanted.length === 0
+      ? []
+      : tx
+          .select({ id: tasks.id, title: tasks.title })
+          .from(tasks)
+          .where(inArray(tasks.id, wanted))
+          .all()
+    ).map((row) => [row.id, row.title]),
+  );
+  if (found.size !== wanted.length) {
+    throw badRequest("A task it waits on doesn't exist. It may have been deleted.");
+  }
+  // A task waiting on this one can't also hold it up, or neither could ever start.
+  const loop = tx
+    .select({ id: links.id })
+    .from(links)
+    .where(and(blocksTask, eq(links.fromId, id), inArray(links.toId, wanted.length ? wanted : [0])))
+    .get();
+  if (loop) {
+    throw badRequest(
+      "Those tasks would wait on each other. Take one of them out of the other's list.",
+    );
+  }
+  const before = (waitingOnFor(tx, [id]).get(id) ?? []).map((item) => item.title);
+  tx.delete(links)
+    .where(and(blocksTask, eq(links.toId, id)))
+    .run();
+  const now = new Date();
+  for (const blocker of wanted) {
+    tx.insert(links)
+      .values({
+        fromType: "task",
+        fromId: blocker,
+        toType: "task",
+        toId: id,
+        relation: BLOCKS,
+        createdAt: now,
+      })
+      .run();
+  }
+  return { before, after: wanted.map((blocker) => found.get(blocker) ?? "") };
+}
+
+/** Tasks waiting on at least one task that isn't done. */
+export function waitingTaskIds(db: Queryable): Set<number> {
+  return new Set(
+    db
+      .select({ id: links.toId })
+      .from(links)
+      .innerJoin(tasks, eq(tasks.id, links.fromId))
+      .where(and(blocksTask, sql`${tasks.status} != 'done'`))
+      .all()
+      .map((row) => row.id),
+  );
+}
+
+function checkDates(startDate: string | null, dueDate: string | null) {
+  if (startDate && dueDate && startDate > dueDate) {
+    throw badRequest("The start date can't be after the due date. Move one of them.");
+  }
+}
+
+/** Adds tags, subtask counts, and what each waits on to task rows. */
 function withExtras(db: Queryable, rows: TaskRow[]): TaskJson[] {
   const ids = rows.map((row) => row.id);
   const tagMap = tagsFor(db, "task", ids);
+  const waits = waitingOnFor(db, ids);
   const counts = new Map(
     ids.length === 0
       ? []
@@ -75,11 +191,14 @@ function withExtras(db: Queryable, rows: TaskRow[]): TaskJson[] {
     status: row.status,
     priority: row.priority,
     dueDate: row.dueDate,
+    startDate: row.startDate,
+    someday: row.someday,
+    evening: row.evening,
+    estimateMinutes: row.estimateMinutes,
+    waitingOn: waits.get(row.id) ?? [],
     sortOrder: row.sortOrder,
     completedAt: row.completedAt?.toISOString() ?? null,
-    recurrence: row.recurrence
-      ? { frequency: row.recurrence.frequency, interval: row.recurrence.interval }
-      : null,
+    recurrence: row.recurrence ? withoutMonthDay(row.recurrence) : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     tags: tagMap.get(row.id) ?? [],
@@ -110,6 +229,59 @@ export function listTasks(db: Queryable, query: TaskListQuery): TaskJson[] {
     .orderBy(...inOrder)
     .all();
   return withExtras(db, rows);
+}
+
+export type DonePageJson = {
+  tasks: TaskJson[];
+  /** Every finished task matching the filters, not just this page. */
+  total: number;
+  /** Pass as `before` for the next page; null on the last one. */
+  next: string | null;
+};
+
+/**
+ * When a task was finished. Tasks marked done before completion times were kept fall
+ * back to their last change.
+ */
+const finishedAt = sql<number>`coalesce(${tasks.completedAt}, ${tasks.updatedAt})`;
+
+/** Finished top-level tasks, most recently finished first, a page at a time. */
+export function listDoneTasks(db: Queryable, query: DoneTaskQuery): DonePageJson {
+  const conditions: SQL[] = [isNull(tasks.parentId), eq(tasks.status, "done")];
+  if (query.projectId === "inbox") conditions.push(isNull(tasks.projectId));
+  else if (query.projectId !== undefined) conditions.push(eq(tasks.projectId, query.projectId));
+  if (query.since) conditions.push(sql`${finishedAt} >= ${query.since.getTime()}`);
+  const total =
+    db
+      .select({ total: count() })
+      .from(tasks)
+      .where(and(...conditions))
+      .get()?.total ?? 0;
+
+  const { before } = query;
+  if (before) {
+    conditions.push(
+      sql`(${finishedAt} < ${before.finishedMs} or (${finishedAt} = ${before.finishedMs} and ${tasks.id} < ${before.id}))`,
+    );
+  }
+  // One extra row says whether there's another page.
+  const rows = db
+    .select()
+    .from(tasks)
+    .where(and(...conditions))
+    .orderBy(desc(finishedAt), desc(tasks.id))
+    .limit(query.limit + 1)
+    .all();
+  const page = rows.slice(0, query.limit);
+  const last = page.at(-1);
+  return {
+    tasks: withExtras(db, page),
+    total,
+    next:
+      rows.length > query.limit && last
+        ? `${(last.completedAt ?? last.updatedAt).getTime()}-${last.id}`
+        : null,
+  };
 }
 
 function findTask(db: Queryable, id: number): TaskRow | undefined {
@@ -189,7 +361,7 @@ function placeTask(
   return { parentId: null, projectId: task.projectId };
 }
 
-export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetailJson {
+export function createTask(db: Queryable, input: TaskCreate, actor: string): TaskDetailJson {
   return db.transaction((tx) => {
     const place = placeTask(
       tx,
@@ -198,6 +370,7 @@ export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetail
     );
     const recurrence = input.recurrence ?? null;
     if (recurrence && place.parentId !== null) throw badRequest(SUBTASKS_DONT_REPEAT);
+    checkDates(input.startDate ?? null, input.dueDate ?? null);
     const status = input.status ?? "todo";
     const now = new Date();
     const row = tx
@@ -209,6 +382,10 @@ export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetail
         status,
         priority: input.priority ?? 0,
         dueDate: input.dueDate ?? null,
+        startDate: input.startDate ?? null,
+        someday: input.someday ?? false,
+        evening: input.evening ?? false,
+        estimateMinutes: input.estimateMinutes ?? null,
         sortOrder: nextSortOrder(tx),
         completedAt: status === "done" ? now : null,
         recurrence,
@@ -218,6 +395,7 @@ export function createTask(db: Db, input: TaskCreate, actor: string): TaskDetail
       .returning()
       .get();
     if (input.tags && input.tags.length > 0) setTags(tx, { type: "task", id: row.id }, input.tags);
+    if (input.waitingOn && input.waitingOn.length > 0) setWaitingOn(tx, row.id, input.waitingOn);
     recordActivity(tx, {
       entity: { type: "task", id: row.id },
       action: "created",
@@ -237,6 +415,10 @@ const tracked = (row: TaskRow) => ({
   status: row.status,
   priority: row.priority,
   dueDate: row.dueDate,
+  startDate: row.startDate,
+  someday: row.someday,
+  evening: row.evening,
+  estimateMinutes: row.estimateMinutes,
   projectId: row.projectId,
   parentId: row.parentId,
   repeat: row.recurrence ? describeRecurrence(row.recurrence) : null,
@@ -245,6 +427,7 @@ const tracked = (row: TaskRow) => ({
 /**
  * Creates the next task in a repeating series from one just completed: same title,
  * notes, priority, project, and tags, the subtasks reopened, and the next due date.
+ * Nothing when the series has ended (its end date passed, or none left).
  */
 function createNextInSeries(
   tx: Queryable,
@@ -254,10 +437,10 @@ function createNextInSeries(
   actor: string,
 ): void {
   const from = done.dueDate ?? today;
-  const dueDate = nextDueDate(rule, from, today);
+  const next = nextInSeries(rule, from, today);
+  if (!next) return;
+  const { dueDate } = next;
   const shift = daysBetween(from, dueDate);
-  const monthDay =
-    rule.frequency === "monthly" ? (rule.monthDay ?? Number(from.slice(8))) : undefined;
   const now = new Date();
   const copy = (source: TaskRow, parentId: number | null) =>
     tx
@@ -270,11 +453,12 @@ function createNextInSeries(
         status: "todo",
         priority: source.priority,
         dueDate: parentId === null ? dueDate : source.dueDate && addDays(source.dueDate, shift),
+        // The start date moves with the due date, so the gap between them stays.
+        startDate: source.startDate && addDays(source.startDate, shift),
+        evening: source.evening,
+        estimateMinutes: source.estimateMinutes,
         sortOrder: nextSortOrder(tx),
-        recurrence:
-          parentId === null
-            ? { frequency: rule.frequency, interval: rule.interval, ...(monthDay && { monthDay }) }
-            : null,
+        recurrence: parentId === null ? next.rule : null,
         createdAt: now,
         updatedAt: now,
       })
@@ -347,14 +531,27 @@ export function updateTask(
       status,
       priority: patch.priority ?? current.priority,
       dueDate: patch.dueDate !== undefined ? patch.dueDate : current.dueDate,
+      startDate: patch.startDate !== undefined ? patch.startDate : current.startDate,
+      someday: patch.someday ?? current.someday,
+      evening: patch.evening ?? current.evening,
+      estimateMinutes:
+        patch.estimateMinutes !== undefined ? patch.estimateMinutes : current.estimateMinutes,
       sortOrder: patch.sortOrder ?? current.sortOrder,
       completedAt,
       recurrence,
     };
+    checkDates(next.startDate, next.dueDate);
     const changes = changedFields(tracked(current), tracked(next));
     if (patch.tags) {
       const tagChange = setTags(tx, { type: "task", id }, patch.tags);
       Object.assign(changes, changedFields({ tags: tagChange.before }, { tags: tagChange.after }));
+    }
+    if (patch.waitingOn) {
+      const waiting = setWaitingOn(tx, id, patch.waitingOn);
+      Object.assign(
+        changes,
+        changedFields({ waitingOn: waiting.before }, { waitingOn: waiting.after }),
+      );
     }
     const recurrenceChanged = JSON.stringify(recurrence) !== JSON.stringify(current.recurrence);
     if (
@@ -379,6 +576,10 @@ export function updateTask(
         status: next.status,
         priority: next.priority,
         dueDate: next.dueDate,
+        startDate: next.startDate,
+        someday: next.someday,
+        evening: next.evening,
+        estimateMinutes: next.estimateMinutes,
         sortOrder: next.sortOrder,
         completedAt: next.completedAt,
         recurrence: completesSeries ? null : recurrence,

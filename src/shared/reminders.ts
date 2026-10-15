@@ -4,13 +4,14 @@ import { z } from "zod";
 // things coming due, and a nudge when the study streak would break. Each has its own
 // time, in Hub's time zone.
 
-export const REMINDER_KINDS = ["digest", "due_soon", "streak"] as const;
+export const REMINDER_KINDS = ["digest", "due_soon", "streak", "tithing"] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
 
 export const REMINDER_LABELS: Record<ReminderKind, string> = {
   digest: "Daily digest",
   due_soon: "Due soon",
   streak: "Study streak at risk",
+  tithing: "Tithing unpaid",
 };
 
 /** How far ahead "due soon" looks, in days. 0 is today only. */
@@ -37,6 +38,18 @@ export const remindersSchema = z
   })
   .strict();
 export type ReminderSettings = z.infer<typeof remindersSchema>;
+
+/**
+ * The tithing reminder, kept apart from `reminders` so an older build (whose reminder
+ * settings allow only the three above) still reads those after a rollback. Off until
+ * turned on.
+ */
+export const tithingReminderSchema = z.object(reminder).strict();
+export type TithingReminderSettings = z.infer<typeof tithingReminderSchema>;
+export const defaultTithingReminder: TithingReminderSettings = { enabled: false, time: "19:00" };
+
+/** While tithing stays unpaid and no new income comes in, it's reminded this often. */
+export const TITHING_REPEAT_DAYS = 7;
 
 export const defaultReminders: ReminderSettings = {
   digest: { enabled: true, time: "07:30" },

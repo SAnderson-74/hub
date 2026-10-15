@@ -1,7 +1,8 @@
-// Starts the production build with a throwaway database for Playwright.
+// Starts the production build with a throwaway database for Playwright, and for
+// screenshots (which use their own folder).
 import { rmSync } from "node:fs";
 
-const dataDir = ".e2e-data";
+const dataDir = process.env.HUB_E2E_DATA_DIR ?? ".e2e-data";
 rmSync(dataDir, { recursive: true, force: true });
 
 Object.assign(process.env, {

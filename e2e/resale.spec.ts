@@ -231,7 +231,7 @@ test("a pasted listing adds an item, and a Shortcut can add another listing", as
   const sheet = page.getByRole("dialog", { name: "Paste a listing" });
   await sheet.getByLabel("Listing").fill("{ not json");
   await sheet.getByRole("button", { name: "Check listing" }).click();
-  await expect(sheet.getByRole("alert")).toContainText("That isn't valid JSON.");
+  await expect(sheet.getByRole("alert")).toContainText("Copy its whole answer.");
   await sheet.getByLabel("Listing").fill(JSON.stringify(listing));
   await sheet.getByRole("button", { name: "Check listing" }).click();
   await expect(sheet).toContainText(`A new item: ${title}`);
@@ -417,6 +417,80 @@ test("an item's purchase and sale link to transactions in Money", async ({ page 
   await transaction.getByRole("link", { name: `Desk lamp ${id}` }).click();
   await expect(page).toHaveURL(new RegExp(`/resale\\?item=${item.id}`));
   await expect(page.getByRole("dialog", { name: "Item" })).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test("items get a SKU and a spot, show on aging, and print as labels", async ({
+  page,
+}, testInfo) => {
+  const id = `${testInfo.project.name} ${Date.now() % 100000}`;
+  const title = `Typewriter ${id}`;
+  const spot = `Shelf ${id}`;
+  const errors = trackErrors(page);
+  // Counts prints instead of opening the print dialog.
+  await page.addInitScript(() => {
+    window.print = () => {
+      (window as unknown as { printed: number }).printed =
+        ((window as unknown as { printed?: number }).printed ?? 0) + 1;
+    };
+  });
+
+  // Bought long ago and never listed.
+  const made = await page.request.post("/api/resale/items", {
+    data: { title, purchasedOn: "2020-01-01", purchaseCents: 1_500 },
+  });
+  expect(made.status()).toBe(201);
+  const item = (await made.json()) as { id: number };
+  const sku = `R-${String(item.id).padStart(4, "0")}`;
+
+  // A SKU made from its number, and where it's kept.
+  await page.goto(`/resale?item=${item.id}`);
+  const sheet = page.getByRole("dialog", { name: "Item" });
+  await sheet.getByRole("button", { name: "Make one" }).click();
+  await expect(sheet.getByLabel("SKU")).toHaveValue(sku);
+  await sheet.getByLabel("Kept at").fill(spot);
+  await sheet.getByRole("button", { name: "Save item" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Item saved");
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toBeHidden();
+
+  // Another item can't take the same SKU.
+  const clash = await page.request.post("/api/resale/items", {
+    data: { title: `Second ${title}`, sku: sku.toLowerCase() },
+  });
+  expect(clash.status()).toBe(409);
+  expect((await clash.json()).error).toBe(`${title} already has the SKU ${sku}. Pick another.`);
+
+  // Aging says to list it, and opens it.
+  await page.getByRole("radio", { name: "Aging" }).check();
+  await expect(page.getByRole("region", { name: "Age of stock" })).toContainText("Over 180 days");
+  const suggestion = page
+    .getByRole("region", { name: "What to do" })
+    .getByRole("button", { name: new RegExp(title) });
+  await expect(suggestion).toContainText("List it");
+  await expect(suggestion).toContainText(/In stock \d+ days and not listed/);
+  await suggestion.click();
+  await expect(sheet.getByLabel("Title")).toHaveValue(title);
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  // Labels: only the spot's items, then the label with its barcode, then print.
+  await page.getByRole("radio", { name: "Labels" }).check();
+  const pick = page.getByRole("region", { name: "Pick items" });
+  await pick.getByLabel("Kept at").selectOption(spot);
+  await expect(pick.getByRole("button", { name: "Pick all 1" })).toBeVisible();
+  const labels = page.getByRole("region", { name: "Labels" });
+  await expect(labels.getByRole("button", { name: "Print labels" })).toBeDisabled();
+  await pick.getByRole("checkbox", { name: new RegExp(title) }).check();
+  await expect(labels).toContainText("1 label.");
+  await expect(labels.getByRole("img", { name: `Barcode for ${sku}` })).toBeVisible();
+  await expect(labels).toContainText(spot);
+  await labels.getByRole("button", { name: "Print labels" }).click();
+  expect(await page.evaluate(() => (window as unknown as { printed?: number }).printed)).toBe(1);
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

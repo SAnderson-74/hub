@@ -1,4 +1,4 @@
-import type { Db } from "../../server/db/client";
+import type { Db, Queryable } from "../../server/db/client";
 import {
   defaultSettings,
   type Settings,
@@ -8,7 +8,7 @@ import {
 import { settings } from "./schema";
 
 /** Stored settings merged over defaults. Invalid stored values fall back to their default. */
-export function readSettings(db: Db): Settings {
+export function readSettings(db: Queryable): Settings {
   const stored = new Map(
     db
       .select()

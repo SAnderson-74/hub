@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { SORTS } from "./listFilter";
 import { RULE_DIRECTIONS } from "./moneyRules";
+import { FUNDS, incomeSetSchema } from "./tithing";
 
 // Books in the accounting sense: a set of accounts, categories, and transactions
 // kept apart from the others, like personal money and a small business.
@@ -155,6 +157,16 @@ export const bookQuerySchema = z.object({ bookId: z.coerce.number().int().positi
 
 // Transactions
 
+/** One part of a split transaction. Parts go the same way as the transaction and add up to it. */
+export const splitSchema = z
+  .object({
+    categoryId: id,
+    amountCents: signedCents.refine((value) => value !== 0, "Give each part an amount."),
+    memo: z.string().trim().max(200, "Keep part notes under 200 characters.").default(""),
+  })
+  .strict();
+export type SplitInput = z.input<typeof splitSchema>;
+
 const transactionFields = {
   accountId: id,
   date,
@@ -171,6 +183,21 @@ const transactionFields = {
     .max(120, "Keep names under 120 characters.")
     .transform((value) => value || null)
     .nullable(),
+  /** One of the account's cards, or null for none. Left out of a new one, it's guessed. */
+  cardId: id.nullable(),
+  /**
+   * Its parts, when one charge was for several categories; null takes the split away.
+   * The transaction's category becomes its largest part's.
+   */
+  splits: z
+    .array(splitSchema)
+    .min(2, "Split into at least two parts, or don't split.")
+    .max(30, "Keep it to 30 parts.")
+    .nullable(),
+  /** Tithing on money in: whether it applies, and the amount it's figured on. */
+  tithing: incomeSetSchema,
+  /** The fund a money-out transaction was given to, or null when it isn't a donation. */
+  donation: z.enum(FUNDS).nullable(),
 };
 
 export const transactionCreateSchema = z
@@ -185,8 +212,8 @@ export type TransactionUpdate = z.infer<typeof transactionUpdateSchema>;
 
 /**
  * A book's transactions, newest first, a page at a time. `categoryId=none` finds
- * uncategorized ones (not transfers), `categoryId=transfer` finds transfers, and `q`
- * searches payees and memos.
+ * uncategorized ones (not transfers), `categoryId=transfer` finds transfers, `cardId`
+ * finds what a card paid for, and `q` searches payees and memos.
  */
 export const transactionQuerySchema = z.object({
   bookId: z.coerce.number().int().positive(),
@@ -194,8 +221,32 @@ export const transactionQuerySchema = z.object({
   categoryId: z
     .union([z.literal("none"), z.literal("transfer"), z.coerce.number().int().positive()])
     .optional(),
+  /** A card id, or "none" for transactions without one. */
+  cardId: z.union([z.literal("none"), z.coerce.number().int().positive()]).optional(),
+  /**
+   * Several categories at once, as ids separated by commas, with "none" for
+   * uncategorized and "transfer" for transfers: "3,7,none". Replaces `categoryId`.
+   */
+  categories: z
+    .string()
+    .max(500, "Pick fewer categories.")
+    .transform((value, context) => {
+      const picked: Array<number | "none" | "transfer"> = [];
+      for (const part of value.split(",").filter(Boolean)) {
+        const number = Number(part);
+        if (part === "none" || part === "transfer") picked.push(part);
+        else if (Number.isInteger(number) && number > 0) picked.push(number);
+        else context.addIssue({ code: "custom", message: `"${part}" isn't a category.` });
+      }
+      return picked;
+    })
+    .optional(),
   from: date.optional(),
   to: date.optional(),
+  /** Only amounts of at least / at most this size, money in or out. */
+  minCents: z.coerce.number().int().min(0).max(10_000_000_000).optional(),
+  maxCents: z.coerce.number().int().min(0).max(10_000_000_000).optional(),
+  sort: z.enum(SORTS).default("newest"),
   q: z.string().trim().max(100, "Search for under 100 characters.").optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),

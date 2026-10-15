@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import { deleteLater } from "../../client/lib/undo";
 import type { BankImport } from "../../shared/bankImport";
+import type { BillCreate, BillDismiss, BillUpdate } from "../../shared/bills";
 import type {
   AccountCreate,
   AccountUpdate,
@@ -14,9 +16,15 @@ import type {
   TransactionUpdate,
   TransferCreate,
 } from "../../shared/books";
-import type { BudgetSet } from "../../shared/budget";
-import type { CashFlowPeriod } from "../../shared/cashFlow";
+import type { BudgetSet, BudgetSettingsSet } from "../../shared/budget";
+import type { CardCreate, CardUpdate } from "../../shared/cards";
+import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
+import type { DebtPlanSet, DebtTerms } from "../../shared/debt";
+import type { Sort } from "../../shared/listFilter";
+import type { OwedCreate } from "../../shared/owed";
+import type { ReceiptImportInput } from "../../shared/receipts";
+import type { PointBalanceSave, RedemptionSave, RewardsSave } from "../../shared/rewards";
 
 async function fetchBooks() {
   const res = await api.money.books.$get();
@@ -40,7 +48,17 @@ export type TransactionFilters = {
   accountId?: number;
   /** A category id, "none" for uncategorized, or "transfer" for transfers. */
   categoryId?: number | "none" | "transfer";
+  /** A card id, or "none" for transactions without a card. */
+  cardId?: number | "none";
   q?: string;
+  /** Several categories at once: ids, "none", or "transfer". Used instead of categoryId. */
+  categories?: string[];
+  from?: string;
+  to?: string;
+  /** Limits on an amount's size in cents, money in or out. */
+  minCents?: number;
+  maxCents?: number;
+  sort?: Sort;
   limit: number;
 };
 
@@ -51,7 +69,16 @@ async function fetchTransactions(bookId: number, filters: TransactionFilters) {
       limit: String(filters.limit),
       ...(filters.accountId === undefined ? {} : { accountId: String(filters.accountId) }),
       ...(filters.categoryId === undefined ? {} : { categoryId: String(filters.categoryId) }),
+      ...(filters.cardId === undefined ? {} : { cardId: String(filters.cardId) }),
       ...(filters.q ? { q: filters.q } : {}),
+      ...(filters.categories && filters.categories.length > 0
+        ? { categories: filters.categories.join(",") }
+        : {}),
+      ...(filters.from ? { from: filters.from } : {}),
+      ...(filters.to ? { to: filters.to } : {}),
+      ...(filters.minCents === undefined ? {} : { minCents: String(filters.minCents) }),
+      ...(filters.maxCents === undefined ? {} : { maxCents: String(filters.maxCents) }),
+      ...(filters.sort && filters.sort !== "newest" ? { sort: filters.sort } : {}),
     },
   });
   if (!res.ok) throw await toApiError(res);
@@ -105,6 +132,19 @@ export function useTransactions(bookId: number | null, filters: TransactionFilte
   });
 }
 
+/** One transaction, for links that open it (search results). */
+export function useTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ["money", "transaction", id ?? 0],
+    queryFn: async () => {
+      const res = await api.money.transactions[":id"].$get({ param: { id: String(id ?? 0) } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled: id !== null,
+  });
+}
+
 /**
  * Any money write can change balances, counts, and lists across a book, so each
  * refreshes everything under "money". It's one person's data; that's cheap.
@@ -125,6 +165,7 @@ function refreshMoney(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: keys.all });
   void queryClient.invalidateQueries({ queryKey: ["goals"] });
   void queryClient.invalidateQueries({ queryKey: ["resale"] });
+  void queryClient.invalidateQueries({ queryKey: ["tithing"] });
 }
 
 export function useCreateBook() {
@@ -218,10 +259,209 @@ export function useUpdateTransaction() {
   });
 }
 
-export function useDeleteTransaction() {
-  return useMoneyMutation(async (id: number) => {
-    const res = await api.money.transactions[":id"].$delete({ param: { id: String(id) } });
+/**
+ * Deletes a transaction (both sides, for a transfer) after a few seconds, with Undo
+ * until then. It leaves the list at once.
+ */
+export function useDeleteTransactionLater() {
+  const queryClient = useQueryClient();
+  return (transaction: Pick<Transaction, "id" | "payee" | "transfer">) => {
+    const gone = new Set([transaction.id, transaction.transfer?.transactionId ?? 0]);
+    const name = transaction.transfer ? "the transfer" : transaction.payee || "the transaction";
+    const send = (keepalive: boolean) =>
+      api.money.transactions[":id"].$delete(
+        { param: { id: String(transaction.id) } },
+        { init: { keepalive } },
+      );
+    deleteLater(queryClient, {
+      message: `Deleted ${name}`,
+      restoredMessage: `Restored ${name}`,
+      hide: {
+        keys: [["money", "transactions"]],
+        remove: (data) => {
+          const page = data as TransactionPage;
+          const left = page.transactions.filter((item) => !gone.has(item.id));
+          return {
+            ...page,
+            transactions: left,
+            total: page.total - (page.transactions.length - left.length),
+          };
+        },
+      },
+      commit: async () => {
+        try {
+          const res = await send(false);
+          if (!res.ok) throw await toApiError(res);
+        } finally {
+          refreshMoney(queryClient);
+        }
+      },
+      flush: () => void send(true),
+    });
+  };
+}
+
+// Cards
+
+async function fetchCards(bookId: number) {
+  const res = await api.money.cards.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export type Card = Awaited<ReturnType<typeof fetchCards>>[number];
+
+/** A book's payment cards, active first. */
+export function useCards(bookId: number | null) {
+  return useQuery({
+    queryKey: ["money", "cards", bookId ?? 0],
+    queryFn: () => fetchCards(bookId ?? 0),
+    enabled: bookId !== null,
+  });
+}
+
+export function useCreateCard() {
+  return useMoneyMutation(async (json: CardCreate) => {
+    const res = await api.money.cards.$post({ json });
     if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUpdateCard() {
+  return useMoneyMutation(async ({ id, patch }: { id: number; patch: CardUpdate }) => {
+    const res = await api.money.cards[":id"].$patch({ param: { id: String(id) }, json: patch });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteCard() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.cards[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Rewards
+
+/**
+ * What a book's cards spent and earned in a year, by month and by rate, against a
+ * flat-rate card earning `baseline` (hundredths of a percent).
+ */
+export function useRewards(bookId: number, year: number, baseline: number) {
+  return useQuery({
+    queryKey: ["money", "rewards", bookId, year, baseline],
+    queryFn: async () => {
+      const res = await api.money.rewards.$get({
+        query: { bookId: String(bookId), year: String(year), baseline: String(baseline) },
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type RewardsReport = NonNullable<ReturnType<typeof useRewards>["data"]>;
+export type CardRewards = RewardsReport["cards"][number];
+
+export function useSaveRewards() {
+  return useMoneyMutation(async ({ cardId, json }: { cardId: number; json: RewardsSave }) => {
+    const res = await api.money.cards[":id"].rewards.$put({
+      param: { id: String(cardId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+/** A points card's statement balances and redemptions. */
+export function useCardPoints(cardId: number | null) {
+  return useQuery({
+    queryKey: ["money", "points", cardId ?? 0],
+    queryFn: async () => {
+      const res = await api.money.cards[":id"].points.$get({ param: { id: String(cardId ?? 0) } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    enabled: cardId !== null,
+  });
+}
+
+export function useSavePointBalance() {
+  return useMoneyMutation(async ({ cardId, json }: { cardId: number; json: PointBalanceSave }) => {
+    const res = await api.money.cards[":id"]["point-balances"].$post({
+      param: { id: String(cardId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeletePointBalance() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money["point-balances"][":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useAddRedemption() {
+  return useMoneyMutation(async ({ cardId, json }: { cardId: number; json: RedemptionSave }) => {
+    const res = await api.money.cards[":id"].redemptions.$post({
+      param: { id: String(cardId) },
+      json,
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteRedemption() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.redemptions[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteRewards() {
+  return useMoneyMutation(async (cardId: number) => {
+    const res = await api.money.cards[":id"].rewards.$delete({ param: { id: String(cardId) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Receipts
+
+/** Previews (dryRun) or adds pasted receipts. A preview changes nothing, so it refreshes nothing. */
+export function useImportReceipts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ json, dryRun }: { json: ReceiptImportInput; dryRun: boolean }) => {
+      const res = await api.money.receipts.$post({
+        query: dryRun ? { dryRun: "true" } : {},
+        json,
+      });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (_result, { dryRun }) => {
+      if (!dryRun) refreshMoney(queryClient);
+    },
+  });
+}
+
+export type ReceiptImport = NonNullable<ReturnType<typeof useImportReceipts>["data"]>;
+
+export function useRemoveReceipt() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.receipts[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }
 
@@ -420,7 +660,7 @@ export function useTransferMatches(id: number | null) {
 // Budgets
 
 /** A book's budget for a month (YYYY-MM), with six months of history. */
-export function useBudget(bookId: number, month: string) {
+export function useBudget(bookId: number, month: string, enabled = true) {
   return useQuery({
     queryKey: ["money", "budget", bookId, month],
     queryFn: async () => {
@@ -429,22 +669,36 @@ export function useBudget(bookId: number, month: string) {
       return res.json();
     },
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
 export type BudgetMonth = NonNullable<ReturnType<typeof useBudget>["data"]>;
 
-export function useCashFlow(bookId: number, month: string, months: CashFlowPeriod) {
+export function useCashFlow(
+  bookId: number,
+  month: string,
+  months: CashFlowPeriod,
+  by: CashFlowGroup = "category",
+) {
   return useQuery({
-    queryKey: ["money", "cash-flow", bookId, month, months],
+    queryKey: ["money", "cash-flow", bookId, month, months, by],
     queryFn: async () => {
       const res = await api.money["cash-flow"].$get({
-        query: { bookId: String(bookId), month, months: String(months) },
+        query: { bookId: String(bookId), month, months: String(months), by },
       });
       if (!res.ok) throw await toApiError(res);
       return res.json();
     },
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useSetBudgetSettings() {
+  return useMoneyMutation(async (json: BudgetSettingsSet) => {
+    const res = await api.money["budget-settings"].$put({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }
 
@@ -526,5 +780,208 @@ export function useAllAccounts(enabled = true) {
       return res.json();
     },
     enabled,
+  });
+}
+
+// Bills and the forecast
+
+export type BillsData = Awaited<ReturnType<typeof fetchBills>>;
+export type Bill = BillsData["bills"][number];
+export type BillSuggestion = BillsData["suggestions"][number];
+export type Forecast = Awaited<ReturnType<typeof fetchForecast>>;
+
+async function fetchBills(bookId: number) {
+  const res = await api.money.bills.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchForecast(bookId: number, days: number) {
+  const res = await api.money.forecast.$get({
+    query: { bookId: String(bookId), days: String(days) },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useBills(bookId: number) {
+  return useQuery({ queryKey: ["money", "bills", bookId], queryFn: () => fetchBills(bookId) });
+}
+
+export function useForecast(bookId: number, days: number) {
+  return useQuery({
+    queryKey: ["money", "forecast", bookId, days],
+    queryFn: () => fetchForecast(bookId, days),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCreateBill() {
+  return useMoneyMutation(async (json: BillCreate) => {
+    const res = await api.money.bills.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUpdateBill() {
+  return useMoneyMutation(async ({ id, patch }: { id: number; patch: BillUpdate }) => {
+    const res = await api.money.bills[":id"].$patch({ param: { id: String(id) }, json: patch });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteBill() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.bills[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+export function useDismissBill() {
+  return useMoneyMutation(async (json: BillDismiss) => {
+    const res = await api.money.bills.dismiss.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Insights
+
+export type Insights = Awaited<ReturnType<typeof fetchInsights>>;
+export type YearReview = Awaited<ReturnType<typeof fetchYearReview>>;
+
+async function fetchInsights(bookId: number, month: string) {
+  const res = await api.money.insights.$get({ query: { bookId: String(bookId), month } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchYearReview(bookId: number, year: number) {
+  const res = await api.money["year-review"].$get({
+    query: { bookId: String(bookId), year: String(year) },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useInsights(bookId: number, month: string) {
+  return useQuery({
+    queryKey: ["money", "insights", bookId, month],
+    queryFn: () => fetchInsights(bookId, month),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useYearReview(bookId: number, year: number) {
+  return useQuery({
+    queryKey: ["money", "year-review", bookId, year],
+    queryFn: () => fetchYearReview(bookId, year),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// Money owed back
+
+export type OwedList = Awaited<ReturnType<typeof fetchOwed>>;
+export type Owed = OwedList["repaid"][number];
+export type TransactionOwed = Awaited<ReturnType<typeof fetchTransactionOwed>>;
+
+async function fetchOwed(bookId: number) {
+  const res = await api.money.owed.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchTransactionOwed(id: number) {
+  const res = await api.money.transactions[":id"].owed.$get({ param: { id: String(id) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useOwed(bookId: number) {
+  return useQuery({ queryKey: ["money", "owed", bookId], queryFn: () => fetchOwed(bookId) });
+}
+
+export function useTransactionOwed(id: number) {
+  return useQuery({
+    queryKey: ["money", "transaction-owed", id],
+    queryFn: () => fetchTransactionOwed(id),
+  });
+}
+
+export function useCreateOwed() {
+  return useMoneyMutation(async (json: OwedCreate) => {
+    const res = await api.money.owed.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteOwed() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.owed[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+export function useMatchOwed() {
+  return useMoneyMutation(async ({ id, repaymentId }: { id: number; repaymentId: number }) => {
+    const res = await api.money.owed[":id"].repaid.$post({
+      param: { id: String(id) },
+      json: { repaymentId },
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUnmatchOwed() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.owed[":id"].repaid.$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+// Debts and money health
+
+export type DebtsData = Awaited<ReturnType<typeof fetchDebts>>;
+export type DebtRow = DebtsData["debts"][number];
+export type Health = Awaited<ReturnType<typeof fetchHealth>>;
+
+async function fetchDebts(bookId: number) {
+  const res = await api.money.debts.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchHealth(bookId: number) {
+  const res = await api.money.health.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useDebts(bookId: number) {
+  return useQuery({ queryKey: ["money", "debts", bookId], queryFn: () => fetchDebts(bookId) });
+}
+
+export function useHealth(bookId: number) {
+  return useQuery({ queryKey: ["money", "health", bookId], queryFn: () => fetchHealth(bookId) });
+}
+
+export function useSetDebtTerms() {
+  return useMoneyMutation(async ({ id, terms }: { id: number; terms: DebtTerms }) => {
+    const res = await api.money.debts[":id"].$put({ param: { id: String(id) }, json: terms });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useSetDebtPlan() {
+  return useMoneyMutation(async (json: DebtPlanSet) => {
+    const res = await api.money["debt-plan"].$put({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }

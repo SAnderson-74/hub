@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Package } from "lucide-react";
+import { ArrowLeftRight, HandCoins, Package } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import { Link } from "react-router";
 import { Sheet } from "../../../client/components/Sheet";
@@ -11,24 +11,41 @@ import {
   secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { useModules } from "../../../client/lib/queries";
 import { CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
+import { cardLabel, guessCard } from "../../../shared/cards";
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { matchRule } from "../../../shared/moneyRules";
 import { formatSigned } from "../../../shared/profit";
+import { FUND_LABELS, FUNDS, type Fund } from "../../../shared/tithing";
 import { formatShortDate } from "../../tasks/dates";
+import { TithingBadge } from "../../tithing/components/TithingBadge";
+import {
+  type ChoiceDraft,
+  choiceInput,
+  choiceOf,
+  choiceReady,
+  defaultChoice,
+  sameChoice,
+  TithingChoice,
+} from "../../tithing/components/TithingChoice";
 import {
   type Account,
+  type Card,
   type Category,
   type Rule,
   type Transaction,
   useCreateTransaction,
   useCreateTransfer,
-  useDeleteTransaction,
+  useDeleteTransactionLater,
   useLinkTransfer,
   useTransferMatches,
   useUnlinkTransfer,
   useUpdateTransaction,
 } from "../queries";
+import { OwedBackSection } from "./OwedBack";
+import { ReceiptBox } from "./ReceiptBox";
+import { newPart, type PartDraft, partsOf, SplitEditor, splitProblem } from "./SplitEditor";
 
 /** "new" adds a transaction; a transaction edits it; null is closed. */
 export type TransactionTarget = "new" | Transaction | null;
@@ -48,6 +65,8 @@ type Draft = {
   memo: string;
   /** Who a payment-app transaction was with. */
   counterparty: string;
+  /** The card it was paid with, or "" for none. */
+  cardId: string;
 };
 
 function toDraft(transaction: Transaction | null, accountId: number | null, today: string): Draft {
@@ -61,12 +80,14 @@ function toDraft(transaction: Transaction | null, accountId: number | null, toda
     categoryId: transaction?.category ? String(transaction.category.id) : "",
     memo: transaction?.memo ?? "",
     counterparty: transaction?.counterparty ?? "",
+    cardId: transaction?.card ? String(transaction.card.id) : "",
   };
 }
 
 export function TransactionSheet({
   target,
   accounts,
+  cards,
   categories,
   rules,
   defaultAccountId,
@@ -75,6 +96,8 @@ export function TransactionSheet({
 }: {
   target: TransactionTarget;
   accounts: Account[];
+  /** The book's cards, for picking which one paid. */
+  cards: Card[];
   categories: Category[];
   /** The book's rules, for suggesting a category from the payee. */
   rules: Rule[];
@@ -95,6 +118,7 @@ export function TransactionSheet({
           key={transaction?.id ?? "new"}
           transaction={transaction}
           accounts={accounts}
+          cards={cards}
           categories={categories}
           rules={rules}
           defaultAccountId={defaultAccountId}
@@ -109,6 +133,7 @@ export function TransactionSheet({
 function TransactionForm({
   transaction,
   accounts,
+  cards,
   categories,
   rules,
   defaultAccountId,
@@ -117,23 +142,49 @@ function TransactionForm({
 }: {
   transaction: Transaction | null;
   accounts: Account[];
+  cards: Card[];
   categories: Category[];
   rules: Rule[];
   defaultAccountId: number | null;
   today: string;
   onDone: () => void;
 }) {
-  const [draft, setDraft] = useState(() => toDraft(transaction, defaultAccountId, today));
+  const [draft, setDraft] = useState(() => {
+    const initial = toDraft(transaction, defaultAccountId, today);
+    if (transaction) return initial;
+    // A new one starts with the account's card when that's clear, like a credit card's.
+    const account = accounts.find((item) => String(item.id) === initial.accountId);
+    const guess = account
+      ? guessCard(
+          account.kind,
+          cards.filter((card) => card.account.id === account.id),
+          { payee: "", memo: "", amountCents: -1 },
+        )
+      : null;
+    return { ...initial, cardId: guess === null ? "" : String(guess) };
+  });
   const [message, setMessage] = useState("");
   const [tried, setTried] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   // A category picked by hand isn't replaced by a rule's suggestion.
   const [categoryTouched, setCategoryTouched] = useState(transaction?.category != null);
   const [suggested, setSuggested] = useState(false);
+  // Likewise a card: a new transaction's card follows the account and payee until picked.
+  const [cardTouched, setCardTouched] = useState(transaction !== null);
+  // The parts, while it's split into categories; null when it isn't.
+  const [parts, setParts] = useState<PartDraft[] | null>(() => partsOf(transaction));
+  const wasSplit = (transaction?.splits.length ?? 0) > 0;
+  // Tithing: on money in, whether it applies and on what; on money out, a donation's fund.
+  const tithingOn = useModules().tithing;
+  const income = transaction?.tithing?.kind === "income" ? transaction.tithing : null;
+  const savedChoice = income ? choiceOf(income) : defaultChoice(true);
+  const [choice, setChoice] = useState<ChoiceDraft>(savedChoice);
+  const [choiceTouched, setChoiceTouched] = useState(false);
+  const savedFund = transaction?.tithing?.kind === "payment" ? transaction.tithing.fund : "";
+  const [fund, setFund] = useState<Fund | "">(savedFund);
   const create = useCreateTransaction();
   const createTransfer = useCreateTransfer();
   const update = useUpdateTransaction();
-  const remove = useDeleteTransaction();
+  const deleteLater = useDeleteTransactionLater();
   const unlink = useUnlinkTransfer();
   const ids = useId();
 
@@ -148,9 +199,24 @@ function TransactionForm({
   const accountMissing = draft.accountId === "";
   const toMissing =
     transferring && (draft.toAccountId === "" || draft.toAccountId === draft.accountId);
-  const blocked = amountInvalid || dateMissing || accountMissing || toMissing;
-  const error =
-    create.error ?? createTransfer.error ?? update.error ?? remove.error ?? unlink.error;
+  const splitting = parts !== null && !transferring && !(transaction?.transfer != null);
+  // Money back into a spending category (a refund) isn't tithed on unless it's turned on.
+  const categoryKind = categories.find((item) => String(item.id) === draft.categoryId)?.kind;
+  const effectiveChoice: ChoiceDraft =
+    !income && !choiceTouched && categoryKind === "expense"
+      ? { ...choice, applies: false }
+      : choice;
+  const showTithing = tithingOn && draft.kind === "in" && !transferring && !isTransferSide;
+  const showDonation = tithingOn && draft.kind === "out" && !transferring && !isTransferSide;
+  const tithingNotReady = showTithing && !choiceReady(effectiveChoice);
+  const blocked =
+    tithingNotReady ||
+    amountInvalid ||
+    dateMissing ||
+    accountMissing ||
+    toMissing ||
+    (splitting && parts !== null && splitProblem(parts, cents) !== null);
+  const error = create.error ?? createTransfer.error ?? update.error ?? unlink.error;
   // Archived accounts and categories stay selectable only where already used.
   const accountChoices = accounts.filter(
     (account) => !account.archived || String(account.id) === draft.accountId,
@@ -158,10 +224,39 @@ function TransactionForm({
   const categoryChoices = categories.filter(
     (category) => !category.archived || String(category.id) === draft.categoryId,
   );
+  const cardsOf = (accountId: string) =>
+    cards.filter((card) => String(card.account.id) === accountId);
+  const cardChoices = cardsOf(draft.accountId).filter(
+    (card) => !card.archived || String(card.id) === draft.cardId,
+  );
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
+  };
+
+  /**
+   * The card a new transaction was likely paid with, the way imports guess it, unless
+   * one was picked by hand. A picked card that isn't the account's is dropped.
+   */
+  const followCard = (next: Pick<Draft, "accountId" | "payee" | "memo" | "kind">) => {
+    const choices = cardsOf(next.accountId);
+    if (cardTouched) {
+      if (draft.cardId && !choices.some((card) => String(card.id) === draft.cardId)) {
+        setDraft((current) => ({ ...current, cardId: "" }));
+      }
+      return;
+    }
+    const account = accounts.find((item) => String(item.id) === next.accountId);
+    const guess =
+      account && next.kind !== "transfer"
+        ? guessCard(account.kind, choices, {
+            payee: next.payee,
+            memo: next.memo,
+            amountCents: next.kind === "in" ? 1 : -1,
+          })
+        : null;
+    setDraft((current) => ({ ...current, cardId: guess === null ? "" : String(guess) }));
   };
 
   /** Fills in the category a rule gives this payee, unless one was picked by hand. */
@@ -174,6 +269,19 @@ function TransactionForm({
     });
     setSuggested(rule !== null);
     setDraft((current) => ({ ...current, categoryId: rule ? String(rule.categoryId) : "" }));
+  };
+
+  /** The tithing choice or donation fund to save with it, only when it changed. */
+  const tithingFields = () => {
+    if (showTithing) {
+      const changed = income
+        ? !sameChoice(effectiveChoice, savedChoice)
+        : choiceTouched || !sameChoice(effectiveChoice, defaultChoice(true));
+      const tithing = choiceInput(effectiveChoice);
+      return changed && tithing ? { tithing: { baseCents: null, ...tithing } } : {};
+    }
+    if (showDonation && fund !== savedFund) return { donation: fund === "" ? null : fund };
+    return {};
   };
 
   const onSubmit = (event: FormEvent) => {
@@ -193,14 +301,29 @@ function TransactionForm({
       );
       return;
     }
+    const sign = draft.kind === "in" ? 1 : -1;
     const fields = {
       accountId: Number(draft.accountId),
       date: draft.date,
-      amountCents: draft.kind === "in" ? cents : -cents,
+      amountCents: sign * cents,
       payee: draft.payee.trim(),
-      categoryId: isTransferSide || !draft.categoryId ? null : Number(draft.categoryId),
+      // Split, the parts carry the categories; otherwise one category, and a split goes.
+      ...(splitting && parts
+        ? {
+            splits: parts.map((part) => ({
+              categoryId: Number(part.categoryId),
+              amountCents: sign * (parseDollars(part.amount) ?? 0),
+              memo: part.memo.trim(),
+            })),
+          }
+        : {
+            categoryId: isTransferSide || !draft.categoryId ? null : Number(draft.categoryId),
+            ...(wasSplit ? { splits: null } : {}),
+          }),
       memo: draft.memo,
       counterparty: isTransferSide ? null : draft.counterparty.trim() || null,
+      ...(isTransferSide ? {} : { cardId: draft.cardId ? Number(draft.cardId) : null }),
+      ...tithingFields(),
     };
     if (!transaction) {
       create.mutate(fields, { onSuccess: onDone });
@@ -211,6 +334,12 @@ function TransactionForm({
       {
         onSuccess: (saved) => {
           setDraft(toDraft(saved, null, today));
+          setParts(partsOf(saved));
+          setChoice(
+            saved.tithing?.kind === "income" ? choiceOf(saved.tithing) : defaultChoice(true),
+          );
+          setChoiceTouched(false);
+          setFund(saved.tithing?.kind === "payment" ? saved.tithing.fund : "");
           setMessage(isTransferSide ? "Transfer saved" : "Transaction saved");
         },
       },
@@ -242,6 +371,7 @@ function TransactionForm({
                     onChange={() => {
                       set("kind", value);
                       suggest(draft.payee, value);
+                      followCard({ ...draft, kind: value });
                     }}
                     className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
                   />
@@ -408,6 +538,7 @@ function TransactionForm({
                 onChange={(event) => {
                   set("payee", event.target.value);
                   suggest(event.target.value, draft.kind);
+                  followCard({ ...draft, payee: event.target.value });
                 }}
                 maxLength={200}
                 placeholder={draft.kind === "in" ? "Employer or customer" : "Store or person"}
@@ -450,7 +581,10 @@ function TransactionForm({
                   <select
                     id={`${ids}-account`}
                     value={draft.accountId}
-                    onChange={(event) => set("accountId", event.target.value)}
+                    onChange={(event) => {
+                      set("accountId", event.target.value);
+                      followCard({ ...draft, accountId: event.target.value });
+                    }}
                     aria-invalid={tried && accountMissing}
                     className={inputClass}
                   >
@@ -462,50 +596,184 @@ function TransactionForm({
                     ))}
                   </select>
                 </div>
-                <div className="min-w-0">
-                  <label htmlFor={`${ids}-category`} className={labelClass}>
-                    Category
-                  </label>
-                  <select
-                    id={`${ids}-category`}
-                    value={draft.categoryId}
-                    onChange={(event) => {
-                      set("categoryId", event.target.value);
-                      setCategoryTouched(true);
-                      setSuggested(false);
-                    }}
-                    aria-describedby={suggested ? `${ids}-suggested` : undefined}
-                    className={inputClass}
-                  >
-                    <option value="">Uncategorized</option>
-                    {/* The kind's own categories first: spending for money out, income for in. */}
-                    {(draft.kind === "in" ? [...CATEGORY_KINDS].reverse() : CATEGORY_KINDS).map(
-                      (kind) => {
-                        const options = categoryChoices.filter(
-                          (category) => category.kind === kind,
-                        );
-                        return options.length === 0 ? null : (
-                          <optgroup key={kind} label={CATEGORY_KIND_LABELS[kind]}>
-                            {options.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        );
-                      },
-                    )}
-                  </select>
-                  {suggested ? (
-                    <p id={`${ids}-suggested`} className="mt-1.5 text-sm text-muted">
-                      Picked by a rule
-                    </p>
-                  ) : null}
-                </div>
+                {splitting ? null : (
+                  <div className="min-w-0">
+                    <label htmlFor={`${ids}-category`} className={labelClass}>
+                      Category
+                    </label>
+                    <select
+                      id={`${ids}-category`}
+                      value={draft.categoryId}
+                      onChange={(event) => {
+                        set("categoryId", event.target.value);
+                        setCategoryTouched(true);
+                        setSuggested(false);
+                      }}
+                      aria-describedby={suggested ? `${ids}-suggested` : undefined}
+                      className={inputClass}
+                    >
+                      <option value="">Uncategorized</option>
+                      {/* The kind's own categories first: spending for money out, income for in. */}
+                      {(draft.kind === "in" ? [...CATEGORY_KINDS].reverse() : CATEGORY_KINDS).map(
+                        (kind) => {
+                          const options = categoryChoices.filter(
+                            (category) => category.kind === kind,
+                          );
+                          return options.length === 0 ? null : (
+                            <optgroup key={kind} label={CATEGORY_KIND_LABELS[kind]}>
+                              {options.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        },
+                      )}
+                    </select>
+                    {suggested ? (
+                      <p id={`${ids}-suggested`} className="mt-1.5 text-sm text-muted">
+                        Picked by a rule
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`${ghostButton} -ml-4 mt-1`}
+                      onClick={() => {
+                        // The whole amount starts in the current category; the rest is split off it.
+                        setParts([
+                          newPart(draft.categoryId, cents === null ? "" : centsToInput(cents)),
+                          newPart(),
+                        ]);
+                        setCategoryTouched(true);
+                        setSuggested(false);
+                      }}
+                    >
+                      Split into categories
+                    </button>
+                  </div>
+                )}
+                {cardChoices.length > 0 ? (
+                  <div className="min-w-0">
+                    <label htmlFor={`${ids}-card`} className={labelClass}>
+                      Card
+                    </label>
+                    <select
+                      id={`${ids}-card`}
+                      value={draft.cardId}
+                      onChange={(event) => {
+                        set("cardId", event.target.value);
+                        setCardTouched(true);
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">No card</option>
+                      {cardChoices.map((card) => (
+                        <option key={card.id} value={card.id}>
+                          {cardLabel(card)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
             )}
+            {splitting && parts ? (
+              <SplitEditor
+                parts={parts}
+                onChange={setParts}
+                categories={categories}
+                kind={draft.kind === "in" ? "in" : "out"}
+                totalCents={cents}
+                tried={tried}
+                onUnsplit={() => {
+                  // Back to one category: the largest part's, if any was picked.
+                  const largest = [...parts].sort(
+                    (a, b) => (parseDollars(b.amount) ?? 0) - (parseDollars(a.amount) ?? 0),
+                  )[0];
+                  if (largest?.categoryId) set("categoryId", largest.categoryId);
+                  setParts(null);
+                }}
+              />
+            ) : null}
           </>
         )}
+
+        {showTithing ? (
+          <>
+            <TithingChoice
+              draft={effectiveChoice}
+              onChange={(next) => {
+                setChoice(next);
+                setChoiceTouched(true);
+              }}
+              wholeCents={income ? income.defaultBaseCents : cents}
+              tried={tried}
+              profit={
+                income !== null && income.defaultBaseCents !== (transaction?.amountCents ?? 0)
+              }
+            />
+            {income?.status && income.applies ? (
+              <p className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <TithingBadge
+                  status={income.status}
+                  owedCents={income.owedCents}
+                  paidCents={income.paidCents}
+                  settled={income.settled}
+                />
+                <Link
+                  to={`/tithing?year=${transaction?.date.slice(0, 4)}`}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-accent-text underline-offset-4 hover:underline"
+                >
+                  Open Tithing
+                </Link>
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {showDonation ? (
+          <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+            <div className="flex items-start gap-3">
+              <HandCoins aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
+              <div className="min-w-0 flex-1">
+                <label htmlFor={`${ids}-fund`} className="block font-semibold text-fg">
+                  Church donation
+                </label>
+                <select
+                  id={`${ids}-fund`}
+                  value={fund}
+                  onChange={(event) => setFund(event.target.value as Fund | "")}
+                  aria-describedby={`${ids}-fund-hint`}
+                  className={`${inputClass} mt-2`}
+                >
+                  <option value="">Not a donation</option>
+                  {FUNDS.map((value) => (
+                    <option key={value} value={value}>
+                      {FUND_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+                <p id={`${ids}-fund-hint`} className="mt-1.5 text-sm text-muted">
+                  {transaction?.tithing?.kind === "payment" &&
+                  transaction.tithing.fund === "tithing"
+                    ? transaction.tithing.linkedCents >= -transaction.amountCents
+                      ? "Matched to the income it pays tithing on."
+                      : "Match it to income on the Tithing page."
+                    : "Tithing counts toward what you owe. Other funds are tracked on their own."}
+                </p>
+                {transaction?.tithing?.kind === "payment" &&
+                transaction.tithing.fund === "tithing" ? (
+                  <Link
+                    to={`/tithing?year=${transaction.date.slice(0, 4)}&payment=${transaction.id}`}
+                    className="inline-flex min-h-11 items-center text-sm font-semibold text-accent-text underline-offset-4 hover:underline"
+                  >
+                    Match to income
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div>
           <label htmlFor={`${ids}-memo`} className={labelClass}>
@@ -547,6 +815,9 @@ function TransactionForm({
         ) : null}
       </form>
 
+      {transaction?.receipt ? (
+        <ReceiptBox receipt={transaction.receipt} today={today} onRemoved={onDone} />
+      ) : null}
       {transaction && isTransferSide ? (
         <div className="space-y-2">
           <button
@@ -565,40 +836,26 @@ function TransactionForm({
       {transaction && !isTransferSide ? (
         <TransferMatches transaction={transaction} today={today} onLinked={onDone} />
       ) : null}
+      {transaction && !isTransferSide ? (
+        <OwedBackSection transaction={transaction} today={today} onMatched={onDone} />
+      ) : null}
 
       {transaction ? (
-        confirmDelete ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
-            <p className="font-semibold text-fg">
-              {isTransferSide
-                ? "Delete this transfer? Both sides go. This can't be undone."
-                : "Delete this transaction? This can't be undone."}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(transaction.id, { onSuccess: onDone })}
-                className="inline-flex h-11 items-center rounded-full bg-danger px-5 font-bold text-crust disabled:opacity-40"
-              >
-                {isTransferSide ? "Delete transfer" : "Delete transaction"}
-              </button>
-              <button type="button" className={ghostButton} onClick={() => setConfirmDelete(false)}>
-                {isTransferSide ? "Keep transfer" : "Keep transaction"}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="border-t border-surface-0/70 pt-4">
-            <button
-              type="button"
-              className={`${dangerButton} -ml-4`}
-              onClick={() => setConfirmDelete(true)}
-            >
-              {isTransferSide ? "Delete transfer" : "Delete transaction"}
-            </button>
-          </div>
-        )
+        <div className="border-t border-surface-0/70 pt-4">
+          <button
+            type="button"
+            className={`${dangerButton} -ml-4`}
+            onClick={() => {
+              deleteLater(transaction);
+              onDone();
+            }}
+          >
+            {isTransferSide ? "Delete transfer" : "Delete transaction"}
+          </button>
+          {isTransferSide ? (
+            <p className="text-sm text-muted">Both sides go. Undo is there for a few seconds.</p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

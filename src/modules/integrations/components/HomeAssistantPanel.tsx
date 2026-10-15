@@ -220,7 +220,8 @@ export function HomeAssistantPanel({ saved }: { saved: HomeAssistantSettings }) 
         <p className="mb-2 text-muted">
           Home Assistant templates read these fields from trigger.json. docs/SETUP.md has examples.
         </p>
-        {preview.isPending ? (
+        {/* The preview loads when opened; until then there's nothing to wait for. */}
+        {!previewing ? null : preview.isPending ? (
           <LoadingRows rows={2} />
         ) : preview.isError ? (
           <p role="alert" className="text-danger">

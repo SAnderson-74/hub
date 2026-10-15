@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeDue, localDate } from "./dates";
-import { groupByStatus, orderAfterStep, orderAt, orderForDrop } from "./ordering";
+import { groupByStatus, mergeTasks, orderAfterStep, orderAt, orderForDrop } from "./ordering";
 
 const list = [
   { id: 1, sortOrder: 1 },
@@ -44,6 +44,21 @@ describe("ordering", () => {
   });
 });
 
+describe("mergeTasks", () => {
+  it("adds finished tasks after open ones, keeping the open copy of a task in both", () => {
+    const open = [
+      { id: 1, status: "todo" },
+      { id: 2, status: "done" }, // just finished, still in the open list
+    ];
+    const done = [
+      { id: 2, status: "done" },
+      { id: 3, status: "done" },
+    ];
+    expect(mergeTasks(open, done)).toEqual([open[0], open[1], done[1]]);
+    expect(mergeTasks([], done)).toEqual(done);
+  });
+});
+
 describe("due dates", () => {
   const today = "2030-03-13"; // a Wednesday
 
@@ -54,6 +69,14 @@ describe("due dates", () => {
     expect(describeDue("2030-03-17", today).label).toBe("Due Sunday");
     expect(describeDue("2030-04-02", today).label).toBe("Due Apr 2");
     expect(describeDue("2031-01-05", today).label).toBe("Due Jan 5, 2031");
+  });
+
+  it("doesn't call finished things overdue", () => {
+    expect(describeDue("2030-03-10", "2030-03-13", { done: true })).toEqual({
+      label: "Was due Mar 10",
+      tone: "muted",
+    });
+    expect(describeDue("2030-03-13", "2030-03-13", { done: true }).label).toBe("Due today");
   });
 
   it("counts days across daylight saving changes", () => {

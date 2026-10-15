@@ -6,12 +6,15 @@ import { log } from "../../server/log";
 import { OPEN_LEAD_STATUSES } from "../../shared/business";
 import type { Reminder } from "../../shared/homeAssistant";
 import { addDays } from "../../shared/recurrence";
+import { inToday } from "../../shared/smartLists";
 import { streakState, streakSummary } from "../../shared/streak";
 import { businessLeads, businessSteps } from "../business/schema";
 import { readSettings } from "../core/settings.service";
+import { assessments, courses } from "../education/schema";
 import { studyStreak } from "../education/streak.service";
 import { goals, milestones } from "../goals/schema";
 import { tasks } from "../tasks/schema";
+import { waitingTaskIds } from "../tasks/tasks.service";
 
 /** How far ahead "upcoming" looks, and how many it lists. */
 const UPCOMING_DAYS = 14;
@@ -22,7 +25,7 @@ const SEND_TIMEOUT_MS = 10_000;
 
 export type UpcomingDate = {
   date: string;
-  kind: "task" | "milestone" | "goal" | "business_step" | "lead";
+  kind: "task" | "milestone" | "goal" | "assessment" | "business_step" | "lead";
   title: string;
 };
 
@@ -60,19 +63,22 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 export function todayTasks(db: Queryable, today: string, timeZone: string) {
   const rows = db
     .select({
+      id: tasks.id,
       title: tasks.title,
       status: tasks.status,
       dueDate: tasks.dueDate,
+      startDate: tasks.startDate,
+      someday: tasks.someday,
       priority: tasks.priority,
       completedAt: tasks.completedAt,
     })
     .from(tasks)
     .all();
+  const waiting = waitingTaskIds(db);
   const open = rows
-    .filter(
-      (task) =>
-        task.status !== "done" &&
-        ((task.dueDate !== null && task.dueDate <= today) || task.status === "doing"),
+    // The Tasks page's Today list: due, started, or in progress, and not waiting.
+    .filter((task) =>
+      inToday({ ...task, waitingOn: waiting.has(task.id) ? [{ done: false }] : [] }, today),
     )
     // Overdue first, then due today, then in-progress tasks without a date.
     .sort((a, b) => byText(a.dueDate ?? NO_DATE, b.dueDate ?? NO_DATE) || b.priority - a.priority);
@@ -132,6 +138,25 @@ export function upcomingDates(db: Queryable, today: string, days = UPCOMING_DAYS
         date: milestone.date,
         kind: "milestone",
         title: `${milestone.title} (${goal})`,
+      });
+    }
+  }
+  for (const assessment of db
+    .select({
+      label: assessments.label,
+      date: assessments.dueOn,
+      code: courses.code,
+      course: courses.title,
+    })
+    .from(assessments)
+    .innerJoin(courses, eq(assessments.courseId, courses.id))
+    .where(and(isNull(assessments.doneAt), lte(assessments.dueOn, to)))
+    .all()) {
+    if (within(assessment.date)) {
+      found.push({
+        date: assessment.date,
+        kind: "assessment",
+        title: `${assessment.label} (${assessment.code || assessment.course})`,
       });
     }
   }

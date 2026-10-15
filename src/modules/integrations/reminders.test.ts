@@ -9,6 +9,7 @@ import {
   recentReminders,
   resetReminderTries,
   runReminders,
+  tithingReminder,
 } from "./reminders.service";
 
 let t: TestApp;
@@ -38,6 +39,40 @@ const configure = async (reminders: Partial<ReminderSettings> = {}, reminderUrl 
   );
 const task = async (title: string, extra: object = {}) =>
   body(await t.api.tasks.$post({ json: { title, ...extra } }));
+/** An exam on a course in its own term, due on a day. */
+const exam = async (label: string, dueOn: string, done = false) => {
+  const name = `Term for ${label}`;
+  // Each answer lists every term; this one's is found by name.
+  const own = <T extends { name: string }>(terms: T[]) => terms.find((term) => term.name === name);
+  const term = own(
+    await body(
+      await t.api.education.terms.$post({
+        json: { name, startDate: "2025-01-01", endDate: "2025-06-30" },
+      }),
+    ),
+  );
+  const course = own(
+    await body(
+      await t.api.education.courses.$post({
+        json: { termId: term?.id ?? 0, code: "ABC101", title: "Networks" },
+      }),
+    ),
+  )?.courses[0];
+  const assessment = own(
+    await body(
+      await t.api.education.courses[":id"].assessments.$post({
+        param: { id: String(course?.id) },
+        json: { kind: "exam", label, dueOn },
+      }),
+    ),
+  )?.courses[0]?.assessments[0];
+  if (done) {
+    await t.api.education.assessments[":id"].$patch({
+      param: { id: String(assessment?.id) },
+      json: { done: true },
+    });
+  }
+};
 const accept = () =>
   vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 200 }));
 const sentBodies = (mock: ReturnType<typeof accept>) =>
@@ -119,6 +154,8 @@ describe("due soon", () => {
     await t.api.business.leads.$post({
       json: { name: "Example Bakery", nextStep: "Send a quote", nextStepOn: "2025-03-11" },
     });
+    await exam("Midterm", "2025-03-11");
+    await exam("Quiz", "2025-03-11", true);
     const fetchMock = accept();
 
     expect(await runReminders(t.db, UTC, at("18:05"))).toEqual([
@@ -126,9 +163,9 @@ describe("due soon", () => {
     ]);
     expect(sentBodies(fetchMock)[0]).toMatchObject({
       kind: "due_soon",
-      title: "3 things due soon",
+      title: "4 things due soon",
       message:
-        "Submit the report, today. Renew the lease, tomorrow. Send a quote: Example Bakery, tomorrow.",
+        "Submit the report, today. Midterm (ABC101), tomorrow. Renew the lease, tomorrow. Send a quote: Example Bakery, tomorrow.",
     });
 
     // The next day, only what's newly due comes up.
@@ -194,7 +231,12 @@ describe("reminder routes", () => {
     await task("Submit the report", { dueDate: new Date().toISOString().slice(0, 10) });
     const overview = await body(await t.api.integrations.reminders.$get());
     expect(overview.configured).toBe(false);
-    expect(overview.previews.map((entry) => entry.kind)).toEqual(["digest", "due_soon", "streak"]);
+    expect(overview.previews.map((entry) => entry.kind)).toEqual([
+      "digest",
+      "due_soon",
+      "streak",
+      "tithing",
+    ]);
     expect(overview.recent).toEqual([]);
 
     const send = (kind: "digest" | "due_soon" | "streak") =>
@@ -211,5 +253,111 @@ describe("reminder routes", () => {
     expect(await failure(await send("streak"))).toMatchObject({ status: 400 });
     const after = await body(await t.api.integrations.reminders.$get());
     expect(after.recent.map((entry) => entry.kind)).toEqual(["due_soon"]);
+  });
+});
+
+describe("modules that are off", () => {
+  it("stay out of reminders and the calendar", async () => {
+    await configure();
+    await task("Submit the report", { dueDate: DAY });
+    await t.api.business.leads.$post({
+      json: { name: "Example Bakery", nextStep: "Send a quote", nextStepOn: DAY },
+    });
+    await exam("Midterm", DAY);
+    expect(dueSoonReminder(t.db, DAY, 1)?.keys).toHaveLength(3);
+    await body(
+      await t.api.settings.$put({
+        json: {
+          modules: {
+            tasks: true,
+            time: true,
+            goals: true,
+            courses: false,
+            resale: true,
+            money: true,
+            taxes: true,
+            business: false,
+          },
+        },
+      }),
+    );
+    expect(dueSoonReminder(t.db, DAY, 1)?.reminder.message).toBe("Submit the report, today.");
+    expect(
+      previewReminders(t.db, UTC, at("20:10")).find((entry) => entry.kind === "streak")?.reminder,
+    ).toBeNull();
+  });
+});
+
+describe("the tithing reminder", () => {
+  /** A checking account, and a way to add money coming into it. */
+  const account = async () => {
+    const book = await body(
+      await t.api.money.books.$post({ json: { name: "Personal", kind: "personal" } }),
+    );
+    const checking = await body(
+      await t.api.money.accounts.$post({
+        json: { bookId: book.id, name: "Checking", kind: "checking" },
+      }),
+    );
+    return (date: string, amountCents: number) =>
+      t.api.money.transactions.$post({
+        json: { accountId: checking.id, date, amountCents, payee: "Paycheck" },
+      });
+  };
+  const turnOn = () =>
+    t.api.settings.$put({ json: { tithingReminder: { enabled: true, time: "19:00" } } });
+
+  it("is off until turned on, then names new income and repeats weekly while unpaid", async () => {
+    await configure();
+    const income = await account();
+    await income(DAY, 100_000);
+    const fetchMock = accept();
+    // Off by default: nothing goes out at its time.
+    expect(await runReminders(t.db, UTC, at("19:05"))).toEqual([]);
+
+    await turnOn();
+    expect(await runReminders(t.db, UTC, at("19:05"))).toEqual([
+      expect.objectContaining({ kind: "tithing", ok: true }),
+    ]);
+    expect(sentBodies(fetchMock).at(-1)).toMatchObject({
+      kind: "tithing",
+      title: "$100 of tithing on new income",
+      message: "$100 of tithing is unpaid on 1 income. 1 income came in since the last reminder.",
+    });
+
+    // The next day: nothing new, and not a week yet.
+    expect(tithingReminder(t.db, "2025-03-11", at("19:05", "2025-03-11"))).toBeNull();
+    // New income the day after: named again, and sent.
+    await income("2025-03-12", 50_000);
+    expect(await runReminders(t.db, UTC, at("19:05", "2025-03-12"))).toEqual([
+      expect.objectContaining({ kind: "tithing", ok: true }),
+    ]);
+    expect(sentBodies(fetchMock).at(-1)).toMatchObject({
+      title: "$50 of tithing on new income",
+    });
+    // Nothing new: quiet until a week after the last one, then a plain reminder.
+    expect(tithingReminder(t.db, "2025-03-18", at("19:05", "2025-03-18"))).toBeNull();
+    expect(tithingReminder(t.db, "2025-03-19", at("19:05", "2025-03-19"))?.reminder).toEqual({
+      kind: "tithing",
+      title: "$150 of tithing unpaid",
+      message: "$150 of tithing is unpaid on 2 incomes.",
+    });
+
+    // Paid up: nothing to say. Recent reminders list each send once.
+    await t.api.tithing.settle.$post({ json: { through: "2025-12-31" } });
+    expect(tithingReminder(t.db, "2025-03-20", at("19:05", "2025-03-20"))).toBeNull();
+    expect(recentReminders(t.db).filter((entry) => entry.kind === "tithing")).toHaveLength(2);
+  });
+
+  it("stays out of reminders while Tithing is off", async () => {
+    await configure();
+    const income = await account();
+    await income(DAY, 100_000);
+    await turnOn();
+    await t.api.settings.$put({ json: { modules: { tithing: false } } });
+    expect(tithingReminder(t.db, DAY, at("19:05"))).toBeNull();
+    expect(previewReminders(t.db, UTC, at("19:05")).map((entry) => entry.kind)).not.toContain(
+      "tithing",
+    );
   });
 });

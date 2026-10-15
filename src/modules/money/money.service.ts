@@ -11,10 +11,12 @@ import {
   isNull,
   lte,
   ne,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
+import { likePattern } from "../../server/db/like";
 import { badRequest, conflict, notFound } from "../../server/errors";
 import {
   type AccountCreate,
@@ -27,22 +29,36 @@ import {
   type CategoryCreate,
   type CategoryKind,
   type CategoryUpdate,
+  type SplitInput,
   STARTER_CATEGORIES,
   type TransactionCreate,
   type TransactionQuery,
   type TransactionUpdate,
 } from "../../shared/books";
+import { type CardKind, cardKindFor } from "../../shared/cards";
 import type { LinkRole } from "../../shared/resale";
 import { goalAccounts } from "../goals/schema";
 import { transactionItems } from "../resale/transactionLinks";
+import { dropTithing, type TransactionTithing, tithingOf } from "../tithing/transactionLinks";
+import { checkCardFits, guessCardFor } from "./cards.service";
+import { dropSplits, primaryCategory, splitsOf } from "./lines";
+import { dropReimbursements } from "./owedLinks";
+import { dropReceipts, type ReceiptJson, receiptsOf } from "./receiptLinks";
+import { dropCategoryRates, dropRewards } from "./rewards.service";
 import {
   moneyAccounts,
   moneyBalanceSnapshots,
+  moneyBills,
   moneyBooks,
+  moneyBudgetSettings,
   moneyBudgets,
+  moneyCards,
   moneyCategories,
+  moneyDebtPlans,
+  moneyDebtTerms,
   moneyImports,
   moneyRules,
+  moneyTransactionSplits,
   moneyTransactions,
 } from "./schema";
 
@@ -104,10 +120,26 @@ export type TransactionJson = {
   /** The payee as the bank wrote it, when it came from a file. */
   bankPayee: string | null;
   category: { id: number; name: string; kind: CategoryKind } | null;
+  /** The card it was paid with, when known. */
+  card: { id: number; name: string; last4: string | null; kind: CardKind } | null;
+  /**
+   * Its parts when one charge was for several categories, empty otherwise. When split,
+   * `category` is the largest part's.
+   */
+  splits: Array<{
+    id: number;
+    category: { id: number; name: string; kind: CategoryKind } | null;
+    amountCents: number;
+    memo: string;
+  }>;
+  /** The receipt for it, with its lines, when one was added. */
+  receipt: ReceiptJson | null;
   /** The other side when this is a transfer between accounts. Transfers have no category. */
   transfer: { transactionId: number; account: { id: number; name: string } } | null;
   /** Resale items this paid for or came from. */
   resaleItems: Array<{ id: number; title: string; role: LinkRole }>;
+  /** Tithing: money in shows what it owes and what's paid; a donation shows its fund. */
+  tithing: TransactionTithing | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -121,6 +153,8 @@ export type TransactionPage = {
   outCents: number;
   /** Matching transfers, left out of the in and out totals. */
   transferCount: number;
+  /** The largest amount in the whole book, whatever the filters, for an amount slider. */
+  largestCents: number;
 };
 
 /** Names are unique ignoring case. */
@@ -235,6 +269,8 @@ export function deleteBook(db: Db, id: number): void {
     }
     // Without accounts there are no transactions, so its rules and categories are unused.
     tx.delete(moneyRules).where(eq(moneyRules.bookId, id)).run();
+    tx.delete(moneyBills).where(eq(moneyBills.bookId, id)).run();
+    tx.delete(moneyDebtPlans).where(eq(moneyDebtPlans.bookId, id)).run();
     const categoryIds = tx
       .select({ id: moneyCategories.id })
       .from(moneyCategories)
@@ -243,7 +279,11 @@ export function deleteBook(db: Db, id: number): void {
       .map((row) => row.id);
     if (categoryIds.length > 0) {
       tx.delete(moneyBudgets).where(inArray(moneyBudgets.categoryId, categoryIds)).run();
+      tx.delete(moneyBudgetSettings)
+        .where(inArray(moneyBudgetSettings.categoryId, categoryIds))
+        .run();
     }
+    dropCategoryRates(tx, categoryIds);
     tx.delete(moneyCategories).where(eq(moneyCategories.bookId, id)).run();
     tx.delete(moneyBooks).where(eq(moneyBooks.id, id)).run();
   });
@@ -423,6 +463,18 @@ export function updateAccount(db: Db, id: number, patch: AccountUpdate): Account
   return db.transaction((tx) => {
     const current = requireAccount(tx, id);
     if (patch.name !== undefined) checkAccountNameFree(tx, current.bookId, patch.name, id);
+    if (patch.kind !== undefined && cardKindFor(patch.kind) !== cardKindFor(current.kind)) {
+      const cards = tx
+        .select({ n: count() })
+        .from(moneyCards)
+        .where(eq(moneyCards.accountId, id))
+        .get();
+      if ((cards?.n ?? 0) > 0) {
+        throw conflict(
+          "This account's cards don't fit that kind of account. Delete its cards first, or keep the kind.",
+        );
+      }
+    }
     const row = tx
       .update(moneyAccounts)
       .set({ ...patch, updatedAt: new Date() })
@@ -444,6 +496,19 @@ export function deleteAccount(db: Db, id: number): void {
     // Imports whose transactions are all gone (undone) go with it, and so do goal links.
     tx.delete(moneyImports).where(eq(moneyImports.accountId, id)).run();
     tx.delete(goalAccounts).where(eq(goalAccounts.accountId, id)).run();
+    dropRewards(
+      tx,
+      tx
+        .select({ id: moneyCards.id })
+        .from(moneyCards)
+        .where(eq(moneyCards.accountId, id))
+        .all()
+        .map((card) => card.id),
+    );
+    tx.delete(moneyCards).where(eq(moneyCards.accountId, id)).run();
+    // Bills paid from it stay, without an account, so the forecast lists them as left out.
+    tx.update(moneyBills).set({ accountId: null }).where(eq(moneyBills.accountId, id)).run();
+    tx.delete(moneyDebtTerms).where(eq(moneyDebtTerms.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }
@@ -453,7 +518,7 @@ export function deleteAccount(db: Db, id: number): void {
 /** A book's categories: spending first, then income, archived ones last in each. */
 export function listCategories(db: Queryable, bookId: number): CategoryJson[] {
   requireBook(db, bookId);
-  const counts = new Map(
+  const counts = new Map<number | null, number>(
     db
       .select({ categoryId: moneyTransactions.categoryId, n: count() })
       .from(moneyTransactions)
@@ -463,6 +528,16 @@ export function listCategories(db: Queryable, bookId: number): CategoryJson[] {
       .all()
       .map((row) => [row.categoryId, row.n]),
   );
+  // Parts of split transactions count too, so a category in use isn't deleted.
+  for (const row of db
+    .select({ categoryId: moneyTransactionSplits.categoryId, n: count() })
+    .from(moneyTransactionSplits)
+    .innerJoin(moneyCategories, eq(moneyCategories.id, moneyTransactionSplits.categoryId))
+    .where(eq(moneyCategories.bookId, bookId))
+    .groupBy(moneyTransactionSplits.categoryId)
+    .all()) {
+    counts.set(row.categoryId, (counts.get(row.categoryId) ?? 0) + row.n);
+  }
   return db
     .select()
     .from(moneyCategories)
@@ -521,10 +596,15 @@ function oneCategory(db: Queryable, row: CategoryRow): CategoryJson {
     .from(moneyTransactions)
     .where(eq(moneyTransactions.categoryId, row.id))
     .get();
-  return categoryJson(row, used?.n ?? 0);
+  const parts = db
+    .select({ n: count() })
+    .from(moneyTransactionSplits)
+    .where(eq(moneyTransactionSplits.categoryId, row.id))
+    .get();
+  return categoryJson(row, (used?.n ?? 0) + (parts?.n ?? 0));
 }
 
-export function createCategory(db: Db, input: CategoryCreate): CategoryJson {
+export function createCategory(db: Queryable, input: CategoryCreate): CategoryJson {
   return db.transaction((tx) => {
     requireBook(tx, input.bookId, "body");
     checkCategoryNameFree(tx, input.bookId, input.name);
@@ -565,8 +645,11 @@ export function deleteCategory(db: Db, id: number): void {
     if ((rules?.n ?? 0) > 0) {
       throw conflict("A rule uses this category. Delete the rule first, or archive the category.");
     }
-    // An unused category's budgets mean nothing without it.
+    // An unused category's budgets and card bonus rates mean nothing without it.
     tx.delete(moneyBudgets).where(eq(moneyBudgets.categoryId, id)).run();
+    tx.delete(moneyBudgetSettings).where(eq(moneyBudgetSettings.categoryId, id)).run();
+    dropCategoryRates(tx, [id]);
+    tx.update(moneyBills).set({ categoryId: null }).where(eq(moneyBills.categoryId, id)).run();
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
   });
 }
@@ -587,8 +670,19 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
           .map((row) => [row.id, row.accountId]),
   );
   const accountIds = [...new Set([...rows.map((row) => row.accountId), ...peers.values()])];
+  const parts = splitsOf(
+    db,
+    rows.map((row) => row.id),
+  );
+  const receipts = receiptsOf(
+    db,
+    rows.map((row) => row.id),
+  );
   const categoryIds = [
-    ...new Set(rows.flatMap((row) => (row.categoryId === null ? [] : [row.categoryId]))),
+    ...new Set([
+      ...rows.flatMap((row) => (row.categoryId === null ? [] : [row.categoryId])),
+      ...[...parts.values()].flat().map((part) => part.categoryId),
+    ]),
   ];
   const accounts = new Map(
     db
@@ -616,6 +710,27 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     db,
     rows.map((row) => row.id),
   );
+  const tithing = tithingOf(db, rows);
+  const cardIds = [...new Set(rows.flatMap((row) => (row.cardId === null ? [] : [row.cardId])))];
+  const cards = new Map(
+    cardIds.length === 0
+      ? []
+      : db
+          .select({
+            id: moneyCards.id,
+            name: moneyCards.name,
+            last4: moneyCards.last4,
+            accountKind: moneyAccounts.kind,
+          })
+          .from(moneyCards)
+          .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyCards.accountId))
+          .where(inArray(moneyCards.id, cardIds))
+          .all()
+          .map(({ accountKind, ...card }) => [
+            card.id,
+            { ...card, kind: cardKindFor(accountKind) ?? ("debit" as const) },
+          ]),
+  );
   return rows.map((row) => ({
     id: row.id,
     account: accounts.get(row.accountId) ?? { id: row.accountId, name: "" },
@@ -626,8 +741,17 @@ export function transactionsJson(db: Queryable, rows: TransactionRow[]): Transac
     counterparty: row.counterparty,
     bankPayee: row.bankPayee,
     category: row.categoryId === null ? null : (categories.get(row.categoryId) ?? null),
+    card: row.cardId === null ? null : (cards.get(row.cardId) ?? null),
+    splits: (parts.get(row.id) ?? []).map((part) => ({
+      id: part.id,
+      category: categories.get(part.categoryId) ?? null,
+      amountCents: part.amountCents,
+      memo: part.memo,
+    })),
+    receipt: receipts.get(row.id) ?? null,
     transfer: transferJson(row.transferPeerId, peers, accounts),
     resaleItems: items.get(row.id) ?? [],
+    tithing: tithing.get(row.id) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }));
@@ -653,25 +777,41 @@ export function oneTransaction(db: Queryable, row: TransactionRow): TransactionJ
   return transaction;
 }
 
-/** Escapes LIKE wildcards so a search for "50%" finds "50%", not everything. */
-export const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+const ORDERS: Record<TransactionQuery["sort"], (size: SQL) => SQL[]> = {
+  newest: () => [desc(moneyTransactions.date), desc(moneyTransactions.id)],
+  oldest: () => [asc(moneyTransactions.date), asc(moneyTransactions.id)],
+  largest: (size) => [sql`${size} desc`, desc(moneyTransactions.date), desc(moneyTransactions.id)],
+  smallest: (size) => [sql`${size} asc`, desc(moneyTransactions.date), desc(moneyTransactions.id)],
+};
 
-/** A book's transactions, newest first, with totals across every page. */
+/** A book's transactions, newest first unless sorted another way, with totals across every page. */
 export function listTransactions(db: Queryable, query: TransactionQuery): TransactionPage {
   requireBook(db, query.bookId);
   const conditions: SQL[] = [eq(moneyAccounts.bookId, query.bookId)];
   if (query.accountId !== undefined) {
     conditions.push(eq(moneyTransactions.accountId, query.accountId));
   }
-  if (query.categoryId === "none") {
-    conditions.push(isNull(moneyTransactions.categoryId), isNull(moneyTransactions.transferPeerId));
-  } else if (query.categoryId === "transfer") {
-    conditions.push(isNotNull(moneyTransactions.transferPeerId));
-  } else if (query.categoryId !== undefined) {
-    conditions.push(eq(moneyTransactions.categoryId, query.categoryId));
+  // A split transaction is in each of its parts' categories, and not in its own.
+  const inCategory = (categoryId: number) =>
+    sql`(case when exists (select 1 from ${moneyTransactionSplits} where ${moneyTransactionSplits.transactionId} = ${moneyTransactions.id}) then exists (select 1 from ${moneyTransactionSplits} where ${moneyTransactionSplits.transactionId} = ${moneyTransactions.id} and ${moneyTransactionSplits.categoryId} = ${categoryId}) else ${moneyTransactions.categoryId} = ${categoryId} end)`;
+  const inChoice = (choice: number | "none" | "transfer"): SQL =>
+    choice === "none"
+      ? (and(isNull(moneyTransactions.categoryId), isNull(moneyTransactions.transferPeerId)) as SQL)
+      : choice === "transfer"
+        ? (isNotNull(moneyTransactions.transferPeerId) as SQL)
+        : inCategory(choice);
+  const picked = query.categories ?? (query.categoryId === undefined ? [] : [query.categoryId]);
+  if (picked.length > 0) conditions.push(or(...picked.map(inChoice)) as SQL);
+  if (query.cardId === "none") {
+    conditions.push(isNull(moneyTransactions.cardId));
+  } else if (query.cardId !== undefined) {
+    conditions.push(eq(moneyTransactions.cardId, query.cardId));
   }
   if (query.from) conditions.push(gte(moneyTransactions.date, query.from));
   if (query.to) conditions.push(lte(moneyTransactions.date, query.to));
+  const size = sql`abs(${moneyTransactions.amountCents})`;
+  if (query.minCents !== undefined) conditions.push(sql`${size} >= ${query.minCents}`);
+  if (query.maxCents !== undefined) conditions.push(sql`${size} <= ${query.maxCents}`);
   if (query.q) {
     const pattern = likePattern(query.q);
     conditions.push(
@@ -696,7 +836,7 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
     .from(moneyTransactions)
     .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
     .where(where)
-    .orderBy(desc(moneyTransactions.date), desc(moneyTransactions.id))
+    .orderBy(...ORDERS[query.sort](size))
     .limit(query.limit)
     .offset(query.offset)
     .all()
@@ -708,6 +848,13 @@ export function listTransactions(db: Queryable, query: TransactionQuery): Transa
     inCents: totals?.inCents ?? 0,
     outCents: totals?.outCents ?? 0,
     transferCount: totals?.transfers ?? 0,
+    largestCents:
+      db
+        .select({ top: sql<number>`coalesce(max(${size}), 0)` })
+        .from(moneyTransactions)
+        .innerJoin(moneyAccounts, eq(moneyAccounts.id, moneyTransactions.accountId))
+        .where(eq(moneyAccounts.bookId, query.bookId))
+        .get()?.top ?? 0,
   };
 }
 
@@ -726,28 +873,86 @@ export function checkCategoryFits(db: Queryable, account: AccountRow, categoryId
   }
 }
 
-export function createTransaction(db: Db, input: TransactionCreate): TransactionJson {
+/**
+ * Checks a split's parts add up to the transaction and fit its book, and saves them in
+ * place of any it had. Returns the category the transaction shows: its largest part's.
+ */
+function saveSplits(
+  tx: Queryable,
+  transactionId: number,
+  account: AccountRow,
+  amountCents: number,
+  parts: SplitInput[],
+): number | null {
+  const total = parts.reduce((sum, part) => sum + part.amountCents, 0);
+  if (total !== amountCents) {
+    throw badRequest(
+      `The parts add up to ${(total / 100).toFixed(2)}, not ${(amountCents / 100).toFixed(2)}. Make them add up to the whole amount.`,
+    );
+  }
+  for (const part of parts) checkCategoryFits(tx, account, part.categoryId);
+  dropSplits(tx, [transactionId]);
+  tx.insert(moneyTransactionSplits)
+    .values(
+      parts.map((part, index) => ({
+        transactionId,
+        categoryId: part.categoryId,
+        amountCents: part.amountCents,
+        memo: part.memo?.trim() ?? "",
+        sortOrder: index,
+      })),
+    )
+    .run();
+  return primaryCategory(parts);
+}
+
+export function createTransaction(db: Queryable, input: TransactionCreate): TransactionJson {
   return db.transaction((tx) => {
     const account = requireAccount(tx, input.accountId, "body");
     checkCategoryFits(tx, account, input.categoryId ?? null);
+    const payee = input.payee ?? "";
+    const memo = input.memo ?? "";
+    // Left out, the card is guessed the way imports guess it; null means no card.
+    const cardId =
+      input.cardId === undefined
+        ? guessCardFor(tx, account, { payee, memo, amountCents: input.amountCents })
+        : input.cardId;
+    checkCardFits(tx, account.id, cardId);
     const row = tx
       .insert(moneyTransactions)
       .values({
         accountId: input.accountId,
         date: input.date,
         amountCents: input.amountCents,
-        payee: input.payee ?? "",
-        memo: input.memo ?? "",
+        payee,
+        memo,
         categoryId: input.categoryId ?? null,
         counterparty: input.counterparty ?? null,
+        cardId,
       })
       .returning()
       .get();
+    if (input.splits) {
+      const categoryId = saveSplits(tx, row.id, account, input.amountCents, input.splits);
+      return oneTransaction(
+        tx,
+        tx
+          .update(moneyTransactions)
+          .set({ categoryId })
+          .where(eq(moneyTransactions.id, row.id))
+          .returning()
+          .get(),
+      );
+    }
     return oneTransaction(tx, row);
   });
 }
 
-export function updateTransaction(db: Db, id: number, patch: TransactionUpdate): TransactionJson {
+export function updateTransaction(
+  db: Queryable,
+  id: number,
+  patch: TransactionUpdate,
+): TransactionJson {
   return db.transaction((tx) => {
     const current = requireTransaction(tx, id);
     if (
@@ -764,9 +969,34 @@ export function updateTransaction(db: Db, id: number, patch: TransactionUpdate):
     const account = requireAccount(tx, accountId, "body");
     const categoryId = patch.categoryId === undefined ? current.categoryId : patch.categoryId;
     checkCategoryFits(tx, account, categoryId);
+    if (current.transferPeerId !== null && patch.cardId !== undefined && patch.cardId !== null) {
+      throw conflict("A transfer isn't paid with a card. Unlink the transfer to pick a card.");
+    }
+    // Moving to another account drops a card that isn't that account's.
+    let cardId = patch.cardId === undefined ? current.cardId : patch.cardId;
+    if (patch.cardId === undefined && accountId !== current.accountId) cardId = null;
+    checkCardFits(tx, accountId, cardId);
+
+    const { splits, ...fields } = patch;
+    const amountCents = patch.amountCents ?? current.amountCents;
+    const wasSplit = (splitsOf(tx, [id]).get(id)?.length ?? 0) > 0;
+    let category = categoryId;
+    if (splits && current.transferPeerId !== null) {
+      throw conflict("A transfer can't be split. Unlink the transfer to split it.");
+    }
+    if (splits) {
+      category = saveSplits(tx, id, account, amountCents, splits);
+    } else if (splits === null || (wasSplit && patch.categoryId !== undefined)) {
+      // Taking the split away, or picking one category for the whole thing.
+      dropSplits(tx, [id]);
+    } else if (wasSplit && amountCents !== current.amountCents) {
+      throw conflict(
+        "This transaction is split. Change its parts along with the amount so they still add up.",
+      );
+    }
     const row = tx
       .update(moneyTransactions)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...fields, categoryId: category, cardId, updatedAt: new Date() })
       .where(eq(moneyTransactions.id, id))
       .returning()
       .get();
@@ -775,10 +1005,14 @@ export function updateTransaction(db: Db, id: number, patch: TransactionUpdate):
 }
 
 /** Deletes a transaction. A transfer is one movement of money, so both sides go. */
-export function deleteTransaction(db: Db, id: number): void {
+export function deleteTransaction(db: Queryable, id: number): void {
   db.transaction((tx) => {
     const row = requireTransaction(tx, id);
     const ids = row.transferPeerId === null ? [id] : [id, row.transferPeerId];
+    dropSplits(tx, ids);
+    dropReceipts(tx, ids);
+    dropTithing(tx, ids);
+    dropReimbursements(tx, ids);
     tx.delete(moneyTransactions).where(inArray(moneyTransactions.id, ids)).run();
   });
 }

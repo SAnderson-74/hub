@@ -78,3 +78,32 @@ export function useSendReminderNow() {
     },
   });
 }
+
+const calendarKey = ["integrations", "calendar"] as const;
+
+/** Whether the calendar feed is on, and its address. */
+export function useCalendarFeed() {
+  return useQuery({
+    queryKey: calendarKey,
+    queryFn: async () => {
+      const res = await api.integrations.calendar.$get();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+  });
+}
+
+/** Turns the feed on (or gives it a new address), or off. */
+export function useSetCalendarFeed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (on: boolean) => {
+      const res = on
+        ? await api.integrations.calendar.$post()
+        : await api.integrations.calendar.$delete();
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSuccess: (data) => queryClient.setQueryData(calendarKey, data),
+  });
+}

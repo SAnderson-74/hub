@@ -1,7 +1,10 @@
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
+import { BILL_FREQUENCIES, BILL_KINDS } from "../../shared/bills";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
+import { DEBT_STRATEGIES } from "../../shared/debt";
 import { RULE_DIRECTIONS } from "../../shared/moneyRules";
+import { REWARD_KINDS } from "../../shared/rewards";
 
 const timestamps = () => ({
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -43,6 +46,25 @@ export const moneyAccounts = sqliteTable(
     ...timestamps(),
   },
   (t) => [index("money_accounts_book_idx").on(t.bookId)],
+);
+
+/**
+ * A payment card on the account it spends from: a credit card on its credit card
+ * account, a debit card on checking. Only the last 4 digits are kept.
+ */
+export const moneyCards = sqliteTable(
+  "money_cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => moneyAccounts.id),
+    name: text("name").notNull(),
+    last4: text("last4"),
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    ...timestamps(),
+  },
+  (t) => [index("money_cards_account_idx").on(t.accountId)],
 );
 
 /** What money was for, per book. Income and spending are kept apart for budgets. */
@@ -90,6 +112,8 @@ export const moneyTransactions = sqliteTable(
     bankPayee: text("bank_payee"),
     /** Who was paid or paid, for payment apps like Venmo: "John Smith". */
     counterparty: text("counterparty"),
+    /** The card it was paid with (or refunded to), when known. */
+    cardId: integer("card_id").references(() => moneyCards.id, { onDelete: "set null" }),
     ...timestamps(),
   },
   (t) => [
@@ -99,6 +123,31 @@ export const moneyTransactions = sqliteTable(
     index("money_transactions_import_idx").on(t.importId),
     index("money_transactions_external_idx").on(t.accountId, t.externalId),
     index("money_transactions_transfer_idx").on(t.transferPeerId),
+    index("money_transactions_card_idx").on(t.cardId),
+  ],
+);
+
+/**
+ * A part of a split transaction: one charge in several categories, like a store run
+ * that was half groceries and half household things. The parts add up to the
+ * transaction, which keeps its largest part's category, so anything that reads only
+ * the transaction (or an older build) still sees a sensible one. No foreign key, so a
+ * rollback to a build without splits can still delete transactions.
+ */
+export const moneyTransactionSplits = sqliteTable(
+  "money_transaction_splits",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    categoryId: integer("category_id").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    memo: text("memo").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_transaction_splits_transaction_idx").on(t.transactionId),
+    index("money_transaction_splits_category_idx").on(t.categoryId),
   ],
 );
 
@@ -110,7 +159,7 @@ export const moneyImports = sqliteTable(
     accountId: integer("account_id")
       .notNull()
       .references(() => moneyAccounts.id),
-    source: text("source", { enum: ["csv", "ofx"] }).notNull(),
+    source: text("source", { enum: ["csv", "ofx", "statement"] }).notNull(),
     fileName: text("file_name").notNull().default(""),
     created: integer("created").notNull().default(0),
     duplicates: integer("duplicates").notNull().default(0),
@@ -195,3 +244,201 @@ export const moneyBalanceSnapshots = sqliteTable(
   },
   (t) => [uniqueIndex("money_balance_snapshots_account_date_unique").on(t.accountId, t.date)],
 );
+
+/**
+ * A card's rewards program: cash back or points, what everything earns, and what a
+ * point is worth. One per card. No foreign keys here or in its rates, so a rollback to
+ * a build without rewards can still delete cards and categories; Hub removes a card's
+ * rewards with it.
+ */
+export const moneyCardRewards = sqliteTable("money_card_rewards", {
+  cardId: integer("card_id").primaryKey(),
+  kind: text("kind", { enum: REWARD_KINDS }).notNull().default("cash_back"),
+  /** Hundredths of a percent (cash back) or of a point per dollar. */
+  baseRate: integer("base_rate").notNull().default(0),
+  /** Hundredths of a cent per point. */
+  pointValue: integer("point_value").notNull().default(100),
+  /** What the card costs a year, for whether it's worth it. */
+  annualFeeCents: integer("annual_fee_cents").notNull().default(0),
+  ...timestamps(),
+});
+
+/** A bonus rate on a card: for a store or a category, maybe between dates, maybe capped. */
+export const moneyRewardRates = sqliteTable(
+  "money_reward_rates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id").notNull(),
+    categoryId: integer("category_id"),
+    contains: text("contains"),
+    rate: integer("rate").notNull(),
+    startsOn: text("starts_on"),
+    endsOn: text("ends_on"),
+    capCents: integer("cap_cents"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [index("money_reward_rates_card_idx").on(t.cardId)],
+);
+
+/** A card's points balance on a day, from its statement. One per card per day. */
+export const moneyPointBalances = sqliteTable(
+  "money_point_balances",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id").notNull(),
+    date: text("date").notNull(),
+    points: integer("points").notNull(),
+    ...timestamps(),
+  },
+  (t) => [uniqueIndex("money_point_balances_card_date_unique").on(t.cardId, t.date)],
+);
+
+/** Points used, and what they were worth: a statement credit, a gift card, travel. */
+export const moneyPointRedemptions = sqliteTable(
+  "money_point_redemptions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardId: integer("card_id").notNull(),
+    date: text("date").notNull(),
+    points: integer("points").notNull(),
+    valueCents: integer("value_cents").notNull(),
+    note: text("note").notNull().default(""),
+    ...timestamps(),
+  },
+  (t) => [index("money_point_redemptions_card_idx").on(t.cardId)],
+);
+
+/** What a transaction looked like before a receipt changed it, so removing the receipt puts it back. */
+export type ReceiptBefore = {
+  payee: string;
+  memo: string;
+  categoryId: number | null;
+  cardId: number | null;
+  splits: Array<{ categoryId: number; amountCents: number; memo: string }>;
+};
+
+/**
+ * A receipt, attached to the transaction it's for: the store, the lines, and how it
+ * got there. `createdTransaction` is set when the receipt came before the bank's
+ * record and Hub added the transaction; `bankMatched` once a bank file found it, so
+ * the file doesn't add it again. No foreign key, like the other newer tables.
+ */
+export const moneyReceipts = sqliteTable(
+  "money_receipts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    store: text("store").notNull(),
+    date: text("date").notNull(),
+    /** Positive: what was charged, or for a return, what came back. */
+    totalCents: integer("total_cents").notNull(),
+    type: text("type", { enum: ["purchase", "return"] })
+      .notNull()
+      .default("purchase"),
+    items: text("items", { mode: "json" })
+      .$type<Array<{ name: string; amountCents: number; category: string }>>()
+      .notNull(),
+    note: text("note").notNull().default(""),
+    createdTransaction: integer("created_transaction", { mode: "boolean" }).notNull(),
+    bankMatched: integer("bank_matched", { mode: "boolean" }).notNull().default(false),
+    before: text("before", { mode: "json" }).$type<ReceiptBefore>(),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_receipts_transaction_idx").on(t.transactionId),
+    index("money_receipts_date_idx").on(t.date),
+  ],
+);
+
+/**
+ * A bill, subscription, or repeating income: confirmed from transactions that repeat
+ * (with the payee group it matches) or added by hand. "dismissed" rows are suggestions
+ * marked "not a bill", kept so they don't come back.
+ */
+export const moneyBills = sqliteTable(
+  "money_bills",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => moneyBooks.id),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: BILL_KINDS }).notNull().default("bill"),
+    status: text("status", { enum: ["active", "dismissed"] })
+      .notNull()
+      .default("active"),
+    /** The usual amount, always positive. */
+    amountCents: integer("amount_cents").notNull().default(0),
+    frequency: text("frequency", { enum: BILL_FREQUENCIES }).notNull().default("monthly"),
+    /** The next date on its schedule, as last set; later dates follow from the frequency. */
+    nextDate: text("next_date").notNull(),
+    /** No foreign keys, so deleting an account or category leaves the bill. */
+    accountId: integer("account_id"),
+    categoryId: integer("category_id"),
+    matchKey: text("match_key"),
+    ...timestamps(),
+  },
+  (t) => [index("money_bills_book_idx").on(t.bookId)],
+);
+
+/**
+ * How a spending category's budget behaves beyond its monthly amount. With `rollover`,
+ * what's left at the end of a month carries into the next, counted from `rolloverFrom`
+ * (YYYY-MM). A goal makes it a sinking fund: saving up `goalCents` by `goalDate` for a
+ * cost that comes once, or again every `goalEveryMonths` months.
+ */
+export const moneyBudgetSettings = sqliteTable("money_budget_settings", {
+  /** No foreign key; deleting the category deletes this row. */
+  categoryId: integer("category_id").primaryKey(),
+  rollover: integer("rollover", { mode: "boolean" }).notNull().default(false),
+  rolloverFrom: text("rollover_from"),
+  goalCents: integer("goal_cents"),
+  goalDate: text("goal_date"),
+  goalEveryMonths: integer("goal_every_months"),
+  ...timestamps(),
+});
+
+/**
+ * Part of a spending transaction that someone owes back. Once the repayment arrives,
+ * `repaymentId` points at it and it counts as a refund in the original's category.
+ * Several of these can share one repayment, when someone pays back for more than one.
+ */
+export const moneyReimbursements = sqliteTable(
+  "money_reimbursements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    /** Always positive. */
+    amountCents: integer("amount_cents").notNull(),
+    who: text("who").notNull().default(""),
+    repaymentId: integer("repayment_id"),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_reimbursements_transaction_idx").on(t.transactionId),
+    index("money_reimbursements_repayment_idx").on(t.repaymentId),
+  ],
+);
+
+/** A card's or loan's yearly rate and minimum payment, for planning its payoff. */
+export const moneyDebtTerms = sqliteTable("money_debt_terms", {
+  /** No foreign key; deleting the account deletes this row. */
+  accountId: integer("account_id").primaryKey(),
+  /** Hundredths of a percent: 2499 is 24.99%. */
+  aprBasisPoints: integer("apr_basis_points").notNull().default(0),
+  minimumCents: integer("minimum_cents").notNull().default(0),
+  ...timestamps(),
+});
+
+/** How a book's debts are paid off: in what order, and how much extra each month. */
+export const moneyDebtPlans = sqliteTable("money_debt_plans", {
+  bookId: integer("book_id")
+    .primaryKey()
+    .references(() => moneyBooks.id),
+  strategy: text("strategy", { enum: DEBT_STRATEGIES }).notNull().default("avalanche"),
+  extraCents: integer("extra_cents").notNull().default(0),
+  /** Account ids, first paid first, for "custom". */
+  order: text("order", { mode: "json" }).$type<number[]>().notNull().default([]),
+  ...timestamps(),
+});

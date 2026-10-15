@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { useLocation } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
@@ -12,10 +13,16 @@ import { applyAccent, previewAccent } from "../../../client/theme";
 import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../../../shared/color";
 import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
 import { streakKey } from "../../education/queries";
+import { CalendarPanel } from "../../integrations/components/CalendarPanel";
 import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
 import { RemindersPanel } from "../../integrations/components/RemindersPanel";
+import { PushPanel } from "../../push/components/PushPanel";
+import { usePushStatus } from "../../push/queries";
 import { BackupsPanel } from "../components/BackupsPanel";
+import { ClaudeProjectPanel } from "../components/ClaudeProjectPanel";
+import { HomeWidgetsPanel } from "../components/HomeWidgetsPanel";
 import { ImportsPanel } from "../components/ImportsPanel";
+import { ModulesPanel } from "../components/ModulesPanel";
 
 function normalizeHex(value: string): string {
   const trimmed = value.trim().toLowerCase();
@@ -262,8 +269,16 @@ function StudyMinimum({ saved }: { saved: number }) {
 
 export function SettingsPage() {
   const settings = useSettings();
+  const push = usePushStatus();
   const system = useSystem();
   const info = system.data;
+  const { hash } = useLocation();
+  const loaded = settings.data !== undefined;
+
+  // A link like /settings#home opens at that section once it has loaded.
+  useEffect(() => {
+    if (hash && loaded) document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [hash, loaded]);
 
   const details: Array<[string, string]> = info
     ? [
@@ -281,7 +296,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Appearance, study streak, Home Assistant, reminders, imports, backups, and details about this installation."
+        subtitle="Appearance, modules and time zone, Home, study streak, Home Assistant, reminders, calendar, imports, the Claude Project, backups, and details about this installation."
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
         <Panel
@@ -299,9 +314,38 @@ export function SettingsPage() {
         </Panel>
 
         <Panel
+          title="Modules and time zone"
+          description="Turn parts of Hub on or off, and set the time zone it works in."
+          className="lg:col-span-7 lg:row-start-2"
+        >
+          {settings.data ? (
+            <ModulesPanel saved={settings.data} />
+          ) : settings.isError ? (
+            <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
+          ) : (
+            <LoadingRows rows={3} />
+          )}
+        </Panel>
+
+        <div id="home" className="scroll-mt-20 lg:col-span-7 lg:row-start-3">
+          <Panel
+            title="Home"
+            description="Pick the widgets Home shows and their order. Wide screens show two to a row."
+          >
+            {settings.data ? (
+              <HomeWidgetsPanel saved={settings.data.homeWidgets} modules={settings.data.modules} />
+            ) : settings.isError ? (
+              <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
+            ) : (
+              <LoadingRows rows={3} />
+            )}
+          </Panel>
+        </div>
+
+        <Panel
           title="Study streak"
           description="Days with at least this much time logged on courses keep the streak going."
-          className="lg:col-span-7 lg:row-start-2"
+          className="lg:col-span-7 lg:row-start-4"
         >
           {settings.data ? (
             <StudyMinimum saved={settings.data.studyMinimumMinutes} />
@@ -315,7 +359,7 @@ export function SettingsPage() {
         <Panel
           title="Home Assistant"
           description="Send Hub's summary to Home Assistant for dashboards, and reminders for it to pass to your phone."
-          className="lg:col-span-7 lg:row-start-3"
+          className="lg:col-span-7 lg:row-start-5"
         >
           {settings.data ? (
             <HomeAssistantPanel saved={settings.data.homeAssistant} />
@@ -328,13 +372,18 @@ export function SettingsPage() {
 
         <Panel
           title="Reminders"
-          description="A morning digest, things coming due, and a nudge before your study streak breaks, sent through Home Assistant."
-          className="lg:col-span-7 lg:row-start-4"
+          description="A morning digest, things coming due, and a nudge before your study streak breaks, sent as notifications or through Home Assistant."
+          className="lg:col-span-7 lg:row-start-6"
         >
           {settings.data ? (
             <RemindersPanel
               saved={settings.data.reminders}
-              configured={settings.data.homeAssistant.reminderUrl !== ""}
+              savedTithing={settings.data.tithingReminder}
+              tithingOn={settings.data.modules.tithing}
+              configured={
+                settings.data.homeAssistant.reminderUrl !== "" ||
+                (push.data?.devices.length ?? 0) > 0
+              }
             />
           ) : settings.isError ? (
             <ErrorNote error={settings.error} onRetry={() => void settings.refetch()} />
@@ -344,17 +393,41 @@ export function SettingsPage() {
         </Panel>
 
         <Panel
+          title="Notifications"
+          description="Reminders on this phone or computer, turned on device by device."
+          className="lg:col-span-7 lg:row-start-7"
+        >
+          <PushPanel />
+        </Panel>
+
+        <Panel
+          title="Calendar feed"
+          description="Hub's due dates in your phone or computer calendar."
+          className="lg:col-span-7 lg:row-start-8"
+        >
+          <CalendarPanel />
+        </Panel>
+
+        <Panel
           title="Imports"
           description="Bring in files and listings from other apps. Each import is also on its own page."
-          className="lg:col-span-7 lg:row-start-5"
+          className="lg:col-span-7 lg:row-start-9"
         >
           <ImportsPanel />
         </Panel>
 
         <Panel
+          title="Claude Project"
+          description="One Claude Project reads receipts, listings, and study plans from photos and documents, and answers in a form Hub can import."
+          className="lg:col-span-7 lg:row-start-10"
+        >
+          <ClaudeProjectPanel />
+        </Panel>
+
+        <Panel
           title="Backups"
           description="Hub saves a copy of everything each night and before updates. Restore one to go back to it."
-          className="lg:col-span-7 lg:row-start-6"
+          className="lg:col-span-7 lg:row-start-11"
         >
           <BackupsPanel startedAt={info?.startedAt ?? null} />
         </Panel>

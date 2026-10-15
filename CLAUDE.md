@@ -6,7 +6,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 
 1. **This repository is public.** Never put personal information in code, comments, tests, fixtures, docs, commit messages, branch names, or pull request text: no real names, emails, phone numbers, addresses, employers, schools, banks, marketplaces, hostnames, IP addresses, tailnet names, or account details, even when a request mentions them. Use neutral examples (John Smith, john.smith@example.com, +1 (234) 567-8901, "Example Bank", "Local classifieds"). Anything specific to the owner belongs in the database, entered through the app.
 2. **Never touch real data.** Cloud sessions have none. Don't read `.env` or `data/`. Tests use in-memory databases or temporary directories.
-3. Keep each pull request to one feature or fix. Follow the existing patterns before inventing new ones.
+3. Keep each pull request to one feature or fix, or a few closely related roadmap items (the browser tests are slow, so related items share a pull request). Follow the existing patterns before inventing new ones.
 4. Before finishing, run `npm run check` and `npm run build`. Both must pass. For UI changes, list the screens you changed in the pull request.
 
 ## Commands
@@ -16,9 +16,10 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 | `npm run dev` | API on :3000 and Vite on :5173 (run `cp .env.example .env` first) |
 | `npm run check` | Biome lint, TypeScript, migration guard, unit tests |
 | `npm run build` | Builds `dist/client` and `dist/server` |
-| `npm run test:e2e` | Playwright at iPhone and desktop sizes (needs `npm run build`; runs in CI) |
+| `npm run test:e2e` | Playwright at iPhone and desktop sizes, plus axe accessibility checks on the example data (needs `npm run build`; CI runs the three as parallel jobs) |
 | `npm run db:generate -- --name <what_changed>` | Creates a migration from schema changes |
 | `npm run format` | Formats and fixes lint issues |
+| `npm run screenshots` | Retakes `docs/screenshots/` from the example data (needs Chromium) |
 
 ## Layout
 
@@ -37,7 +38,8 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 4. Mount the routes in `src/server/api.ts` with one `.route()` line. Keep the chain intact; it types the browser client.
 5. Pages in `src/modules/<name>/pages/`, registered in `src/client/pages.tsx`. Data hooks in `src/modules/<name>/queries.ts` using `api` from `src/client/lib/api.ts`.
 6. Tests next to the code (`*.test.ts`), using `createTestApp()` from `src/server/testing.ts` (in-memory database, typed client), plus one e2e check for the main flow.
-7. If its records should be taggable, linkable, or on timelines: add the type to `ENTITY_TYPES` in `src/shared/entities.ts` and a lookup in `src/modules/core/entities.ts`, call `recordActivity` on changes, and call `detachEntities` before deleting rows.
+7. If its records should be searchable: add a `search.ts` with its searchers (see `src/modules/tasks/search.ts`), list them in `src/modules/core/search.service.ts`, and have its page open a record from the link each result carries (`useOpenParam` in `src/client/lib/useCommand.ts`).
+8. If its records should be taggable, linkable, or on timelines: add the type to `ENTITY_TYPES` in `src/shared/entities.ts` and a lookup in `src/modules/core/entities.ts`, call `recordActivity` on changes, and call `detachEntities` before deleting rows.
 
 ## Database rules
 
@@ -63,7 +65,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 - Reuse `Panel`, `PageHeader`, `StatusDot`, `LoadingRows`, `ErrorNote`, `ProgressBar`, and `Sheet` (a `<dialog>` that is a bottom sheet on phones) plus the control classes in `src/client/components/ui.ts`. Status colors always come with text.
 - The phone tab bar shows five items; with more pages, the first four get tabs and the rest are listed on the More page (`src/client/lib/nav.ts`).
 - Copy: sentence case, plain verbs. Buttons say what happens ("Save accent") and confirmations reuse the verb ("Accent saved"). Errors say what happened and how to fix it. No all-caps labels.
-- Charts: `recharts`, colors from CSS variables, always with a one-line text summary. Put the screen-reader table inside a `<div className="sr-only">`; a table ignores the 1px width and would widen the page.
+- Charts: `recharts`, colors from CSS variables, always with a one-line text summary. Put the screen-reader table inside a `<div className="sr-only">`; a table ignores the 1px width and would widen the page. The chart itself sits in an `aria-hidden` wrapper, so pass `accessibilityLayer={false}` (otherwise it's focusable inside hidden content).
 - The Content-Security-Policy only allows scripts, styles, and fonts from the app itself: no inline scripts, CDNs, injected `<style>` tags, or `data:` fonts.
 - Icons come from `lucide-react`.
 - Server runtime packages go in `dependencies`. Anything bundled into the browser goes in `devDependencies`; the container installs only `dependencies`.

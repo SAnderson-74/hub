@@ -20,6 +20,7 @@ import {
   useDeleteAccount,
   useUpdateAccount,
 } from "../queries";
+import { AccountCards } from "./AccountCards";
 import { BalanceHistory } from "./BalanceHistory";
 
 /** "new" adds an account to the book; an account edits it; null is closed. */
@@ -257,6 +258,8 @@ function AccountForm({
           </p>
         ) : null}
       </form>
+
+      {account ? <AccountCards account={account} /> : null}
 
       {account ? <BalanceHistory account={account} today={today} /> : null}
 

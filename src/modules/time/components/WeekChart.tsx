@@ -50,6 +50,7 @@ export function WeekChart({ days, summary }: { days: number[]; summary: string }
       <div aria-hidden="true" className="h-52 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
+            accessibilityLayer={false}
             data={data}
             margin={{ top: 4, right: 4, bottom: 0, left: -12 }}
             barCategoryGap="28%"

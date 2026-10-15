@@ -10,6 +10,7 @@ import {
   primaryButton,
   secondaryButton,
 } from "../../../client/components/ui";
+import { useOpenParam } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { COURSE_STATUS_LABELS } from "../../../shared/education";
 import { formatShortDate, localDate } from "../../tasks/dates";
@@ -33,6 +34,15 @@ export function CoursesPage() {
   const requested = Number(params.get("term"));
   const term = list.find((item) => item.id === requested) ?? defaultTerm(list, today);
   const selectTerm = (id: number) => setParams({ term: String(id) }, { replace: true });
+  // A search result (?term=3&course=12) opens that course.
+  useOpenParam(
+    "course",
+    (id) => {
+      const course = list.flatMap((item) => item.courses).find((item) => item.id === id);
+      if (course) setCourseSheet({ mode: "edit", course });
+    },
+    terms.isSuccess,
+  );
   // The sheet shows the latest copy of a course after each save.
   const openCourse =
     courseSheet?.mode === "edit"

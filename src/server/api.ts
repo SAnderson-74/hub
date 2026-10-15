@@ -3,17 +3,24 @@ import { businessRoutes } from "../modules/business/business.routes";
 import { activityRoutes } from "../modules/core/activity.routes";
 import { backupRoutes } from "../modules/core/backups.routes";
 import { linkRoutes } from "../modules/core/links.routes";
+import { searchRoutes } from "../modules/core/search.routes";
 import { settingsRoutes } from "../modules/core/settings.routes";
+import { setupRoutes } from "../modules/core/setup.routes";
 import { systemRoutes } from "../modules/core/system.routes";
 import { tagRoutes } from "../modules/core/tags.routes";
 import { educationRoutes } from "../modules/education/education.routes";
 import { goalRoutes } from "../modules/goals/goals.routes";
+import { habitRoutes } from "../modules/habits/habits.routes";
 import { integrationRoutes } from "../modules/integrations/integrations.routes";
 import { moneyRoutes } from "../modules/money/money.routes";
+import { plannerRoutes } from "../modules/planner/planner.routes";
+import { pushRoutes } from "../modules/push/push.routes";
 import { resaleRoutes } from "../modules/resale/resale.routes";
 import { projectRoutes } from "../modules/tasks/projects.routes";
 import { taskRoutes } from "../modules/tasks/tasks.routes";
+import { templateRoutes } from "../modules/tasks/templates.routes";
 import { timeRoutes } from "../modules/time/time.routes";
+import { tithingRoutes } from "../modules/tithing/tithing.routes";
 import type { Deps } from "./deps";
 import type { AppEnv } from "./env";
 
@@ -27,19 +34,26 @@ export function createApi(deps: Deps) {
     .get("/me", (c) => c.json(c.get("user")))
     .route("/system", systemRoutes(deps))
     .route("/settings", settingsRoutes(deps))
+    .route("/setup", setupRoutes(deps))
     .route("/backups", backupRoutes(deps))
     .route("/projects", projectRoutes(deps))
     .route("/tasks", taskRoutes(deps))
+    .route("/templates", templateRoutes(deps))
     .route("/tags", tagRoutes(deps))
     .route("/links", linkRoutes(deps))
     .route("/activity", activityRoutes(deps))
+    .route("/search", searchRoutes(deps))
     .route("/time", timeRoutes(deps))
     .route("/goals", goalRoutes(deps))
+    .route("/habits", habitRoutes(deps))
     .route("/education", educationRoutes(deps))
     .route("/resale", resaleRoutes(deps))
     .route("/money", moneyRoutes(deps))
+    .route("/tithing", tithingRoutes(deps))
     .route("/business", businessRoutes(deps))
-    .route("/integrations", integrationRoutes(deps));
+    .route("/integrations", integrationRoutes(deps))
+    .route("/planner", plannerRoutes(deps))
+    .route("/push", pushRoutes(deps));
 }
 
 export type Api = ReturnType<typeof createApi>;

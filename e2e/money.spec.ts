@@ -577,17 +577,18 @@ test("net worth adds up every account over time", async ({ page }, testInfo) => 
   await expect(page.getByRole("radio", { name: "Net worth" })).toBeChecked();
   await expect(page.getByRole("radio", { name: `${book} only` })).toBeChecked();
 
-  await expect(page.locator("figcaption")).toHaveText(
-    /^Net worth is \$1,150, down \$100 since the end of \w{3} \d{4}\.$/,
-  );
+  await expect(
+    page.getByRole("region", { name: "Net worth over time" }).locator("figcaption"),
+  ).toHaveText(/^Net worth is \$1,150, down \$100 since the end of \w{3} \d{4}\.$/);
   const where = page.getByRole("region", { name: "Assets" });
   await expect(where).toContainText(`Checking ${id}`);
   await expect(where).toContainText("$1,400");
   await expect(page.getByRole("region", { name: "Debts" })).toContainText("$250");
   await expect(where).not.toContainText(`Side savings ${id}`);
 
-  await page.getByText("Show the numbers").click();
-  await expect(page.getByRole("row", { name: /^Today/ })).toContainText("$1,150");
+  const chart = page.getByRole("region", { name: "Net worth over time" });
+  await chart.getByText("Show the numbers").click();
+  await expect(chart.getByRole("row", { name: /^Today/ })).toContainText("$1,150");
 
   // Every book, over a longer range.
   await page.getByRole("radio", { name: "3 years" }).check();
@@ -703,6 +704,11 @@ test("cash flow shows where money came from and went", async ({ page }, testInfo
   // (Its center can sit under another band or a label, so press it directly.)
   await panel.locator("svg path").nth(2).dispatchEvent("pointerdown");
   await expect(panel).toContainText("$400 · 21% of money out");
+
+  // By payment method, the same money out is by the account that paid.
+  await panel.getByRole("radio", { name: "Payment method" }).check();
+  await expect(panel).toContainText("The most went through Checking, $1,900.");
+  await panel.getByRole("radio", { name: "Category" }).check();
 
   await panel.getByRole("radio", { name: "12 months" }).check();
   await expect(panel).toContainText("In the 12 months to");

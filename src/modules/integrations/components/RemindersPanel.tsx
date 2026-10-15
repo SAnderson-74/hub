@@ -10,6 +10,9 @@ import {
   type ReminderKind,
   type ReminderSettings,
   remindersSchema,
+  TITHING_REPEAT_DAYS,
+  type TithingReminderSettings,
+  tithingReminderSchema,
 } from "../../../shared/reminders";
 import { useReminders, useSendReminderNow } from "../queries";
 
@@ -17,11 +20,12 @@ const HINTS: Record<ReminderKind, string> = {
   digest:
     "Today's tasks, what's due in the next few days, and your study streak. Skipped on a quiet day.",
   due_soon:
-    "Tasks, goals, milestones, business steps, and lead follow-ups coming due. Each one once.",
+    "Tasks, goals, milestones, assessments, bills, business steps, and lead follow-ups coming due. Each one once.",
   streak: "When you have a study streak and haven't met today's minimum yet.",
+  tithing: `When income comes in with tithing to pay, and every ${TITHING_REPEAT_DAYS} days while some is unpaid.`,
 };
 
-const SETTING_KEYS: Record<ReminderKind, keyof ReminderSettings> = {
+const SETTING_KEYS: Record<Exclude<ReminderKind, "tithing">, keyof ReminderSettings> = {
   digest: "digest",
   due_soon: "dueSoon",
   streak: "streak",
@@ -41,9 +45,14 @@ const sentLabel = (iso: string) =>
 /** When each reminder goes out, what it would say now, and the latest sent. */
 export function RemindersPanel({
   saved,
+  savedTithing,
+  tithingOn,
   configured,
 }: {
   saved: ReminderSettings;
+  savedTithing: TithingReminderSettings;
+  /** Whether the Tithing module is on; its reminder shows only then. */
+  tithingOn: boolean;
   /** Whether the reminder webhook address is set. */
   configured: boolean;
 }) {
@@ -52,23 +61,39 @@ export function RemindersPanel({
   const overview = useReminders();
   const sendNow = useSendReminderNow();
   const [draft, setDraft] = useState(saved);
+  const [tithing, setTithing] = useState(savedTithing);
   const [message, setMessage] = useState("");
   const parsed = remindersSchema.safeParse(draft);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const tithingParsed = tithingReminderSchema.safeParse(tithing);
+  const valid = parsed.success && tithingParsed.success;
+  const dirty =
+    JSON.stringify(draft) !== JSON.stringify(saved) ||
+    JSON.stringify(tithing) !== JSON.stringify(savedTithing);
+  const kinds: ReminderKind[] = tithingOn
+    ? ["digest", "due_soon", "streak", "tithing"]
+    : ["digest", "due_soon", "streak"];
+  /** A reminder's on/off and time, from the draft or the saved settings. */
+  const partOf = (kind: ReminderKind, from: "draft" | "saved") =>
+    kind === "tithing"
+      ? from === "draft"
+        ? tithing
+        : savedTithing
+      : (from === "draft" ? draft : saved)[SETTING_KEYS[kind]];
 
-  const setPart = <K extends keyof ReminderSettings>(
-    key: K,
-    value: Partial<ReminderSettings[K]>,
-  ) => {
-    setDraft((current) => ({ ...current, [key]: { ...current[key], ...value } }));
+  const setPart = (kind: ReminderKind, value: { enabled?: boolean; time?: string }) => {
+    if (kind === "tithing") setTithing((current) => ({ ...current, ...value }));
+    else {
+      const key = SETTING_KEYS[kind];
+      setDraft((current) => ({ ...current, [key]: { ...current[key], ...value } }));
+    }
     setMessage("");
   };
 
   const onSave = (event: FormEvent) => {
     event.preventDefault();
-    if (!parsed.success) return;
+    if (!parsed.success || !tithingParsed.success) return;
     save.mutate(
-      { reminders: parsed.data },
+      { reminders: parsed.data, tithingReminder: tithingParsed.data },
       {
         onSuccess: () => {
           setMessage("Reminders saved");
@@ -82,15 +107,15 @@ export function RemindersPanel({
     <div className="space-y-6">
       {!configured ? (
         <p className="rounded-tile bg-base/80 p-4 text-sm text-fg ring-1 ring-surface-0/50">
-          Reminders go to Home Assistant, which sends them to your phone. Add the reminder webhook
-          under Home Assistant to turn them on. Until then, you can see what they'd say below.
+          Reminders go out as notifications on devices that turn them on (Notifications, below), or
+          through Home Assistant's reminder webhook. Until one is set up, you can see what they'd
+          say below.
         </p>
       ) : null}
 
       <form onSubmit={onSave} noValidate className="space-y-4">
-        {(["digest", "due_soon", "streak"] as const).map((kind) => {
-          const key = SETTING_KEYS[kind];
-          const part = draft[key];
+        {kinds.map((kind) => {
+          const part = partOf(kind, "draft");
           const id = `${ids}-${kind}`;
           return (
             <fieldset
@@ -102,7 +127,7 @@ export function RemindersPanel({
                 <input
                   type="checkbox"
                   checked={part.enabled}
-                  onChange={(event) => setPart(key, { enabled: event.target.checked })}
+                  onChange={(event) => setPart(kind, { enabled: event.target.checked })}
                   aria-describedby={`${id}-hint`}
                   className="size-5 accent-accent"
                 />
@@ -124,7 +149,7 @@ export function RemindersPanel({
                     type="time"
                     value={part.time}
                     disabled={!part.enabled}
-                    onChange={(event) => setPart(key, { time: event.target.value })}
+                    onChange={(event) => setPart(kind, { time: event.target.value })}
                     className={`${inputClass} w-36`}
                   />
                 </div>
@@ -140,9 +165,14 @@ export function RemindersPanel({
                       id={`${id}-days`}
                       value={draft.dueSoon.days}
                       disabled={!part.enabled}
-                      onChange={(event) =>
-                        setPart("dueSoon", { days: Number(event.target.value) as DueSoonDays })
-                      }
+                      onChange={(event) => {
+                        const days = Number(event.target.value) as DueSoonDays;
+                        setDraft((current) => ({
+                          ...current,
+                          dueSoon: { ...current.dueSoon, days },
+                        }));
+                        setMessage("");
+                      }}
                       className={`${inputClass} w-52`}
                     >
                       {DUE_SOON_DAYS.map((days) => (
@@ -161,15 +191,15 @@ export function RemindersPanel({
           Times are in Hub's time zone. A reminder Hub couldn't send on time still goes out up to
           three hours later.
         </p>
-        {!parsed.success ? (
+        {!valid ? (
           <p role="alert" className="text-sm text-danger">
-            {parsed.error.issues[0]?.message}
+            {(parsed.error ?? tithingParsed.error)?.issues[0]?.message}
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
-            disabled={!dirty || !parsed.success || save.isPending}
+            disabled={!dirty || !valid || save.isPending}
             className={primaryButton}
           >
             {save.isPending ? "Saving…" : "Save reminders"}
@@ -205,8 +235,8 @@ export function RemindersPanel({
                 <p className="text-sm font-semibold text-muted">
                   {REMINDER_LABELS[preview.kind]}
                   {preview.sentToday ? " · Sent today" : ""}
-                  {saved[SETTING_KEYS[preview.kind]].enabled
-                    ? ` · ${formatTime(saved[SETTING_KEYS[preview.kind]].time)}`
+                  {partOf(preview.kind, "saved").enabled
+                    ? ` · ${formatTime(partOf(preview.kind, "saved").time)}`
                     : " · Off"}
                 </p>
                 {preview.reminder ? (
@@ -256,7 +286,8 @@ export function RemindersPanel({
               <li key={`${entry.sentAt}-${entry.kind}`} className="py-2">
                 <p className="font-semibold break-words text-fg">{entry.title}</p>
                 <p className="text-muted">
-                  {REMINDER_LABELS[entry.kind]} · {sentLabel(entry.sentAt)}
+                  {entry.kind === "habit" ? "Habit" : REMINDER_LABELS[entry.kind]} ·{" "}
+                  {sentLabel(entry.sentAt)}
                 </p>
               </li>
             ))}
