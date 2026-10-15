@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartLine,
   FileUp,
+  Lightbulb,
   List,
   PiggyBank,
   Plus,
@@ -54,7 +55,9 @@ import { CategoriesSheet } from "../components/CategoriesSheet";
 import { FilterSheet } from "../components/FilterSheet";
 import { ForecastView } from "../components/ForecastView";
 import { ImportSheet } from "../components/ImportSheet";
+import { InsightsView } from "../components/InsightsView";
 import { NetWorthView } from "../components/NetWorthView";
+import { OwedPanel } from "../components/OwedBack";
 import { ReceiptsSheet } from "../components/ReceiptsSheet";
 import { RewardsView } from "../components/RewardsView";
 import { RulesSheet } from "../components/RulesSheet";
@@ -82,12 +85,13 @@ import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget" | "bills" | "forecast" | "rewards" | "net-worth";
+type View = "transactions" | "budget" | "bills" | "forecast" | "insights" | "rewards" | "net-worth";
 const VIEWS: readonly View[] = [
   "transactions",
   "budget",
   "bills",
   "forecast",
+  "insights",
   "rewards",
   "net-worth",
 ];
@@ -243,6 +247,7 @@ function BookView({
   useCommand("net-worth", () => chooseView("net-worth"));
   useCommand("bills", () => chooseView("bills"));
   useCommand("forecast", () => chooseView("forecast"));
+  useCommand("insights", () => chooseView("insights"));
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
@@ -267,6 +272,7 @@ function BookView({
               ["budget", "Budget", PiggyBank],
               ["bills", "Bills", CalendarDays],
               ["forecast", "Forecast", ChartLine],
+              ["insights", "Insights", Lightbulb],
               ["rewards", "Rewards", BadgePercent],
               ["net-worth", "Net worth", TrendingUp],
             ] as const
@@ -375,6 +381,8 @@ function BookView({
         />
       ) : view === "forecast" ? (
         <ForecastView book={book} today={today} />
+      ) : view === "insights" ? (
+        <InsightsView book={book} today={today} />
       ) : view === "net-worth" ? (
         <NetWorthView
           book={book}
@@ -398,11 +406,14 @@ function BookView({
         </Panel>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-          <AccountsPanel
-            accounts={allAccounts}
-            today={today}
-            onOpen={(account) => setAccountTarget(account)}
-          />
+          <div className="space-y-4 lg:col-span-4 lg:space-y-6">
+            <AccountsPanel
+              accounts={allAccounts}
+              today={today}
+              onOpen={(account) => setAccountTarget(account)}
+            />
+            <OwedPanel book={book} today={today} />
+          </div>
           <TransactionsPanel
             book={book}
             accounts={allAccounts}
@@ -492,7 +503,7 @@ function AccountsPanel({
 }) {
   const net = netBalance(accounts);
   return (
-    <Panel title="Accounts" className="lg:col-span-4">
+    <Panel title="Accounts">
       <ul className="space-y-2">
         {accounts.map((account) => (
           <li key={account.id}>

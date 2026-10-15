@@ -21,7 +21,9 @@ import {
 } from "../../../shared/budget";
 import { centsToInput, formatCents, parseDollars } from "../../../shared/money";
 import { formatSigned } from "../../../shared/profit";
+import { formatShortDate } from "../../tasks/dates";
 import { type Book, type BudgetMonth, useBudget, useSetBudget } from "../queries";
+import { BudgetSettingsSheet } from "./BudgetSettingsSheet";
 import { CashFlowPanel } from "./CashFlowPanel";
 
 // The chart loads on demand, so the rest of the app doesn't carry the chart library.
@@ -87,16 +89,19 @@ export function BudgetView({ book, today }: { book: Book; today: string }) {
           <Summary data={budget.data} />
           <CashFlowPanel book={book} month={month} />
           <Panel title="Categories" className="lg:col-span-7">
-            <CategoryBudgets data={budget.data} />
+            <CategoryBudgets data={budget.data} today={today} />
           </Panel>
-          <Panel title="Last 6 months" className="lg:col-span-5">
-            <Suspense fallback={<LoadingRows rows={3} />}>
-              <BudgetHistoryChart
-                months={budget.data.history}
-                summary={historySummary(budget.data.history)}
-              />
-            </Suspense>
-          </Panel>
+          <div className="space-y-4 lg:col-span-5 lg:space-y-6">
+            <SavingUp data={budget.data} today={today} />
+            <Panel title="Last 6 months">
+              <Suspense fallback={<LoadingRows rows={3} />}>
+                <BudgetHistoryChart
+                  months={budget.data.history}
+                  summary={historySummary(budget.data.history)}
+                />
+              </Suspense>
+            </Panel>
+          </div>
         </div>
       )}
     </div>
@@ -105,7 +110,8 @@ export function BudgetView({ book, today }: { book: Book; today: string }) {
 
 function Summary({ data }: { data: BudgetMonth }) {
   const { totals } = data;
-  const status = budgetStatus(totals.budgetedCents, totals.spentBudgetedCents);
+  const available = totals.budgetedCents + totals.carriedCents;
+  const status = budgetStatus(available, totals.spentBudgetedCents);
   const extras = [
     totals.spentUnbudgetedCents !== 0
       ? `${formatCents(totals.spentUnbudgetedCents)} in categories without a budget`
@@ -123,7 +129,15 @@ function Summary({ data }: { data: BudgetMonth }) {
       className="lg:col-span-12"
     >
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Budgeted" value={formatCents(totals.budgetedCents)} />
+        <Stat
+          label="Budgeted"
+          value={formatCents(totals.budgetedCents)}
+          note={
+            totals.carriedCents > 0
+              ? `Plus ${formatCents(totals.carriedCents)} carried over`
+              : undefined
+          }
+        />
         <Stat
           label="Spent"
           value={formatCents(totals.spentBudgetedCents)}
@@ -133,7 +147,7 @@ function Summary({ data }: { data: BudgetMonth }) {
           label={status.over ? "Over" : "Left"}
           value={formatCents(Math.abs(status.remainingCents))}
           note={
-            totals.budgetedCents === 0
+            available === 0
               ? "Set a budget below"
               : status.over
                 ? "More than budgeted"
@@ -146,8 +160,9 @@ function Summary({ data }: { data: BudgetMonth }) {
   );
 }
 
-function CategoryBudgets({ data }: { data: BudgetMonth }) {
+function CategoryBudgets({ data, today }: { data: BudgetMonth; today: string }) {
   const [announcement, setAnnouncement] = useState("");
+  const [settings, setSettings] = useState<BudgetMonth["categories"][number] | null>(null);
   if (data.categories.length === 0) {
     return (
       <p className="text-muted">
@@ -155,14 +170,20 @@ function CategoryBudgets({ data }: { data: BudgetMonth }) {
       </p>
     );
   }
-  const budgeted = data.categories.filter((row) => row.budgetCents !== null);
-  const unbudgeted = data.categories.filter((row) => row.budgetCents === null);
+  const budgeted = data.categories.filter((row) => row.availableCents !== null);
+  const unbudgeted = data.categories.filter((row) => row.availableCents === null);
   return (
     <div className="space-y-6">
       {budgeted.length > 0 ? (
         <ul className="space-y-2">
           {budgeted.map((row) => (
-            <CategoryRow key={row.id} row={row} month={data.month} onSaved={setAnnouncement} />
+            <CategoryRow
+              key={row.id}
+              row={row}
+              month={data.month}
+              onSaved={setAnnouncement}
+              onSettings={() => setSettings(row)}
+            />
           ))}
         </ul>
       ) : (
@@ -176,7 +197,13 @@ function CategoryBudgets({ data }: { data: BudgetMonth }) {
           <h3 className="text-sm font-semibold text-muted">Without a budget</h3>
           <ul className="space-y-2">
             {unbudgeted.map((row) => (
-              <CategoryRow key={row.id} row={row} month={data.month} onSaved={setAnnouncement} />
+              <CategoryRow
+                key={row.id}
+                row={row}
+                month={data.month}
+                onSaved={setAnnouncement}
+                onSettings={() => setSettings(row)}
+              />
             ))}
           </ul>
         </section>
@@ -184,6 +211,16 @@ function CategoryBudgets({ data }: { data: BudgetMonth }) {
       <p role="status" className="text-sm font-semibold text-ok empty:hidden">
         {announcement}
       </p>
+      <BudgetSettingsSheet
+        row={settings}
+        month={data.month}
+        today={today}
+        onClose={() => setSettings(null)}
+        onSaved={(message) => {
+          setSettings(null);
+          setAnnouncement(message);
+        }}
+      />
     </div>
   );
 }
@@ -192,10 +229,12 @@ function CategoryRow({
   row,
   month,
   onSaved,
+  onSettings,
 }: {
   row: BudgetMonth["categories"][number];
   month: string;
   onSaved: (message: string) => void;
+  onSettings: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(row.budgetCents ? centsToInput(row.budgetCents) : "");
@@ -224,7 +263,12 @@ function CategoryRow({
     submit(cents, cents === 0 ? `Budget removed for ${row.name}` : `Budget saved for ${row.name}`);
   };
 
-  const status = row.budgetCents === null ? null : budgetStatus(row.budgetCents, row.spentCents);
+  const status =
+    row.availableCents === null ? null : budgetStatus(row.availableCents, row.spentCents);
+  const notes = [
+    row.carriedCents > 0 ? `Includes ${formatCents(row.carriedCents)} carried over` : "",
+    row.rollover && row.carriedCents === 0 ? "Carries over" : "",
+  ].filter(Boolean);
 
   return (
     <li className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
@@ -235,23 +279,34 @@ function CategoryRow({
             {row.archived ? <span className="font-normal text-muted"> · Archived</span> : null}
           </p>
           <p className="text-sm text-muted tabular-nums">
-            {row.budgetCents === null
+            {row.availableCents === null
               ? `${formatSigned(row.spentCents)} spent`
-              : `${formatSigned(row.spentCents)} of ${formatCents(row.budgetCents)}`}
+              : `${formatSigned(row.spentCents)} of ${formatCents(row.availableCents)}`}
           </p>
+          {notes.length > 0 ? <p className="text-sm text-muted">{notes.join(" · ")}</p> : null}
         </div>
         {editing ? null : (
-          <button
-            type="button"
-            className={`${ghostButton} -mr-2`}
-            aria-label={`${row.budgetCents === null ? "Set budget" : "Change budget"} for ${row.name}`}
-            onClick={() => setEditing(true)}
-          >
-            {row.budgetCents === null ? "Set budget" : "Change"}
-          </button>
+          <div className="-mr-2 flex shrink-0 flex-wrap justify-end">
+            <button
+              type="button"
+              className={ghostButton}
+              aria-label={`${row.budgetCents === null ? "Set budget" : "Change budget"} for ${row.name}`}
+              onClick={() => setEditing(true)}
+            >
+              {row.budgetCents === null ? "Set budget" : "Change"}
+            </button>
+            <button
+              type="button"
+              className={ghostButton}
+              aria-label={`Options for ${row.name}: carry over and save up`}
+              onClick={onSettings}
+            >
+              Options
+            </button>
+          </div>
         )}
       </div>
-      {status && row.budgetCents !== null ? (
+      {status && row.availableCents !== null ? (
         <div className="space-y-1">
           <ProgressBar
             percent={status.percent}
@@ -318,5 +373,79 @@ function CategoryRow({
         </form>
       ) : null}
     </li>
+  );
+}
+
+/** Sinking funds: categories saving up for a cost, with what to set aside each month. */
+function SavingUp({ data, today }: { data: BudgetMonth; today: string }) {
+  const funds = data.categories.filter((row) => row.goal !== null);
+  const save = useSetBudget();
+  if (funds.length === 0) return null;
+  return (
+    <Panel
+      title="Saving up"
+      description="Costs that come once or twice a year, saved for a little each month."
+    >
+      <ul className="space-y-3">
+        {funds.map((row) => {
+          const goal = row.goal;
+          if (!goal) return null;
+          const percent = Math.min(100, Math.round((goal.savedCents / goal.cents) * 100));
+          const onTrack = (row.budgetCents ?? 0) >= goal.neededMonthlyCents;
+          return (
+            <li
+              key={row.id}
+              className="space-y-2 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <p className="font-semibold break-words text-fg">{row.name}</p>
+                <p className="text-sm text-muted tabular-nums">
+                  {formatCents(goal.savedCents)} of {formatCents(goal.cents)} by{" "}
+                  {formatShortDate(goal.dueDate, today)}
+                </p>
+              </div>
+              <ProgressBar percent={percent} label={`${row.name}: ${percent}% saved`} />
+              {goal.neededMonthlyCents === 0 ? (
+                <p className="flex items-center gap-2 text-sm font-semibold text-ok">
+                  <StatusDot tone="ok" />
+                  Saved in full
+                </p>
+              ) : onTrack ? (
+                <p className="flex items-center gap-2 text-sm font-semibold text-ok">
+                  <StatusDot tone="ok" />
+                  On track at {formatCents(row.budgetCents ?? 0)} a month
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-warn">
+                    <StatusDot tone="warn" />
+                    Needs {formatCents(goal.neededMonthlyCents)} a month
+                  </p>
+                  <button
+                    type="button"
+                    className={`${ghostButton} -ml-3`}
+                    disabled={save.isPending}
+                    onClick={() =>
+                      save.mutate({
+                        categoryId: row.id,
+                        month: data.month,
+                        amountCents: goal.neededMonthlyCents,
+                      })
+                    }
+                  >
+                    Budget {formatCents(goal.neededMonthlyCents)} a month
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {save.error ? (
+        <p role="alert" className="mt-3 text-sm text-danger">
+          {save.error.message}
+        </p>
+      ) : null}
+    </Panel>
   );
 }

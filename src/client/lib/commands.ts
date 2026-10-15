@@ -6,6 +6,7 @@ import {
   Keyboard,
   LayoutGrid,
   LayoutTemplate,
+  Lightbulb,
   type LucideIcon,
   Moon,
   PackagePlus,
@@ -132,6 +133,14 @@ const ACTIONS: Array<Omit<Command, "group">> = [
     keywords: "money cash flow balance ahead low",
     icon: ChartLine,
     to: "/money?do=forecast",
+    module: "money",
+  },
+  {
+    id: "insights",
+    label: "Go to Insights",
+    keywords: "money spending trends month year review compare stores categories",
+    icon: Lightbulb,
+    to: "/money?do=insights",
     module: "money",
   },
   {

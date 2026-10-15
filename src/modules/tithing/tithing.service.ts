@@ -19,6 +19,7 @@ import {
   requireAccount,
   requireTransaction,
 } from "../money/money.service";
+import { repaymentIds } from "../money/owedLinks";
 import { moneyAccounts, moneyBooks, moneyCategories, moneyTransactions } from "../money/schema";
 import { tithingIncome, tithingLinks, tithingPayments } from "./schema";
 import { inBatches, incomeFacts, type TithingSubject } from "./transactionLinks";
@@ -263,6 +264,7 @@ export function settleIncome(
 
 /** Whether tithing applies by default: not money back into a spending category. */
 function defaultApplies(db: Queryable, row: TithingSubject): boolean {
+  if (repaymentIds(db, [row.id]).size > 0) return false;
   if (row.categoryId === null) return true;
   const category = db
     .select({ kind: moneyCategories.kind })

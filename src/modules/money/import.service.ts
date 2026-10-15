@@ -15,6 +15,7 @@ import { dropTithing } from "../tithing/transactionLinks";
 import { cardsOfAccount } from "./cards.service";
 import { dropSplits } from "./lines";
 import { requireAccount } from "./money.service";
+import { dropReimbursements } from "./owedLinks";
 import { dropReceipts, fitsReceipt, waitingReceipts } from "./receiptLinks";
 import { rulesForBook } from "./rules.service";
 import {
@@ -411,6 +412,7 @@ export function undoImport(db: Db, id: number): ImportJson {
     dropSplits(tx, removing);
     dropReceipts(tx, removing);
     dropTithing(tx, removing);
+    dropReimbursements(tx, removing);
     tx.delete(moneyTransactions).where(eq(moneyTransactions.importId, id)).run();
     const undone = tx
       .update(moneyImports)

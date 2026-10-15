@@ -78,7 +78,7 @@ for (const { path, heading } of PAGES) {
 
 test("Money's views meet WCAG 2.1 AA", async ({ page }) => {
   await open(page, "/money", "Money");
-  for (const view of ["Budget", "Bills", "Forecast", "Rewards", "Net worth"]) {
+  for (const view of ["Budget", "Bills", "Forecast", "Insights", "Rewards", "Net worth"]) {
     await page.getByRole("radio", { name: view, exact: true }).check();
     await settled(page);
     expect(await violations(page), view).toEqual([]);
@@ -142,4 +142,24 @@ test("templates and planning sheets meet WCAG 2.1 AA", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Shut down" }).click();
   await checkSheet(page, page.getByRole("dialog", { name: "Shut down for the day" }));
+});
+
+test("budget options and money owed back meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/money", "Money");
+  await page.getByRole("radio", { name: "Budget", exact: true }).check();
+  await settled(page);
+  await page.getByRole("button", { name: /^Options for Insurance/ }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Carry over and save up" }));
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("radio", { name: "Transactions", exact: true }).check();
+  await expect(page.getByRole("region", { name: "Owed to you" })).toBeVisible();
+  await page
+    .getByRole("region", { name: "Transactions" })
+    .getByRole("button", { name: /Example Tickets/ })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Transaction" });
+  await expect(sheet.getByText("Not paid back yet")).toBeVisible();
+  await sheet.getByRole("button", { name: "Someone owes me part of this" }).click();
+  await checkSheet(page, sheet);
 });

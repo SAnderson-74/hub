@@ -15,11 +15,12 @@ import type {
   TransactionUpdate,
   TransferCreate,
 } from "../../shared/books";
-import type { BudgetSet } from "../../shared/budget";
+import type { BudgetSet, BudgetSettingsSet } from "../../shared/budget";
 import type { CardCreate, CardUpdate } from "../../shared/cards";
 import type { CashFlowGroup, CashFlowPeriod } from "../../shared/cashFlow";
 import type { CategorizeApply } from "../../shared/categorize";
 import type { Sort } from "../../shared/listFilter";
+import type { OwedCreate } from "../../shared/owed";
 import type { ReceiptImportInput } from "../../shared/receipts";
 import type { PointBalanceSave, RedemptionSave, RewardsSave } from "../../shared/rewards";
 
@@ -656,6 +657,14 @@ export function useCashFlow(
   });
 }
 
+export function useSetBudgetSettings() {
+  return useMoneyMutation(async (json: BudgetSettingsSet) => {
+    const res = await api.money["budget-settings"].$put({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
 export function useSetBudget() {
   return useMoneyMutation(async (json: BudgetSet) => {
     const res = await api.money.budgets.$put({ json });
@@ -797,5 +806,103 @@ export function useDismissBill() {
   return useMoneyMutation(async (json: BillDismiss) => {
     const res = await api.money.bills.dismiss.$post({ json });
     if (!res.ok) throw await toApiError(res);
+  });
+}
+
+// Insights
+
+export type Insights = Awaited<ReturnType<typeof fetchInsights>>;
+export type YearReview = Awaited<ReturnType<typeof fetchYearReview>>;
+
+async function fetchInsights(bookId: number, month: string) {
+  const res = await api.money.insights.$get({ query: { bookId: String(bookId), month } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchYearReview(bookId: number, year: number) {
+  const res = await api.money["year-review"].$get({
+    query: { bookId: String(bookId), year: String(year) },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useInsights(bookId: number, month: string) {
+  return useQuery({
+    queryKey: ["money", "insights", bookId, month],
+    queryFn: () => fetchInsights(bookId, month),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useYearReview(bookId: number, year: number) {
+  return useQuery({
+    queryKey: ["money", "year-review", bookId, year],
+    queryFn: () => fetchYearReview(bookId, year),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// Money owed back
+
+export type OwedList = Awaited<ReturnType<typeof fetchOwed>>;
+export type Owed = OwedList["repaid"][number];
+export type TransactionOwed = Awaited<ReturnType<typeof fetchTransactionOwed>>;
+
+async function fetchOwed(bookId: number) {
+  const res = await api.money.owed.$get({ query: { bookId: String(bookId) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+async function fetchTransactionOwed(id: number) {
+  const res = await api.money.transactions[":id"].owed.$get({ param: { id: String(id) } });
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+export function useOwed(bookId: number) {
+  return useQuery({ queryKey: ["money", "owed", bookId], queryFn: () => fetchOwed(bookId) });
+}
+
+export function useTransactionOwed(id: number) {
+  return useQuery({
+    queryKey: ["money", "transaction-owed", id],
+    queryFn: () => fetchTransactionOwed(id),
+  });
+}
+
+export function useCreateOwed() {
+  return useMoneyMutation(async (json: OwedCreate) => {
+    const res = await api.money.owed.$post({ json });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useDeleteOwed() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.owed[":id"].$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+  });
+}
+
+export function useMatchOwed() {
+  return useMoneyMutation(async ({ id, repaymentId }: { id: number; repaymentId: number }) => {
+    const res = await api.money.owed[":id"].repaid.$post({
+      param: { id: String(id) },
+      json: { repaymentId },
+    });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
+  });
+}
+
+export function useUnmatchOwed() {
+  return useMoneyMutation(async (id: number) => {
+    const res = await api.money.owed[":id"].repaid.$delete({ param: { id: String(id) } });
+    if (!res.ok) throw await toApiError(res);
+    return res.json();
   });
 }
