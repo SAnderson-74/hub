@@ -44,7 +44,7 @@ import {
 } from "../education/education.service";
 import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service";
 import { createBill, deleteBill, listBills } from "../money/bills.service";
-import { setBudget } from "../money/budget.service";
+import { setBudget, setBudgetSettings } from "../money/budget.service";
 import { createCard, deleteCard } from "../money/cards.service";
 import {
   createAccount,
@@ -56,6 +56,7 @@ import {
   listCategories,
 } from "../money/money.service";
 import { importReceipts } from "../money/receipts.service";
+import { createOwed, matchRepayment } from "../money/reimbursements.service";
 import { saveRewards } from "../money/rewards.service";
 import { createTransfer } from "../money/transfers.service";
 import { createItem, createPlatform, deleteItem, deletePlatform } from "../resale/resale.service";
@@ -481,6 +482,62 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
     ] as const) {
       const id = categoryId.get(category);
       if (id) setBudget(db, { categoryId: id, month: monthStart(-5).slice(0, 7), amountCents });
+    }
+
+    // Car insurance every six months, saved for a little each month.
+    const insurance = categoryId.get("Insurance");
+    if (insurance) {
+      setBudget(db, {
+        categoryId: insurance,
+        month: monthStart(-2).slice(0, 7),
+        amountCents: 10_000,
+      });
+      setBudgetSettings(db, {
+        categoryId: insurance,
+        month: monthStart(-2).slice(0, 7),
+        rollover: true,
+        goal: { cents: 60_000, dueDate: addDays(monthStart(4), 14), everyMonths: 6 },
+      });
+    }
+    // Dinner split with a friend who paid back their half, and tickets still owed for.
+    const dining = categoryId.get("Dining out");
+    const entertainment = categoryId.get("Entertainment");
+    if (dining && entertainment) {
+      const spend = (date: string, amountCents: number, payee: string, category: number) =>
+        note(
+          "transaction",
+          createTransaction(
+            db,
+            transactionCreateSchema.parse({
+              accountId: checking.id,
+              date,
+              amountCents,
+              payee,
+              categoryId: category,
+            }),
+          ),
+        );
+      const dinner = spend(day(-10), -6_400, "Noodle Bar", dining);
+      const repaid = note(
+        "transaction",
+        createTransaction(
+          db,
+          transactionCreateSchema.parse({
+            accountId: checking.id,
+            date: day(-8),
+            amountCents: 3_200,
+            payee: "Venmo from Jane Doe",
+            counterparty: "Jane Doe",
+          }),
+        ),
+      );
+      matchRepayment(
+        db,
+        createOwed(db, { transactionId: dinner.id, amountCents: 3_200, who: "Jane Doe" }).id,
+        repaid.id,
+      );
+      const tickets = spend(day(-3), -12_000, "Example Tickets", entertainment);
+      createOwed(db, { transactionId: tickets.id, amountCents: 6_000, who: "John Smith" });
     }
 
     // Pay, rent, and the subscription confirmed as bills. The other repeating payments

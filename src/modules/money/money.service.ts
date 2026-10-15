@@ -42,6 +42,7 @@ import { transactionItems } from "../resale/transactionLinks";
 import { dropTithing, type TransactionTithing, tithingOf } from "../tithing/transactionLinks";
 import { checkCardFits, guessCardFor } from "./cards.service";
 import { dropSplits, primaryCategory, splitsOf } from "./lines";
+import { dropReimbursements } from "./owedLinks";
 import { dropReceipts, type ReceiptJson, receiptsOf } from "./receiptLinks";
 import { dropCategoryRates, dropRewards } from "./rewards.service";
 import {
@@ -49,6 +50,7 @@ import {
   moneyBalanceSnapshots,
   moneyBills,
   moneyBooks,
+  moneyBudgetSettings,
   moneyBudgets,
   moneyCards,
   moneyCategories,
@@ -274,6 +276,9 @@ export function deleteBook(db: Db, id: number): void {
       .map((row) => row.id);
     if (categoryIds.length > 0) {
       tx.delete(moneyBudgets).where(inArray(moneyBudgets.categoryId, categoryIds)).run();
+      tx.delete(moneyBudgetSettings)
+        .where(inArray(moneyBudgetSettings.categoryId, categoryIds))
+        .run();
     }
     dropCategoryRates(tx, categoryIds);
     tx.delete(moneyCategories).where(eq(moneyCategories.bookId, id)).run();
@@ -638,6 +643,7 @@ export function deleteCategory(db: Db, id: number): void {
     }
     // An unused category's budgets and card bonus rates mean nothing without it.
     tx.delete(moneyBudgets).where(eq(moneyBudgets.categoryId, id)).run();
+    tx.delete(moneyBudgetSettings).where(eq(moneyBudgetSettings.categoryId, id)).run();
     dropCategoryRates(tx, [id]);
     tx.update(moneyBills).set({ categoryId: null }).where(eq(moneyBills.categoryId, id)).run();
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
@@ -1002,6 +1008,7 @@ export function deleteTransaction(db: Queryable, id: number): void {
     dropSplits(tx, ids);
     dropReceipts(tx, ids);
     dropTithing(tx, ids);
+    dropReimbursements(tx, ids);
     tx.delete(moneyTransactions).where(inArray(moneyTransactions.id, ids)).run();
   });
 }

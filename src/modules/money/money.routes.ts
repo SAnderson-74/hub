@@ -32,7 +32,7 @@ import {
   transferCreateSchema,
   transferLinkSchema,
 } from "../../shared/books";
-import { budgetQuerySchema, budgetSetSchema } from "../../shared/budget";
+import { budgetQuerySchema, budgetSetSchema, budgetSettingsSchema } from "../../shared/budget";
 import { cardCreateSchema, cardUpdateSchema } from "../../shared/cards";
 import { cashFlowQuerySchema } from "../../shared/cashFlow";
 import {
@@ -40,7 +40,9 @@ import {
   categorizeQuerySchema,
   fillPeopleSchema,
 } from "../../shared/categorize";
+import { insightsQuerySchema, yearReviewQuerySchema } from "../../shared/insights";
 import { netWorthQuerySchema } from "../../shared/netWorth";
+import { owedCreateSchema, owedMatchSchema, owedUpdateSchema } from "../../shared/owed";
 import { receiptImportSchema } from "../../shared/receipts";
 import {
   pointBalanceSchema,
@@ -58,11 +60,12 @@ import {
   listBills,
   updateBill,
 } from "./bills.service";
-import { budgetMonth, setBudget } from "./budget.service";
+import { budgetMonth, setBudget, setBudgetSettings } from "./budget.service";
 import { createCard, deleteCard, listCards, updateCard } from "./cards.service";
 import { cashFlow } from "./cashFlow.service";
 import { applyCategory, categorizeOverview, fillPeople } from "./categorize.service";
 import { importBankFile, listImports, listLayouts, undoImport } from "./import.service";
+import { insights, yearReview } from "./insights.service";
 import {
   allAccounts,
   createAccount,
@@ -86,6 +89,15 @@ import {
 } from "./money.service";
 import { netWorth } from "./netWorth.service";
 import { importReceipts, removeReceipt } from "./receipts.service";
+import {
+  createOwed,
+  deleteOwed,
+  listOwed,
+  matchRepayment,
+  transactionOwed,
+  unmatchRepayment,
+  updateOwed,
+} from "./reimbursements.service";
 import {
   addRedemption,
   cardPoints,
@@ -432,6 +444,12 @@ export function moneyRoutes({ db, config }: Deps) {
         zValidator("json", budgetSetSchema, invalid("That budget isn't valid.")),
         (c) => c.json(setBudget(db, c.req.valid("json"))),
       )
+      // Carrying unspent money over, and saving up for a cost (a sinking fund).
+      .put(
+        "/budget-settings",
+        zValidator("json", budgetSettingsSchema, invalid("Those budget settings aren't valid.")),
+        (c) => c.json(setBudgetSettings(db, c.req.valid("json"))),
+      )
       .get(
         "/net-worth",
         zValidator(
@@ -442,6 +460,60 @@ export function moneyRoutes({ db, config }: Deps) {
           ),
         ),
         (c) => c.json(netWorth(db, c.req.valid("query"))),
+      )
+      // Spending month over month and year over year, and a year in review.
+      .get(
+        "/insights",
+        zValidator(
+          "query",
+          insightsQuerySchema,
+          invalid("Pass the book as bookId and a month like 2030-01."),
+        ),
+        (c) => {
+          const { bookId, month } = c.req.valid("query");
+          return c.json(insights(db, bookId, month));
+        },
+      )
+      .get(
+        "/year-review",
+        zValidator(
+          "query",
+          yearReviewQuerySchema,
+          invalid("Pass the book as bookId and a year like 2030."),
+        ),
+        (c) => {
+          const { bookId, year } = c.req.valid("query");
+          return c.json(yearReview(db, bookId, year));
+        },
+      )
+      // Money owed back on spending, and the repayments that settle it.
+      .get("/owed", bookQuery, (c) => c.json(listOwed(db, c.req.valid("query").bookId)))
+      .get("/transactions/:id/owed", idParam, (c) =>
+        c.json(transactionOwed(db, c.req.valid("param").id)),
+      )
+      .post(
+        "/owed",
+        zValidator("json", owedCreateSchema, invalid("Say how much is owed back, and by whom.")),
+        (c) => c.json(createOwed(db, c.req.valid("json")), 201),
+      )
+      .patch(
+        "/owed/:id",
+        idParam,
+        zValidator("json", owedUpdateSchema, invalid("Those changes to what's owed aren't valid.")),
+        (c) => c.json(updateOwed(db, c.req.valid("param").id, c.req.valid("json"))),
+      )
+      .delete("/owed/:id", idParam, (c) => {
+        deleteOwed(db, c.req.valid("param").id);
+        return c.body(null, 204);
+      })
+      .post(
+        "/owed/:id/repaid",
+        idParam,
+        zValidator("json", owedMatchSchema, invalid("Pick the repayment as repaymentId.")),
+        (c) => c.json(matchRepayment(db, c.req.valid("param").id, c.req.valid("json").repaymentId)),
+      )
+      .delete("/owed/:id/repaid", idParam, (c) =>
+        c.json(unmatchRepayment(db, c.req.valid("param").id)),
       )
       // Bills, subscriptions, and repeating income, with suggestions from repeating payments.
       .get("/bills", bookQuery, (c) => c.json(listBills(db, c.req.valid("query").bookId, today())))

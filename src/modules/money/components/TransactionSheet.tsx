@@ -43,6 +43,7 @@ import {
   useUnlinkTransfer,
   useUpdateTransaction,
 } from "../queries";
+import { OwedBackSection } from "./OwedBack";
 import { ReceiptBox } from "./ReceiptBox";
 import { newPart, type PartDraft, partsOf, SplitEditor, splitProblem } from "./SplitEditor";
 
@@ -836,6 +837,9 @@ function TransactionForm({
       ) : null}
       {transaction && !isTransferSide ? (
         <TransferMatches transaction={transaction} today={today} onLinked={onDone} />
+      ) : null}
+      {transaction && !isTransferSide ? (
+        <OwedBackSection transaction={transaction} today={today} onMatched={onDone} />
       ) : null}
 
       {transaction ? (

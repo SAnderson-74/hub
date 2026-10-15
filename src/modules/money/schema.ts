@@ -380,3 +380,42 @@ export const moneyBills = sqliteTable(
   },
   (t) => [index("money_bills_book_idx").on(t.bookId)],
 );
+
+/**
+ * How a spending category's budget behaves beyond its monthly amount. With `rollover`,
+ * what's left at the end of a month carries into the next, counted from `rolloverFrom`
+ * (YYYY-MM). A goal makes it a sinking fund: saving up `goalCents` by `goalDate` for a
+ * cost that comes once, or again every `goalEveryMonths` months.
+ */
+export const moneyBudgetSettings = sqliteTable("money_budget_settings", {
+  /** No foreign key; deleting the category deletes this row. */
+  categoryId: integer("category_id").primaryKey(),
+  rollover: integer("rollover", { mode: "boolean" }).notNull().default(false),
+  rolloverFrom: text("rollover_from"),
+  goalCents: integer("goal_cents"),
+  goalDate: text("goal_date"),
+  goalEveryMonths: integer("goal_every_months"),
+  ...timestamps(),
+});
+
+/**
+ * Part of a spending transaction that someone owes back. Once the repayment arrives,
+ * `repaymentId` points at it and it counts as a refund in the original's category.
+ * Several of these can share one repayment, when someone pays back for more than one.
+ */
+export const moneyReimbursements = sqliteTable(
+  "money_reimbursements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    /** Always positive. */
+    amountCents: integer("amount_cents").notNull(),
+    who: text("who").notNull().default(""),
+    repaymentId: integer("repayment_id"),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_reimbursements_transaction_idx").on(t.transactionId),
+    index("money_reimbursements_repayment_idx").on(t.repaymentId),
+  ],
+);
