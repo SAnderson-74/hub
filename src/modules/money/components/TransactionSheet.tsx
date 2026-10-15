@@ -37,12 +37,13 @@ import {
   type Transaction,
   useCreateTransaction,
   useCreateTransfer,
-  useDeleteTransaction,
+  useDeleteTransactionLater,
   useLinkTransfer,
   useTransferMatches,
   useUnlinkTransfer,
   useUpdateTransaction,
 } from "../queries";
+import { OwedBackSection } from "./OwedBack";
 import { ReceiptBox } from "./ReceiptBox";
 import { newPart, type PartDraft, partsOf, SplitEditor, splitProblem } from "./SplitEditor";
 
@@ -164,7 +165,6 @@ function TransactionForm({
   });
   const [message, setMessage] = useState("");
   const [tried, setTried] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   // A category picked by hand isn't replaced by a rule's suggestion.
   const [categoryTouched, setCategoryTouched] = useState(transaction?.category != null);
   const [suggested, setSuggested] = useState(false);
@@ -184,7 +184,7 @@ function TransactionForm({
   const create = useCreateTransaction();
   const createTransfer = useCreateTransfer();
   const update = useUpdateTransaction();
-  const remove = useDeleteTransaction();
+  const deleteLater = useDeleteTransactionLater();
   const unlink = useUnlinkTransfer();
   const ids = useId();
 
@@ -216,8 +216,7 @@ function TransactionForm({
     accountMissing ||
     toMissing ||
     (splitting && parts !== null && splitProblem(parts, cents) !== null);
-  const error =
-    create.error ?? createTransfer.error ?? update.error ?? remove.error ?? unlink.error;
+  const error = create.error ?? createTransfer.error ?? update.error ?? unlink.error;
   // Archived accounts and categories stay selectable only where already used.
   const accountChoices = accounts.filter(
     (account) => !account.archived || String(account.id) === draft.accountId,
@@ -837,40 +836,26 @@ function TransactionForm({
       {transaction && !isTransferSide ? (
         <TransferMatches transaction={transaction} today={today} onLinked={onDone} />
       ) : null}
+      {transaction && !isTransferSide ? (
+        <OwedBackSection transaction={transaction} today={today} onMatched={onDone} />
+      ) : null}
 
       {transaction ? (
-        confirmDelete ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
-            <p className="font-semibold text-fg">
-              {isTransferSide
-                ? "Delete this transfer? Both sides go. This can't be undone."
-                : "Delete this transaction? This can't be undone."}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(transaction.id, { onSuccess: onDone })}
-                className="inline-flex h-11 items-center rounded-full bg-danger px-5 font-bold text-crust disabled:opacity-40"
-              >
-                {isTransferSide ? "Delete transfer" : "Delete transaction"}
-              </button>
-              <button type="button" className={ghostButton} onClick={() => setConfirmDelete(false)}>
-                {isTransferSide ? "Keep transfer" : "Keep transaction"}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="border-t border-surface-0/70 pt-4">
-            <button
-              type="button"
-              className={`${dangerButton} -ml-4`}
-              onClick={() => setConfirmDelete(true)}
-            >
-              {isTransferSide ? "Delete transfer" : "Delete transaction"}
-            </button>
-          </div>
-        )
+        <div className="border-t border-surface-0/70 pt-4">
+          <button
+            type="button"
+            className={`${dangerButton} -ml-4`}
+            onClick={() => {
+              deleteLater(transaction);
+              onDone();
+            }}
+          >
+            {isTransferSide ? "Delete transfer" : "Delete transaction"}
+          </button>
+          {isTransferSide ? (
+            <p className="text-sm text-muted">Both sides go. Undo is there for a few seconds.</p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

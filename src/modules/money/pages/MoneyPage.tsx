@@ -2,7 +2,11 @@ import {
   ArrowLeftRight,
   BadgePercent,
   BookOpen,
+  CalendarDays,
+  ChartLine,
   FileUp,
+  Landmark,
+  Lightbulb,
   List,
   PiggyBank,
   Plus,
@@ -15,6 +19,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
@@ -26,6 +31,7 @@ import {
   secondaryButton,
 } from "../../../client/components/ui";
 import { useModules } from "../../../client/lib/queries";
+import { useCommand, useOpenParam } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { ACCOUNT_KIND_LABELS, CATEGORY_KIND_LABELS, CATEGORY_KINDS } from "../../../shared/books";
 import { cardLabel } from "../../../shared/cards";
@@ -43,12 +49,17 @@ import { FUND_LABELS } from "../../../shared/tithing";
 import { formatShortDate, localDate } from "../../tasks/dates";
 import { TithingBadge } from "../../tithing/components/TithingBadge";
 import { AccountSheet, type AccountTarget } from "../components/AccountSheet";
+import { BillsView } from "../components/BillsView";
 import { BooksSheet } from "../components/BooksSheet";
 import { BudgetView } from "../components/BudgetView";
 import { CategoriesSheet } from "../components/CategoriesSheet";
+import { DebtsView } from "../components/DebtsView";
 import { FilterSheet } from "../components/FilterSheet";
+import { ForecastView } from "../components/ForecastView";
 import { ImportSheet } from "../components/ImportSheet";
+import { InsightsView } from "../components/InsightsView";
 import { NetWorthView } from "../components/NetWorthView";
+import { OwedPanel } from "../components/OwedBack";
 import { ReceiptsSheet } from "../components/ReceiptsSheet";
 import { RewardsView } from "../components/RewardsView";
 import { RulesSheet } from "../components/RulesSheet";
@@ -68,6 +79,7 @@ import {
   useCategories,
   useCategorize,
   useRules,
+  useTransaction,
   useTransactions,
   useTransferSuggestions,
 } from "../queries";
@@ -75,8 +87,25 @@ import { BOOK_KEY, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
-type View = "transactions" | "budget" | "rewards" | "net-worth";
-const VIEWS: readonly View[] = ["transactions", "budget", "rewards", "net-worth"];
+type View =
+  | "transactions"
+  | "budget"
+  | "bills"
+  | "forecast"
+  | "insights"
+  | "debts"
+  | "rewards"
+  | "net-worth";
+const VIEWS: readonly View[] = [
+  "transactions",
+  "budget",
+  "bills",
+  "forecast",
+  "insights",
+  "debts",
+  "rewards",
+  "net-worth",
+];
 
 function storedView(): View {
   try {
@@ -104,6 +133,14 @@ export function MoneyPage() {
       // Private browsing; the choice still applies to this visit.
     }
   };
+  // A search result names its book (?book=2) so its transaction opens in the right one.
+  useOpenParam(
+    "book",
+    (id) => {
+      if (active.some((item) => item.id === id)) choose(id);
+    },
+    books.isSuccess,
+  );
 
   return (
     <>
@@ -186,6 +223,49 @@ function BookView({
     }
   };
 
+  // Links from the command menu and search. A transaction link waits until its book
+  // is the one showing.
+  const [params] = useSearchParams();
+  const [linkedId, setLinkedId] = useState<number | null>(null);
+  const linked = useTransaction(linkedId);
+  useOpenParam("transaction", setLinkedId, !params.has("book"));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the linked transaction arrives
+  useEffect(() => {
+    if (linkedId === null || linked.isPending) return;
+    if (linked.data) {
+      chooseView("transactions");
+      setTransactionTarget(linked.data);
+    }
+    setLinkedId(null);
+  }, [linkedId, linked.isPending, linked.data]);
+  const accountsReady = accounts.isSuccess;
+  useCommand(
+    "add-transaction",
+    () => {
+      if (accounts.data?.some((account) => !account.archived)) setTransactionTarget("new");
+    },
+    accountsReady,
+  );
+  useCommand(
+    "import",
+    () => {
+      if (accounts.data?.some((account) => !account.archived)) setImporting(true);
+    },
+    accountsReady,
+  );
+  useCommand("budget", () => chooseView("budget"));
+  useCommand("rewards", () => chooseView("rewards"));
+  useCommand("net-worth", () => chooseView("net-worth"));
+  useCommand("bills", () => chooseView("bills"));
+  useCommand("forecast", () => chooseView("forecast"));
+  useCommand("insights", () => chooseView("insights"));
+  useCommand("debts", () => chooseView("debts"));
+  // From the weekly review: sort the uncategorized transactions.
+  useCommand("sort", () => {
+    chooseView("transactions");
+    setSortingOpen(true);
+  });
+
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);
   // New transactions and imports go to the filtered account, or the first open one.
@@ -207,6 +287,10 @@ function BookView({
             [
               ["transactions", "Transactions", List],
               ["budget", "Budget", PiggyBank],
+              ["bills", "Bills", CalendarDays],
+              ["forecast", "Forecast", ChartLine],
+              ["insights", "Insights", Lightbulb],
+              ["debts", "Debts", Landmark],
               ["rewards", "Rewards", BadgePercent],
               ["net-worth", "Net worth", TrendingUp],
             ] as const
@@ -306,6 +390,19 @@ function BookView({
           today={today}
           onAddAccount={() => setAccountTarget("new")}
         />
+      ) : view === "bills" ? (
+        <BillsView
+          book={book}
+          accounts={allAccounts}
+          categories={categories.data ?? []}
+          today={today}
+        />
+      ) : view === "forecast" ? (
+        <ForecastView book={book} today={today} />
+      ) : view === "insights" ? (
+        <InsightsView book={book} today={today} />
+      ) : view === "debts" ? (
+        <DebtsView book={book} today={today} />
       ) : view === "net-worth" ? (
         <NetWorthView
           book={book}
@@ -329,11 +426,14 @@ function BookView({
         </Panel>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-          <AccountsPanel
-            accounts={allAccounts}
-            today={today}
-            onOpen={(account) => setAccountTarget(account)}
-          />
+          <div className="space-y-4 lg:col-span-4 lg:space-y-6">
+            <AccountsPanel
+              accounts={allAccounts}
+              today={today}
+              onOpen={(account) => setAccountTarget(account)}
+            />
+            <OwedPanel book={book} today={today} />
+          </div>
           <TransactionsPanel
             book={book}
             accounts={allAccounts}
@@ -423,7 +523,7 @@ function AccountsPanel({
 }) {
   const net = netBalance(accounts);
   return (
-    <Panel title="Accounts" className="lg:col-span-4">
+    <Panel title="Accounts">
       <ul className="space-y-2">
         {accounts.map((account) => (
           <li key={account.id}>

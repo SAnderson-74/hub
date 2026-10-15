@@ -79,11 +79,26 @@ describe("budgets", () => {
         archived: false,
         budgetCents: 50_000,
         spentCents: 18_500,
+        rollover: false,
+        carriedCents: 0,
+        availableCents: 50_000,
+        goal: null,
       },
-      { id: dining.id, name: "Dining out", archived: false, budgetCents: null, spentCents: 4_500 },
+      {
+        id: dining.id,
+        name: "Dining out",
+        archived: false,
+        budgetCents: null,
+        spentCents: 4_500,
+        rollover: false,
+        carriedCents: 0,
+        availableCents: null,
+        goal: null,
+      },
     ]);
     expect(march.totals).toEqual({
       budgetedCents: 50_000,
+      carriedCents: 0,
       spentBudgetedCents: 18_500,
       spentUnbudgetedCents: 4_500,
       incomeCents: 300_000,
@@ -173,5 +188,123 @@ describe("budgets", () => {
     expect((await monthOf(book.id, "2030-01")).categories.map((row) => row.name)).toEqual([
       "Dining out",
     ]);
+  });
+});
+
+describe("carrying over and saving up", () => {
+  const settle = async (json: {
+    categoryId: number;
+    month: string;
+    rollover: boolean;
+    goal: { cents: number; dueDate: string; everyMonths: 6 | 12 | null } | null;
+  }) => body(await t.api.money["budget-settings"].$put({ json }));
+
+  it("carries what's left into the next month, but not overspending", async () => {
+    const { book, account, groceries } = await setup();
+    await setBudget(groceries.id, "2030-01", 40_000);
+    await spend(account.id, "2029-12-10", -99_000, groceries.id); // before it started
+    await spend(account.id, "2030-01-10", -30_000, groceries.id);
+    await spend(account.id, "2030-02-10", -50_000, groceries.id);
+    await spend(account.id, "2030-03-10", -10_000, groceries.id);
+
+    // Off, nothing carries.
+    let april = await monthOf(book.id, "2030-04");
+    expect(april.categories.find((row) => row.id === groceries.id)).toMatchObject({
+      rollover: false,
+      carriedCents: 0,
+      availableCents: 40_000,
+    });
+
+    // On from January: $100 left in January, February's $500 spends $400 + $100 carried,
+    // so nothing carries; March leaves $300.
+    const january = await settle({
+      categoryId: groceries.id,
+      month: "2030-01",
+      rollover: true,
+      goal: null,
+    });
+    expect(january.categories.find((row) => row.id === groceries.id)?.carriedCents).toBe(0);
+    expect((await monthOf(book.id, "2030-02")).categories[0]).toMatchObject({
+      carriedCents: 10_000,
+      availableCents: 50_000,
+    });
+    expect((await monthOf(book.id, "2030-03")).categories[0]?.carriedCents).toBe(0);
+    april = await monthOf(book.id, "2030-04");
+    expect(april.categories[0]).toMatchObject({ carriedCents: 30_000, availableCents: 70_000 });
+    expect(april.totals).toMatchObject({ budgetedCents: 40_000, carriedCents: 30_000 });
+
+    // Turned on again later, it counts from then.
+    await settle({ categoryId: groceries.id, month: "2030-04", rollover: false, goal: null });
+    await settle({ categoryId: groceries.id, month: "2030-04", rollover: true, goal: null });
+    expect((await monthOf(book.id, "2030-05")).categories[0]?.carriedCents).toBe(40_000);
+    expect((await monthOf(book.id, "2030-04")).categories[0]?.carriedCents).toBe(0);
+  });
+
+  it("saves up for a cost that comes once or twice a year", async () => {
+    const { book, account, groceries, paycheck } = await setup();
+    // $600 of car insurance due in June, starting in January: $100 a month.
+    let month = await settle({
+      categoryId: groceries.id,
+      month: "2030-01",
+      rollover: false,
+      goal: { cents: 60_000, dueDate: "2030-06-15", everyMonths: 6 },
+    });
+    expect(month.categories[0]).toMatchObject({
+      rollover: true,
+      goal: { cents: 60_000, dueDate: "2030-06-15", neededMonthlyCents: 10_000, savedCents: 0 },
+    });
+    await setBudget(groceries.id, "2030-01", 10_000);
+    month = await monthOf(book.id, "2030-04");
+    expect(month.categories[0]?.goal).toMatchObject({
+      savedCents: 40_000,
+      neededMonthlyCents: 10_000,
+    });
+
+    // Paid in June from what was saved, then it starts again for December.
+    await spend(account.id, "2030-06-15", -60_000, groceries.id);
+    month = await monthOf(book.id, "2030-06");
+    expect(month.categories[0]).toMatchObject({
+      carriedCents: 50_000,
+      spentCents: 60_000,
+      goal: { dueDate: "2030-06-15", savedCents: 0 },
+    });
+    month = await monthOf(book.id, "2030-07");
+    expect(month.categories[0]?.goal).toMatchObject({
+      dueDate: "2030-12-15",
+      neededMonthlyCents: 10_000,
+    });
+
+    // Only spending categories, and both turned off removes it.
+    expect(
+      (
+        await failure(
+          await t.api.money["budget-settings"].$put({
+            json: { categoryId: paycheck.id, month: "2030-01", rollover: true, goal: null },
+          }),
+        )
+      ).status,
+    ).toBe(400);
+    month = await settle({
+      categoryId: groceries.id,
+      month: "2030-07",
+      rollover: false,
+      goal: null,
+    });
+    expect(month.categories[0]).toMatchObject({ rollover: false, goal: null, carriedCents: 0 });
+  });
+
+  it("goes with its category", async () => {
+    const { book, dining } = await setup();
+    await settle({
+      categoryId: dining.id,
+      month: "2030-01",
+      rollover: true,
+      goal: { cents: 10_000, dueDate: "2030-03-01", everyMonths: null },
+    });
+    expect(
+      (await t.api.money.categories[":id"].$delete({ param: { id: String(dining.id) } })).status,
+    ).toBe(204);
+    const month = await monthOf(book.id, "2030-01");
+    expect(month.categories.map((row) => row.name)).toEqual(["Groceries"]);
   });
 });

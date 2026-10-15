@@ -99,6 +99,8 @@ const KIND_LABELS: Record<string, string> = {
   assessment: "Assessment",
   "business step": "Business step",
   lead: "Lead follow-up",
+  bill: "Bill",
+  income: "Income",
 };
 
 /** A calendar of all-day events, one per dated item. */

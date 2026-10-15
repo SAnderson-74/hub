@@ -1,9 +1,15 @@
-import { Ellipsis, type LucideIcon } from "lucide-react";
+import { Ellipsis, type LucideIcon, Search } from "lucide-react";
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
+import { appCommands, menuKeyLabel } from "../lib/commands";
 import { phoneNav } from "../lib/nav";
-import { useSystem } from "../lib/queries";
+import { useModules, useSystem } from "../lib/queries";
+import { useShortcuts } from "../lib/useShortcuts";
 import type { AppPage } from "../pages";
 import { BrandMark } from "./BrandMark";
+import { CommandMenu } from "./CommandMenu";
+import { ShortcutsSheet } from "./ShortcutsSheet";
+import { UndoBar } from "./UndoBar";
 
 /**
  * Layout for every page: a sidebar on wide screens, a bottom tab bar on phones.
@@ -15,6 +21,16 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
   const { tabs, more } = phoneNav(pages);
   const appName = system.data?.appName ?? "Hub";
   const version = system.data?.version;
+  const modules = useModules();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useShortcuts({
+    pages,
+    onToggleMenu: () => setMenuOpen((value) => !value),
+    onOpenMenu: () => setMenuOpen(true),
+    onShowShortcuts: () => setShortcutsOpen(true),
+  });
+  const menuKey = menuKeyLabel(typeof navigator === "undefined" ? "" : navigator.userAgent);
 
   return (
     <div className="min-h-dvh bg-base text-fg">
@@ -30,7 +46,19 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
           <BrandMark />
           <span className="text-lg font-bold tracking-[-0.02em]">{appName}</span>
         </div>
-        <nav aria-label="Main" className="mt-9">
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          aria-keyshortcuts="Control+K Meta+K /"
+          className="mt-7 flex h-11 items-center gap-3 rounded-control bg-base px-3 text-muted ring-1 ring-surface-0 hover:text-fg hover:ring-surface-1"
+        >
+          <Search aria-hidden="true" className="size-5" />
+          <span className="flex-1 text-left font-semibold">Search</span>
+          <span aria-hidden="true" className="text-sm text-muted">
+            {menuKey}
+          </span>
+        </button>
+        <nav aria-label="Main" className="mt-5">
           <ul className="flex flex-col gap-1">
             {pages.map((page) => (
               <li key={page.id}>
@@ -65,7 +93,17 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
       <div className="md:pl-64">
         <header className="sticky top-0 z-10 flex items-center gap-3 bg-base/85 px-5 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 backdrop-blur-md md:hidden">
           <BrandMark className="size-8" />
-          <span className="text-lg font-bold tracking-[-0.02em]">{appName}</span>
+          <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-[-0.02em]">
+            {appName}
+          </span>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Search"
+            className="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-0 hover:text-fg"
+          >
+            <Search aria-hidden="true" className="size-5" />
+          </button>
         </header>
         <main
           id="main"
@@ -97,6 +135,15 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
           ) : null}
         </ul>
       </nav>
+
+      <CommandMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        commands={appCommands(pages, modules)}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} pages={pages} />
+      <UndoBar />
     </div>
   );
 }

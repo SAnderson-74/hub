@@ -33,7 +33,15 @@ describe("ICS text", () => {
 
   it("makes an all-day event per item, with a stable id", () => {
     const text = buildCalendar(
-      [{ key: "task:12", kind: "task", title: "Renew the lease, again", date: "2030-03-31" }],
+      [
+        {
+          key: "task:12",
+          kind: "task",
+          title: "Renew the lease, again",
+          date: "2030-03-31",
+          href: "/tasks?task=12",
+        },
+      ],
       { now: new Date("2030-03-01T12:00:00Z"), timeZone: "UTC" },
     );
     expect(text.endsWith("\r\n")).toBe(true);

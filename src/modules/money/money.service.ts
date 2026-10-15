@@ -16,6 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
+import { likePattern } from "../../server/db/like";
 import { badRequest, conflict, notFound } from "../../server/errors";
 import {
   type AccountCreate,
@@ -41,15 +42,20 @@ import { transactionItems } from "../resale/transactionLinks";
 import { dropTithing, type TransactionTithing, tithingOf } from "../tithing/transactionLinks";
 import { checkCardFits, guessCardFor } from "./cards.service";
 import { dropSplits, primaryCategory, splitsOf } from "./lines";
+import { dropReimbursements } from "./owedLinks";
 import { dropReceipts, type ReceiptJson, receiptsOf } from "./receiptLinks";
 import { dropCategoryRates, dropRewards } from "./rewards.service";
 import {
   moneyAccounts,
   moneyBalanceSnapshots,
+  moneyBills,
   moneyBooks,
+  moneyBudgetSettings,
   moneyBudgets,
   moneyCards,
   moneyCategories,
+  moneyDebtPlans,
+  moneyDebtTerms,
   moneyImports,
   moneyRules,
   moneyTransactionSplits,
@@ -263,6 +269,8 @@ export function deleteBook(db: Db, id: number): void {
     }
     // Without accounts there are no transactions, so its rules and categories are unused.
     tx.delete(moneyRules).where(eq(moneyRules.bookId, id)).run();
+    tx.delete(moneyBills).where(eq(moneyBills.bookId, id)).run();
+    tx.delete(moneyDebtPlans).where(eq(moneyDebtPlans.bookId, id)).run();
     const categoryIds = tx
       .select({ id: moneyCategories.id })
       .from(moneyCategories)
@@ -271,6 +279,9 @@ export function deleteBook(db: Db, id: number): void {
       .map((row) => row.id);
     if (categoryIds.length > 0) {
       tx.delete(moneyBudgets).where(inArray(moneyBudgets.categoryId, categoryIds)).run();
+      tx.delete(moneyBudgetSettings)
+        .where(inArray(moneyBudgetSettings.categoryId, categoryIds))
+        .run();
     }
     dropCategoryRates(tx, categoryIds);
     tx.delete(moneyCategories).where(eq(moneyCategories.bookId, id)).run();
@@ -495,6 +506,9 @@ export function deleteAccount(db: Db, id: number): void {
         .map((card) => card.id),
     );
     tx.delete(moneyCards).where(eq(moneyCards.accountId, id)).run();
+    // Bills paid from it stay, without an account, so the forecast lists them as left out.
+    tx.update(moneyBills).set({ accountId: null }).where(eq(moneyBills.accountId, id)).run();
+    tx.delete(moneyDebtTerms).where(eq(moneyDebtTerms.accountId, id)).run();
     tx.delete(moneyAccounts).where(eq(moneyAccounts.id, id)).run();
   });
 }
@@ -633,7 +647,9 @@ export function deleteCategory(db: Db, id: number): void {
     }
     // An unused category's budgets and card bonus rates mean nothing without it.
     tx.delete(moneyBudgets).where(eq(moneyBudgets.categoryId, id)).run();
+    tx.delete(moneyBudgetSettings).where(eq(moneyBudgetSettings.categoryId, id)).run();
     dropCategoryRates(tx, [id]);
+    tx.update(moneyBills).set({ categoryId: null }).where(eq(moneyBills.categoryId, id)).run();
     tx.delete(moneyCategories).where(eq(moneyCategories.id, id)).run();
   });
 }
@@ -760,9 +776,6 @@ export function oneTransaction(db: Queryable, row: TransactionRow): TransactionJ
   if (!transaction) throw new Error("Expected one transaction");
   return transaction;
 }
-
-/** Escapes LIKE wildcards so a search for "50%" finds "50%", not everything. */
-export const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 
 const ORDERS: Record<TransactionQuery["sort"], (size: SQL) => SQL[]> = {
   newest: () => [desc(moneyTransactions.date), desc(moneyTransactions.id)],
@@ -999,6 +1012,7 @@ export function deleteTransaction(db: Queryable, id: number): void {
     dropSplits(tx, ids);
     dropReceipts(tx, ids);
     dropTithing(tx, ids);
+    dropReimbursements(tx, ids);
     tx.delete(moneyTransactions).where(inArray(moneyTransactions.id, ids)).run();
   });
 }

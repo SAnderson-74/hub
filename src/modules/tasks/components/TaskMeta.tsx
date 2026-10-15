@@ -1,7 +1,19 @@
-import { CalendarDays, Flag, ListChecks, Repeat, Tag } from "lucide-react";
+import {
+  Archive,
+  CalendarDays,
+  Clock,
+  Flag,
+  Hourglass,
+  ListChecks,
+  Moon,
+  Repeat,
+  Tag,
+} from "lucide-react";
+import { formatMinutesShort } from "../../../shared/quickAdd";
 import { describeRecurrence } from "../../../shared/recurrence";
+import { isWaiting } from "../../../shared/smartLists";
 import { TASK_PRIORITY_LABELS } from "../../../shared/tasks";
-import { type DueTone, describeDue } from "../dates";
+import { type DueTone, describeDue, formatShortDate } from "../dates";
 import type { TaskItem } from "../queries";
 
 const dueClass: Record<DueTone, string> = {
@@ -24,7 +36,34 @@ export function TaskMeta({
 }) {
   const done = task.status === "done";
   const due = task.dueDate ? describeDue(task.dueDate, today, { done }) : null;
+  const waitingFor = task.waitingOn.filter((other) => !other.done);
   const parts = [
+    !done && isWaiting(task) ? (
+      <span key="waiting" className="inline-flex items-center gap-1 text-muted">
+        <Hourglass aria-hidden="true" className="size-3.5" />
+        {waitingFor.length === 1
+          ? `Waiting on ${waitingFor[0]?.title}`
+          : `Waiting on ${waitingFor.length} tasks`}
+      </span>
+    ) : null,
+    !done && task.someday ? (
+      <span key="someday" className="inline-flex items-center gap-1 text-muted">
+        <Archive aria-hidden="true" className="size-3.5" />
+        Someday
+      </span>
+    ) : null,
+    !done && task.startDate && task.startDate > today ? (
+      <span key="start" className="inline-flex items-center gap-1 text-muted">
+        <CalendarDays aria-hidden="true" className="size-3.5" />
+        Starts {formatShortDate(task.startDate, today)}
+      </span>
+    ) : null,
+    !done && task.evening ? (
+      <span key="evening" className="inline-flex items-center gap-1 text-muted">
+        <Moon aria-hidden="true" className="size-3.5" />
+        This evening
+      </span>
+    ) : null,
     due ? (
       <span
         key="due"
@@ -47,6 +86,13 @@ export function TaskMeta({
       >
         <Flag aria-hidden="true" className="size-3.5" />
         {TASK_PRIORITY_LABELS[task.priority]} priority
+      </span>
+    ) : null,
+    !done && task.estimateMinutes ? (
+      <span key="estimate" className="inline-flex items-center gap-1 text-muted">
+        <Clock aria-hidden="true" className="size-3.5" />
+        {formatMinutesShort(task.estimateMinutes)}
+        <span className="sr-only">estimated</span>
       </span>
     ) : null,
     task.subtaskCount > 0 ? (

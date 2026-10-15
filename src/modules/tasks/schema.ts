@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 import type { Recurrence } from "../../shared/recurrence";
 import { PROJECT_KINDS, TASK_STATUSES, type TaskPriority } from "../../shared/tasks";
+import type { TemplateBody } from "../../shared/templates";
 
 // Ids use AUTOINCREMENT so a deleted row's id is never reused: links and the
 // activity log refer to entities by id.
@@ -50,6 +51,14 @@ export const tasks = sqliteTable(
     status: text("status", { enum: TASK_STATUSES }).notNull().default("todo"),
     priority: integer("priority").$type<TaskPriority>().notNull().default(0),
     dueDate: text("due_date"),
+    /** Not shown in Today or Anytime before this day ("don't show me until…"). */
+    startDate: text("start_date"),
+    /** Parked: only in Someday until this is cleared. */
+    someday: integer("someday", { mode: "boolean" }).notNull().default(false),
+    /** In Today's "This evening" section rather than the day's main list. */
+    evening: integer("evening", { mode: "boolean" }).notNull().default(false),
+    /** How long it should take, in minutes, for planning the day. */
+    estimateMinutes: integer("estimate_minutes"),
     sortOrder: real("sort_order").notNull().default(0),
     completedAt: integer("completed_at", { mode: "timestamp_ms" }),
     /** Repeat rule. Completing the task creates the next one, which takes the rule over. */
@@ -62,3 +71,14 @@ export const tasks = sqliteTable(
     index("tasks_due_date_idx").on(t.dueDate),
   ],
 );
+
+/**
+ * Reusable tasks and projects ("Trip prep", "Monthly close"). Using one creates the
+ * tasks, with due dates counted from the day it's used.
+ */
+export const taskTemplates = sqliteTable("task_templates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  body: text("body", { mode: "json" }).$type<TemplateBody>().notNull(),
+  ...timestamps(),
+});

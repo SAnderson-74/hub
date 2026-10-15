@@ -197,6 +197,76 @@
       "when": 1791967565657,
       "tag": "0027_assessment_due_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1792012365944,
+      "tag": "0028_task_start_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1792013527183,
+      "tag": "0029_task_templates_and_estimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1792018663692,
+      "tag": "0030_money_bills",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1792021721998,
+      "tag": "0031_budget_settings_and_reimbursements",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1792024126501,
+      "tag": "0032_debt_terms_and_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1792025984349,
+      "tag": "0033_push_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1792040446041,
+      "tag": "0034_habits",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1792043061198,
+      "tag": "0035_goal_checkins",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1792043442522,
+      "tag": "0036_resale_sku_and_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1792045790975,
+      "tag": "0037_weekly_reviews",
+      "breakpoints": true
     }
   ]
 }

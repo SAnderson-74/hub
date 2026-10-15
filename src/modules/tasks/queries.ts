@@ -1,14 +1,17 @@
 import {
   type InfiniteData,
   type QueryClient,
+  type QueryKey,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import { deleteLater } from "../../client/lib/undo";
 import type { ProjectCreate, ProjectUpdate, TaskCreate, TaskUpdate } from "../../shared/tasks";
 import type { TasksDocument } from "../../shared/tasksImport";
+import type { TemplateFrom, TemplateUse } from "../../shared/templates";
 import { mergeTasks } from "./ordering";
 
 /** "all", "inbox" (no project), or a project id. */
@@ -208,16 +211,60 @@ export function useUpdateTask() {
   });
 }
 
-export function useDeleteTask() {
+/**
+ * Deletes a task and its subtasks after a few seconds, with Undo until then. It leaves
+ * the lists at once.
+ */
+export function useDeleteTaskLater() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.tasks[":id"].$delete({ param: { id: String(id) } });
-      if (!res.ok) throw await toApiError(res);
-    },
-    onSuccess: (_result, id) => queryClient.removeQueries({ queryKey: keys.detail(id) }),
-    onSettled: () => refreshTasks(queryClient),
-  });
+  return (task: { id: number; title: string }) => {
+    const send = (keepalive: boolean) =>
+      api.tasks[":id"].$delete({ param: { id: String(task.id) } }, { init: { keepalive } });
+    deleteLater(queryClient, {
+      message: `Deleted ${task.title}`,
+      restoredMessage: `Restored ${task.title}`,
+      hide: { keys: [keys.tasks], remove: (data, key) => withoutTask(data, key, task.id) },
+      commit: async () => {
+        try {
+          const res = await send(false);
+          if (!res.ok) throw await toApiError(res);
+          queryClient.removeQueries({ queryKey: keys.detail(task.id) });
+        } finally {
+          refreshTasks(queryClient);
+        }
+      },
+      flush: () => void send(true),
+    });
+  };
+}
+
+/** A tasks query's data without the task (or, for a parent's detail, without the subtask). */
+function withoutTask(data: unknown, key: QueryKey, id: number): unknown {
+  const keep = (task: { id: number; parentId: number | null }) =>
+    task.id !== id && task.parentId !== id;
+  switch (key[1]) {
+    case "list":
+      return (data as TaskItem[]).filter(keep);
+    case "done": {
+      const pages = data as InfiniteData<DonePage>;
+      return {
+        ...pages,
+        pages: pages.pages.map((page) => ({ ...page, tasks: page.tasks.filter(keep) })),
+      };
+    }
+    case "done-since": {
+      const page = data as DonePage;
+      return { ...page, tasks: page.tasks.filter(keep) };
+    }
+    case "detail": {
+      const task = data as TaskDetail;
+      return task.subtasks.some((subtask) => subtask.id === id)
+        ? { ...task, subtasks: task.subtasks.filter((subtask) => subtask.id !== id) }
+        : task;
+    }
+    default:
+      return data;
+  }
 }
 
 export function useCreateProject() {
@@ -271,5 +318,68 @@ export function useImportTasks() {
       // Tasks, projects, and goals all change.
       if (!dryRun) void queryClient.invalidateQueries();
     },
+  });
+}
+
+// Templates
+
+export type Template = Awaited<ReturnType<typeof fetchTemplates>>[number];
+
+async function fetchTemplates() {
+  const res = await api.templates.$get();
+  if (!res.ok) throw await toApiError(res);
+  return res.json();
+}
+
+const templateKey = ["templates"] as const;
+
+export function useTemplates(enabled = true) {
+  return useQuery({ queryKey: templateKey, queryFn: fetchTemplates, enabled });
+}
+
+export function useSaveTemplateFrom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (json: TemplateFrom) => {
+      const res = await api.templates.from.$post({ json });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: templateKey }),
+  });
+}
+
+export function useRenameTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const res = await api.templates[":id"].$patch({ param: { id: String(id) }, json: { name } });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: templateKey }),
+  });
+}
+
+export function useDeleteTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.templates[":id"].$delete({ param: { id: String(id) } });
+      if (!res.ok) throw await toApiError(res);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: templateKey }),
+  });
+}
+
+export function useUseTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...json }: TemplateUse & { id: number }) => {
+      const res = await api.templates[":id"].use.$post({ param: { id: String(id) }, json });
+      if (!res.ok) throw await toApiError(res);
+      return res.json();
+    },
+    onSettled: () => refreshTasks(queryClient),
   });
 }

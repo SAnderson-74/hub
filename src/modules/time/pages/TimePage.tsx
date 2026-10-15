@@ -4,9 +4,11 @@ import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { iconButton, secondaryButton } from "../../../client/components/ui";
+import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { EntryList } from "../components/EntryList";
 import { EntrySheet, type EntryTarget } from "../components/EntrySheet";
+import { FocusPanel } from "../components/FocusPanel";
 import { TimerPanel } from "../components/TimerPanel";
 import { useEntries } from "../queries";
 import { addDaysLocal, formatWeekRange, minutesByDay, startOfWeek, weekSummary } from "../week";
@@ -22,6 +24,8 @@ export function TimePage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const entries = useEntries({ from: weekStart, to: addDaysLocal(weekStart, 7) });
   const [sheet, setSheet] = useState<EntryTarget>(null);
+  // "Log time" from shutting down the day.
+  useCommand("add-entry", () => setSheet("new"));
   const isThisWeek = weekStart.getTime() === thisWeek.getTime();
   const days = minutesByDay(entries.data ?? [], weekStart, now);
 
@@ -29,7 +33,10 @@ export function TimePage() {
     <>
       <PageHeader title="Time" subtitle="Track what you spend time on and see how the week went." />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-        <TimerPanel className="lg:col-span-5" />
+        <div className="space-y-4 lg:col-span-5 lg:space-y-6">
+          <TimerPanel />
+          <FocusPanel />
+        </div>
 
         <Panel
           title={isThisWeek ? "This week" : `Week of ${formatWeekRange(weekStart)}`}

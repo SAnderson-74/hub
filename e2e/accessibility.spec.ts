@@ -13,11 +13,14 @@ const PAGES = [
   { path: "/time", heading: "Time" },
   { path: "/goals", heading: "Goals" },
   { path: "/courses", heading: "Courses" },
+  { path: "/habits", heading: "Habits" },
   { path: "/resale", heading: "Resale" },
   { path: "/money", heading: "Money" },
   { path: "/tithing", heading: "Tithing" },
   { path: "/taxes", heading: "Taxes" },
   { path: "/business", heading: "Business" },
+  { path: "/calendar", heading: "Calendar" },
+  { path: "/review", heading: "Weekly review" },
   { path: "/settings", heading: "Settings" },
   { path: "/more", heading: "More" },
 ] as const;
@@ -78,8 +81,8 @@ for (const { path, heading } of PAGES) {
 
 test("Money's views meet WCAG 2.1 AA", async ({ page }) => {
   await open(page, "/money", "Money");
-  for (const view of ["Budget", "Rewards", "Net worth"]) {
-    await page.getByRole("radio", { name: view }).check();
+  for (const view of ["Budget", "Bills", "Forecast", "Insights", "Debts", "Rewards", "Net worth"]) {
+    await page.getByRole("radio", { name: view, exact: true }).check();
     await settled(page);
     expect(await violations(page), view).toEqual([]);
   }
@@ -115,4 +118,100 @@ test("the main sheets meet WCAG 2.1 AA", async ({ page }) => {
   await open(page, "/money", "Money");
   await page.getByRole("button", { name: "Add transaction" }).click();
   await checkSheet(page, page.getByRole("dialog", { name: /transaction/i }));
+});
+
+test("the command menu and shortcuts meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/", /^Good (morning|afternoon|evening)/);
+  await page.getByRole("button", { name: "Search", exact: true }).locator("visible=true").click();
+  const menu = page.getByRole("dialog", { name: "Search and commands" });
+  await checkSheet(page, menu);
+  await menu.getByRole("combobox").fill("run");
+  await expect(menu.getByRole("group", { name: "Goals" })).toBeVisible();
+  await checkSheet(page, menu);
+  await menu.getByRole("combobox").fill("keyboard");
+  await menu.getByRole("combobox").press("Enter");
+  await checkSheet(page, page.getByRole("dialog", { name: "Keyboard shortcuts" }));
+});
+
+test("templates and planning sheets meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/tasks", "Tasks");
+  await page.getByRole("button", { name: "Templates" }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Templates" }));
+  await page.keyboard.press("Escape");
+
+  await open(page, "/tasks?list=today", "Tasks");
+  await page.getByRole("button", { name: "Plan the day" }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Plan the day" }));
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Shut down" }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Shut down for the day" }));
+});
+
+test("budget options and money owed back meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/money", "Money");
+  await page.getByRole("radio", { name: "Budget", exact: true }).check();
+  await settled(page);
+  await page.getByRole("button", { name: /^Options for Insurance/ }).click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Carry over and save up" }));
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("radio", { name: "Transactions", exact: true }).check();
+  await expect(page.getByRole("region", { name: "Owed to you" })).toBeVisible();
+  await page
+    .getByRole("region", { name: "Transactions" })
+    .getByRole("button", { name: /Example Tickets/ })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Transaction" });
+  await expect(sheet.getByText("Not paid back yet")).toBeVisible();
+  await sheet.getByRole("button", { name: "Someone owes me part of this" }).click();
+  await checkSheet(page, sheet);
+});
+
+test("the habit sheet meets WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/habits", "Habits");
+  await page
+    .getByRole("region", { name: "All habits" })
+    .getByRole("button", { name: /^Read 20 pages(?!:)/ })
+    .click();
+  await checkSheet(page, page.getByRole("dialog", { name: "Habit" }));
+});
+
+test("resale aging and labels, and a goal's check-ins, meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/resale", "Resale");
+  await page.getByRole("radio", { name: "Aging" }).check();
+  await expect(page.getByRole("region", { name: "What to do" })).toContainText("Typewriter");
+  expect(await violations(page), "Aging").toEqual([]);
+
+  await page.getByRole("radio", { name: "Labels" }).check();
+  await page.getByRole("button", { name: /^Pick all/ }).click();
+  await expect(page.getByRole("img", { name: "Barcode for BIKE-01" })).toBeVisible();
+  expect(await violations(page), "Labels").toEqual([]);
+  await page.getByRole("radio", { name: "Items" }).check();
+
+  await open(page, "/goals", "Goals");
+  await page
+    .getByRole("button", { name: /Emergency fund/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Goal" });
+  await expect(sheet.getByRole("list", { name: "Check-ins" })).toBeVisible();
+  await checkSheet(page, sheet);
+});
+
+test("the undo bar meets WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/tasks", "Tasks");
+  await page.getByRole("button", { name: /^Replace the smoke detector batteries/ }).click();
+  await page
+    .getByRole("dialog", { name: "Task" })
+    .getByRole("button", { name: "Delete task" })
+    .click();
+  const bar = page.getByRole("status").filter({ hasText: "Deleted Replace the smoke detector" });
+  await expect(bar).toBeVisible();
+  // Held while checked, so the example task isn't deleted.
+  await bar.hover();
+  expect(await violations(page)).toEqual([]);
+  await bar.getByRole("button", { name: "Undo" }).click();
+  await expect(
+    page.getByRole("button", { name: /^Replace the smoke detector batteries/ }),
+  ).toBeVisible();
 });

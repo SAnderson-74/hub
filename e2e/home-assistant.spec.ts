@@ -62,7 +62,7 @@ test("reminders show what they'd say, and their times save", async ({ page }, te
 
   await page.goto("/settings");
   const panel = page.getByRole("region", { name: "Reminders" });
-  await expect(panel).toContainText("Add the reminder webhook under Home Assistant");
+  await expect(panel).toContainText("Until one is set up, you can see what they'd say below.");
   await expect(panel).toContainText(title);
 
   const time = testInfo.project.name === "iphone" ? "06:45" : "08:15";
@@ -70,11 +70,22 @@ test("reminders show what they'd say, and their times save", async ({ page }, te
   await digest.getByLabel("At").fill(time);
   const due = panel.getByRole("group", { name: "Due soon" });
   await due.getByLabel("Looking at").selectOption({ label: "The next 3 days" });
+  // The tithing reminder is off until turned on.
+  const tithing = panel.getByRole("group", { name: "Tithing unpaid" });
+  await expect(tithing.getByRole("checkbox")).not.toBeChecked();
+  await tithing.getByRole("checkbox").check();
+  await tithing.getByLabel("At").fill("19:30");
   await panel.getByRole("button", { name: "Save reminders" }).click();
   await expect(panel.getByRole("status").filter({ hasText: "Reminders saved" })).toBeVisible();
 
   await page.reload();
   await expect(digest.getByLabel("At")).toHaveValue(time);
   await expect(due.getByLabel("Looking at")).toHaveValue("3");
+  await expect(tithing.getByRole("checkbox")).toBeChecked();
+  await expect(tithing.getByLabel("At")).toHaveValue("19:30");
+  // Put it back for the other tests, which share this database.
+  await page.request.put("/api/settings", {
+    data: { tithingReminder: { enabled: false, time: "19:00" } },
+  });
   expect(errors).toEqual([]);
 });

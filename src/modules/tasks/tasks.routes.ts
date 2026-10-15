@@ -5,6 +5,7 @@ import { localDateParts } from "../../server/db/backup";
 import type { Deps } from "../../server/deps";
 import type { AppEnv } from "../../server/env";
 import { idParamSchema, invalid } from "../../server/validate";
+import { quickAddSchema } from "../../shared/quickAdd";
 import {
   doneTaskQuerySchema,
   taskCreateSchema,
@@ -13,6 +14,7 @@ import {
 } from "../../shared/tasks";
 import { tasksImportSchema } from "../../shared/tasksImport";
 import { importTasks } from "./import.service";
+import { quickAddTask } from "./quickAdd.service";
 import {
   createTask,
   deleteTask,
@@ -42,6 +44,11 @@ export function taskRoutes({ db, config }: Deps) {
       )
       .post("/", zValidator("json", taskCreateSchema, invalid("That task isn't valid.")), (c) =>
         c.json(createTask(db, c.req.valid("json"), c.get("user").login), 201),
+      )
+      // One line of text read into a task, for iOS Shortcuts:
+      // "Renew registration next Fri !high #car every year".
+      .post("/quick", zValidator("json", quickAddSchema, invalid("Send the task as text.")), (c) =>
+        c.json(quickAddTask(db, c.req.valid("json"), today(), c.get("user").login), 201),
       )
       // Projects, tasks, and goals pasted from a Claude Project (hub-tasks/v1). Like every
       // route, behind Tailscale sign-in; the pasted text is checked field by field.

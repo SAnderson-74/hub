@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Panel } from "../../../client/components/Panel";
 import { Stat } from "../../../client/components/Stat";
 import { primaryButton } from "../../../client/components/ui";
+import { useOpenParam } from "../../../client/lib/useCommand";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUSES,
@@ -63,6 +64,8 @@ const TONES = { danger: "text-danger", warn: "text-warn", muted: "text-muted" } 
 /** Possible customers, from first contact to won or lost. */
 export function LeadsView({ leads, today }: { leads: Lead[]; today: string }) {
   const [editing, setEditing] = useState<number | "new" | null>(null);
+  // A search result (?lead=12) opens it.
+  useOpenParam("lead", setEditing);
   const save = useSaveLead();
   const remove = useDeleteLead();
   const current = typeof editing === "number" ? leads.find((item) => item.id === editing) : null;

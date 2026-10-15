@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { HTTPException } from "hono/http-exception";
 import type { Db, Queryable } from "../../server/db/client";
 import { log } from "../../server/log";
+import { billCreateSchema } from "../../shared/bills";
 import { accountCreateSchema, bookCreateSchema, transactionCreateSchema } from "../../shared/books";
 import {
   gearCreateSchema,
@@ -42,8 +43,13 @@ import {
   listTerms,
 } from "../education/education.service";
 import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service";
-import { setBudget } from "../money/budget.service";
+import { goalCheckins } from "../goals/schema";
+import { createHabit, deleteHabit, setCheckin } from "../habits/habits.service";
+import { habits } from "../habits/schema";
+import { createBill, deleteBill, listBills } from "../money/bills.service";
+import { setBudget, setBudgetSettings } from "../money/budget.service";
 import { createCard, deleteCard } from "../money/cards.service";
+import { setDebtPlan, setDebtTerms } from "../money/debts.service";
 import {
   createAccount,
   createBook,
@@ -54,6 +60,7 @@ import {
   listCategories,
 } from "../money/money.service";
 import { importReceipts } from "../money/receipts.service";
+import { createOwed, matchRepayment } from "../money/reimbursements.service";
 import { saveRewards } from "../money/rewards.service";
 import { createTransfer } from "../money/transfers.service";
 import { createItem, createPlatform, deleteItem, deletePlatform } from "../resale/resale.service";
@@ -75,12 +82,14 @@ const DEMO_KINDS = [
   "goal",
   "term",
   "time_entry",
+  "habit",
   "platform",
   "resale_item",
   "book",
   "account",
   "card",
   "transaction",
+  "bill",
   "phase",
   "step",
   "gear",
@@ -175,6 +184,16 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       milestoneCreateSchema.parse({ title: "First $1,000", targetDate: day(30) }),
       actor,
     );
+    // A check-in a month ago, so its pace shows. It goes with the goal.
+    db.insert(goalCheckins)
+      .values({
+        goalId: fund.id,
+        date: day(-30),
+        percent: 20,
+        currentCents: 60_000,
+        note: "Setting aside $50 a week.",
+      })
+      .run();
     const run = note(
       "goal",
       createGoal(db, goalCreateSchema.parse({ title: "Run a 10K", targetDate: day(90) }), actor),
@@ -280,6 +299,8 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
         purchasedOn: day(-20),
         purchaseCents: 12_000,
         purchasePlatformId: platform?.id ?? null,
+        sku: "BIKE-01",
+        spot: "Garage rack",
       },
       {
         title: "Desk lamp, brass",
@@ -297,6 +318,16 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
         category: "Cameras",
         purchasedOn: day(-5),
         purchaseCents: 2_500,
+        sku: "CAM-01",
+        spot: "Closet bin 2",
+      },
+      {
+        title: "Typewriter",
+        status: "acquired",
+        category: "Home",
+        purchasedOn: day(-75),
+        purchaseCents: 1_500,
+        spot: "Garage shelf B",
       },
     ];
     for (const item of items) {
@@ -480,6 +511,129 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       if (id) setBudget(db, { categoryId: id, month: monthStart(-5).slice(0, 7), amountCents });
     }
 
+    // Car insurance every six months, saved for a little each month.
+    const insurance = categoryId.get("Insurance");
+    if (insurance) {
+      setBudget(db, {
+        categoryId: insurance,
+        month: monthStart(-2).slice(0, 7),
+        amountCents: 10_000,
+      });
+      setBudgetSettings(db, {
+        categoryId: insurance,
+        month: monthStart(-2).slice(0, 7),
+        rollover: true,
+        goal: { cents: 60_000, dueDate: addDays(monthStart(4), 14), everyMonths: 6 },
+      });
+    }
+    // Dinner split with a friend who paid back their half, and tickets still owed for.
+    const dining = categoryId.get("Dining out");
+    const entertainment = categoryId.get("Entertainment");
+    if (dining && entertainment) {
+      const spend = (date: string, amountCents: number, payee: string, category: number) =>
+        note(
+          "transaction",
+          createTransaction(
+            db,
+            transactionCreateSchema.parse({
+              accountId: checking.id,
+              date,
+              amountCents,
+              payee,
+              categoryId: category,
+            }),
+          ),
+        );
+      const dinner = spend(day(-10), -6_400, "Noodle Bar", dining);
+      const repaid = note(
+        "transaction",
+        createTransaction(
+          db,
+          transactionCreateSchema.parse({
+            accountId: checking.id,
+            date: day(-8),
+            amountCents: 3_200,
+            payee: "Venmo from Jane Doe",
+            counterparty: "Jane Doe",
+          }),
+        ),
+      );
+      matchRepayment(
+        db,
+        createOwed(db, { transactionId: dinner.id, amountCents: 3_200, who: "Jane Doe" }).id,
+        repaid.id,
+      );
+      const tickets = spend(day(-3), -12_000, "Example Tickets", entertainment);
+      createOwed(db, { transactionId: tickets.id, amountCents: 6_000, who: "John Smith" });
+    }
+
+    // A car loan alongside the card, with their rates, paid off highest rate first.
+    const loan = note(
+      "account",
+      createAccount(
+        db,
+        accountCreateSchema.parse({
+          bookId: book.id,
+          name: "Car loan",
+          kind: "loan",
+          institution: "Example Bank",
+          openingBalanceCents: -1_240_000,
+        }),
+      ),
+    );
+    setDebtTerms(db, loan.id, { aprBasisPoints: 690, minimumCents: 35_000 });
+    setDebtTerms(db, rewards.id, { aprBasisPoints: 2_499, minimumCents: 3_500 });
+    setDebtPlan(db, { bookId: book.id, strategy: "avalanche", extraCents: 10_000, order: [] });
+
+    // Pay, rent, and the subscription confirmed as bills. The other repeating payments
+    // stay suggestions, so Bills shows both.
+    const confirmed = new Set(
+      ["Paycheck", "Housing", "Subscriptions"].map((name) => categoryId.get(name)),
+    );
+    for (const found of listBills(db, book.id, today).suggestions) {
+      if (!confirmed.has(found.categoryId ?? undefined)) continue;
+      const subscription = found.categoryId === categoryId.get("Subscriptions");
+      note(
+        "bill",
+        createBill(
+          db,
+          billCreateSchema.parse({
+            bookId: book.id,
+            name: found.name,
+            kind: subscription ? "subscription" : found.kind,
+            amountCents: found.amountCents,
+            frequency: found.frequency,
+            nextDate: found.nextDate,
+            accountId: found.accountId,
+            categoryId: found.categoryId,
+            matchKey: found.matchKey,
+          }),
+          today,
+        ),
+      );
+    }
+
+    // Habits: study from the course time above, a daily one, and a weekly one, with six
+    // weeks of history and a few misses.
+    const clock = { now, timeZone: "UTC" };
+    const sixWeeksAgo = day(-41);
+    const habit = (input: Parameters<typeof createHabit>[1]) => {
+      const made = note("habit", createHabit(db, input, clock));
+      db.update(habits).set({ startDate: sixWeeksAgo }).where(eq(habits.id, made.id)).run();
+      return made;
+    };
+    habit({ name: "Study", kind: "study" });
+    const reading = habit({ name: "Read 20 pages", remindAt: "21:00" });
+    const running = habit({ name: "Run", schedule: { kind: "weekly", times: 3 } });
+    for (let offset = -41; offset <= -1; offset += 1) {
+      if (offset % 5 !== 0 && offset !== -9) setCheckin(db, reading.id, day(offset), true, clock);
+      if (
+        [-41, -39, -37, -34, -32, -29, -27, -25, -20, -18, -15, -13, -11, -6, -4].includes(offset)
+      ) {
+        setCheckin(db, running.id, day(offset), true, clock);
+      }
+    }
+
     // Business
     const phase = note("phase", createPhase(db, phaseCreateSchema.parse({ name: "Set up" })));
     for (const [title, offset] of [
@@ -543,12 +697,14 @@ const DELETERS: Record<DemoKind, (db: Db, id: number, actor: string) => void> = 
   goal: deleteGoal,
   term: deleteTerm,
   time_entry: (db, id) => deleteEntry(db, id),
+  habit: (db, id) => deleteHabit(db, id),
   platform: (db, id) => void deletePlatform(db, id),
   resale_item: deleteItem,
   book: (db, id) => deleteBook(db, id),
   account: (db, id) => deleteAccount(db, id),
   card: (db, id) => deleteCard(db, id),
   transaction: (db, id) => deleteTransaction(db, id),
+  bill: (db, id) => deleteBill(db, id),
   phase: (db, id) => deletePhase(db, id),
   step: (db, id) => deleteStep(db, id),
   gear: (db, id) => deleteGear(db, id),

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db, Queryable } from "../../server/db/client";
 import { badRequest, notFound } from "../../server/errors";
+import type { GoalCheckinCreate } from "../../shared/goalPace";
 import {
   computeProgress,
   type GoalCreate,
@@ -17,7 +18,7 @@ import { detachEntities } from "../core/entities";
 import { links } from "../core/schema";
 import { accountsById } from "../money/money.service";
 import { tasks } from "../tasks/schema";
-import { goalAccounts, goals, milestones } from "./schema";
+import { goalAccounts, goalCheckins, goals, milestones } from "./schema";
 
 type GoalRow = typeof goals.$inferSelect;
 type MilestoneRow = typeof milestones.$inferSelect;
@@ -53,6 +54,8 @@ export type GoalJson = {
   /** In order: by target date (undated last), then sort order. */
   milestones: MilestoneJson[];
   linkedTaskCount: number;
+  /** Check-ins, oldest first, for its pace. */
+  checkins: Array<{ id: number; date: string; percent: number; note: string }>;
 };
 
 export type GoalDetailJson = GoalJson & {
@@ -125,6 +128,20 @@ function withExtras(db: Queryable, rows: GoalRow[]): GoalJson[] {
   const byGoal = new Map<number, MilestoneJson[]>();
   for (const row of milestoneRows) {
     byGoal.set(row.goalId, [...(byGoal.get(row.goalId) ?? []), toMilestoneJson(row)]);
+  }
+  const checkinsByGoal = new Map<number, GoalJson["checkins"]>();
+  for (const row of ids.length === 0
+    ? []
+    : db
+        .select()
+        .from(goalCheckins)
+        .where(inArray(goalCheckins.goalId, ids))
+        .orderBy(asc(goalCheckins.date), asc(goalCheckins.id))
+        .all()) {
+    checkinsByGoal.set(row.goalId, [
+      ...(checkinsByGoal.get(row.goalId) ?? []),
+      { id: row.id, date: row.date, percent: row.percent, note: row.note },
+    ]);
   }
 
   const taskLinks = goalTaskLinks(db, ids);
@@ -202,6 +219,7 @@ function withExtras(db: Queryable, rows: GoalRow[]): GoalJson[] {
       }),
       milestones: goalMilestones,
       linkedTaskCount: taskCount.total,
+      checkins: checkinsByGoal.get(row.id) ?? [],
     };
   });
 }
@@ -386,6 +404,7 @@ export function deleteGoal(db: Db, id: number, actor: string): void {
   db.transaction((tx) => {
     const row = requireGoal(tx, id);
     detachEntities(tx, "goal", [id], actor);
+    tx.delete(goalCheckins).where(eq(goalCheckins.goalId, id)).run();
     tx.delete(goals).where(eq(goals.id, id)).run();
     recordActivity(tx, {
       entity: { type: "goal", id },
@@ -501,4 +520,37 @@ export function deleteMilestone(
     logMilestones(tx, goal, before, actor);
     return getGoal(tx, goalId);
   });
+}
+
+// Check-ins
+
+/** Notes how a goal is going, with its progress now, for its pace. */
+export function addCheckin(
+  db: Queryable,
+  goalId: number,
+  input: GoalCheckinCreate,
+  today: string,
+): GoalDetailJson {
+  const goal = getGoal(db, goalId);
+  db.insert(goalCheckins)
+    .values({
+      goalId,
+      date: today,
+      percent: goal.progress.percent,
+      currentCents: goal.progressMode === "amount" ? goal.currentCents : null,
+      note: input.note.trim(),
+    })
+    .run();
+  return getGoal(db, goalId);
+}
+
+export function deleteCheckin(db: Queryable, goalId: number, checkinId: number): GoalDetailJson {
+  const row = db
+    .select({ id: goalCheckins.id })
+    .from(goalCheckins)
+    .where(and(eq(goalCheckins.id, checkinId), eq(goalCheckins.goalId, goalId)))
+    .get();
+  if (!row) throw notFound("That check-in doesn't exist. It may have been deleted.");
+  db.delete(goalCheckins).where(eq(goalCheckins.id, checkinId)).run();
+  return getGoal(db, goalId);
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { body, createTestApp, failure, type TestApp } from "../../server/testing";
 import { defaultModules } from "../../shared/modules";
+import { listBills } from "../money/bills.service";
 import { budgetMonth } from "../money/budget.service";
 import { moneyReceipts } from "../money/schema";
 import { seedDemo } from "./demo.service";
@@ -97,6 +98,14 @@ describe("example data", () => {
     for (const month of march.history) expect(month.spentCents).toBeGreaterThan(0);
     const [term] = await body(await t.api.education.terms.$get());
     for (const course of term?.courses ?? []) expect(course.plannedStart).not.toBeNull();
+    // Pay, rent, and the subscription are bills; utilities wait to be confirmed.
+    const bills = listBills(t.db, book?.id ?? 0, "2030-03-01");
+    expect(bills.bills.map((bill) => [bill.name, bill.kind, bill.nextDate])).toEqual([
+      ["Streamco", "subscription", "2030-03-13"],
+      ["Example Employer Payroll", "income", "2030-04-01"],
+      ["Example Property Management", "bill", "2030-04-01"],
+    ]);
+    expect(bills.suggestions.map((found) => found.name)).toContain("City Power And Water");
   });
 
   it("keeps what was added to it since", async () => {

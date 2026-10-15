@@ -1,6 +1,8 @@
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { BankColumns, BankOptions } from "../../shared/bankImport";
+import { BILL_FREQUENCIES, BILL_KINDS } from "../../shared/bills";
 import { ACCOUNT_KINDS, BOOK_KINDS, CATEGORY_KINDS } from "../../shared/books";
+import { DEBT_STRATEGIES } from "../../shared/debt";
 import { RULE_DIRECTIONS } from "../../shared/moneyRules";
 import { REWARD_KINDS } from "../../shared/rewards";
 
@@ -348,3 +350,95 @@ export const moneyReceipts = sqliteTable(
     index("money_receipts_date_idx").on(t.date),
   ],
 );
+
+/**
+ * A bill, subscription, or repeating income: confirmed from transactions that repeat
+ * (with the payee group it matches) or added by hand. "dismissed" rows are suggestions
+ * marked "not a bill", kept so they don't come back.
+ */
+export const moneyBills = sqliteTable(
+  "money_bills",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bookId: integer("book_id")
+      .notNull()
+      .references(() => moneyBooks.id),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: BILL_KINDS }).notNull().default("bill"),
+    status: text("status", { enum: ["active", "dismissed"] })
+      .notNull()
+      .default("active"),
+    /** The usual amount, always positive. */
+    amountCents: integer("amount_cents").notNull().default(0),
+    frequency: text("frequency", { enum: BILL_FREQUENCIES }).notNull().default("monthly"),
+    /** The next date on its schedule, as last set; later dates follow from the frequency. */
+    nextDate: text("next_date").notNull(),
+    /** No foreign keys, so deleting an account or category leaves the bill. */
+    accountId: integer("account_id"),
+    categoryId: integer("category_id"),
+    matchKey: text("match_key"),
+    ...timestamps(),
+  },
+  (t) => [index("money_bills_book_idx").on(t.bookId)],
+);
+
+/**
+ * How a spending category's budget behaves beyond its monthly amount. With `rollover`,
+ * what's left at the end of a month carries into the next, counted from `rolloverFrom`
+ * (YYYY-MM). A goal makes it a sinking fund: saving up `goalCents` by `goalDate` for a
+ * cost that comes once, or again every `goalEveryMonths` months.
+ */
+export const moneyBudgetSettings = sqliteTable("money_budget_settings", {
+  /** No foreign key; deleting the category deletes this row. */
+  categoryId: integer("category_id").primaryKey(),
+  rollover: integer("rollover", { mode: "boolean" }).notNull().default(false),
+  rolloverFrom: text("rollover_from"),
+  goalCents: integer("goal_cents"),
+  goalDate: text("goal_date"),
+  goalEveryMonths: integer("goal_every_months"),
+  ...timestamps(),
+});
+
+/**
+ * Part of a spending transaction that someone owes back. Once the repayment arrives,
+ * `repaymentId` points at it and it counts as a refund in the original's category.
+ * Several of these can share one repayment, when someone pays back for more than one.
+ */
+export const moneyReimbursements = sqliteTable(
+  "money_reimbursements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id").notNull(),
+    /** Always positive. */
+    amountCents: integer("amount_cents").notNull(),
+    who: text("who").notNull().default(""),
+    repaymentId: integer("repayment_id"),
+    ...timestamps(),
+  },
+  (t) => [
+    index("money_reimbursements_transaction_idx").on(t.transactionId),
+    index("money_reimbursements_repayment_idx").on(t.repaymentId),
+  ],
+);
+
+/** A card's or loan's yearly rate and minimum payment, for planning its payoff. */
+export const moneyDebtTerms = sqliteTable("money_debt_terms", {
+  /** No foreign key; deleting the account deletes this row. */
+  accountId: integer("account_id").primaryKey(),
+  /** Hundredths of a percent: 2499 is 24.99%. */
+  aprBasisPoints: integer("apr_basis_points").notNull().default(0),
+  minimumCents: integer("minimum_cents").notNull().default(0),
+  ...timestamps(),
+});
+
+/** How a book's debts are paid off: in what order, and how much extra each month. */
+export const moneyDebtPlans = sqliteTable("money_debt_plans", {
+  bookId: integer("book_id")
+    .primaryKey()
+    .references(() => moneyBooks.id),
+  strategy: text("strategy", { enum: DEBT_STRATEGIES }).notNull().default("avalanche"),
+  extraCents: integer("extra_cents").notNull().default(0),
+  /** Account ids, first paid first, for "custom". */
+  order: text("order", { mode: "json" }).$type<number[]>().notNull().default([]),
+  ...timestamps(),
+});

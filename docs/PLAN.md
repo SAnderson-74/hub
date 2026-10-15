@@ -117,7 +117,7 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 5.9 Items to sell from the Claude Project: a `hub-inventory/v1` format for up to 100 items at once into Resale (through the item import, with its preview, duplicate check, and review flags), with serial and IMEI numbers taken out
 - [x] 5.10 Tasks and goals from the Claude Project: a `hub-tasks/v1` format for projects, tasks with subtasks, and goals with milestones, read from notes or lists, previewed and added in one transaction, with open duplicates skipped
 - [x] 5.11 Tithing: a Tithing page (money in is tithed on by default, switchable per transaction or on a partial amount like a sale's profit or gross pay; donations are money-out transactions linked to the income they pay for; red until paid, green once paid), charts of owed and paid by month and income by source, a year summary, other funds (fast offering, other donations) kept apart, and a `hub-tithing/v1` format from the Claude Project for donation history and paychecks
-- [ ] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
+- [x] 5.12 Tithing on Home: a widget with the unpaid tithing total (red when something is unpaid, green when paid up) and an optional reminder, through the existing reminder scheduler, when a paycheck arrives or tithing is unpaid
 - [x] 5.13 Search, sort, and filters on the Money transaction list and the Tithing lists (newest, oldest, largest or smallest amount; a range of amounts with a slider; dates with presets like 1 month and 1 year or a custom range; several categories), and income marked as paid without a payment, in bulk or through a date, for tithing paid before Hub tracked it
 
 ### Phase 6: Groundwork, Home, and search
@@ -126,42 +126,42 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 6.2 Accessibility checks (axe) on every page at iPhone and desktop sizes in the browser tests
 - [x] 6.3 Dates on assessments, shown on the course, in reminders, the calendar feed, and the pacing timeline
 - [x] 6.4 Shared schedules for anything that repeats: chosen weekdays, every weekday, yearly, "the 2nd Tuesday", "the last day of the month", repeat from completion or on schedule, end after a number of times or on a date; used first by repeating tasks
-- [ ] 6.5 Home widgets for every module, chosen and ordered in Settings, including tithing on Home (5.12)
-- [ ] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
+- [x] 6.5 Home widgets for every module (money this month, tithing unpaid or paid up, time today, resale stock and listings that have sat, business follow-ups), chosen and ordered in Settings
+- [x] 6.6 Search everything, and a command menu (Ctrl+K or ⌘K, `/`, two-key shortcuts, `?` for the list)
 
 ### Phase 7: Tasks and planning
 
-- [ ] 7.1 Quick add in plain English ("Renew registration next Fri !high #car every year"), shown as chips before saving, also in the command menu and the Shortcuts endpoint
-- [ ] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
-- [ ] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
+- [x] 7.1 Quick add in plain English ("Renew registration next Fri !high #car every year"), shown as chips before saving, also in the command menu and the Shortcuts endpoint
+- [x] 7.2 Today, Upcoming, Anytime, Someday, and the Logbook; start dates separate from due dates; "This evening"; tasks waiting on another task stay out of Today
+- [x] 7.3 Templates and checklists: reusable tasks and projects with due dates relative to the day they're used
 
 ### Phase 8: Money ahead
 
-- [ ] 8.1 Bills, subscriptions, and repeating income: found from repeating transactions, confirmed, listed with the next date and amount, and the yearly cost of subscriptions
-- [ ] 8.2 Bills on a calendar, alerts when one changes price or doesn't arrive, and reminders before each is due
-- [ ] 8.3 Cash-flow forecast: each account's expected balance 30, 60, or 90 days ahead, with a warning before it runs low
-- [ ] 8.4 Sinking funds for costs that come once or twice a year, and budgets that carry unspent money into the next month
-- [ ] 8.5 Reimbursements and shared costs: the part owed back is matched to the repayment, counts only your share, and stays out of tithing
-- [ ] 8.6 Spending insights: month over month and year over year by category and store, a year in review, and alerts when a category runs well above its usual
-- [ ] 8.7 Debt payoff planner: snowball, avalanche, or your own order, with payoff dates, interest, and what extra payments change
-- [ ] 8.8 Money health numbers (months of spending covered, savings rate) and a net-worth projection with what-if sliders
+- [x] 8.1 Bills, subscriptions, and repeating income: found from repeating transactions, confirmed, listed with the next date and amount, and the yearly cost of subscriptions
+- [x] 8.2 Bills on a calendar, alerts when one changes price or doesn't arrive, and reminders before each is due
+- [x] 8.3 Cash-flow forecast: each account's expected balance 30, 60, or 90 days ahead, with a warning before it runs low
+- [x] 8.4 Sinking funds for costs that come once or twice a year, and budgets that carry unspent money into the next month
+- [x] 8.5 Reimbursements and shared costs: the part owed back is matched to the repayment, counts only your share, and stays out of tithing
+- [x] 8.6 Spending insights: month over month and year over year by category and store, a year in review, and alerts when a category runs well above its usual
+- [x] 8.7 Debt payoff planner: snowball, avalanche, or your own order, with payoff dates, interest, and what extra payments change
+- [x] 8.8 Money health numbers (months of spending covered, savings rate) and a net-worth projection with what-if sliders
 
 ### Phase 9: Habits, focus, resale, and goals
 
-- [ ] 9.1 Push notifications on the phone's Home Screen app (Web Push): encrypted end to end, sent only to Apple's and other browsers' push services, counts only on the lock screen unless chosen, off until turned on per device
-- [ ] 9.2 Habits: flexible schedules, check-ins, and a strength score that dips for a miss instead of resetting
-- [ ] 9.3 Habits on Home, a heat map, reminders, and the study streak linked as a habit
-- [ ] 9.4 Focus timer: work and break blocks on a task or course, saved as time entries
-- [ ] 9.5 Inventory aging and stale listings: age groups, sell-through, days to sell, and suggestions to reprice or relist
-- [ ] 9.6 Storage spots and SKUs for resale items, with printable labels
-- [ ] 9.7 Goal pace: on track or behind, a projected finish date, what's needed each week, and check-in notes
+- [x] 9.1 Push notifications on the phone's Home Screen app (Web Push): encrypted end to end, sent only to Apple's and other browsers' push services, counts only on the lock screen unless chosen, off until turned on per device
+- [x] 9.2 Habits: flexible schedules, check-ins, and a strength score that dips for a miss instead of resetting
+- [x] 9.3 Habits on Home, a heat map, reminders, and the study streak linked as a habit
+- [x] 9.4 Focus timer: work and break blocks on a task or course, saved as time entries
+- [x] 9.5 Inventory aging and stale listings: age groups, sell-through, days to sell, and suggestions to reprice or relist
+- [x] 9.6 Storage spots and SKUs for resale items, with printable labels
+- [x] 9.7 Goal pace: on track or behind, a projected finish date, what's needed each week, and check-in notes
 
 ### Phase 10: Plan and review
 
-- [ ] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
-- [ ] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
-- [ ] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
-- [ ] 10.4 Undo for a few seconds after deleting a task, transaction, or item
+- [x] 10.1 Plan the day (estimates against the hours you have) and shut down (roll the rest to tomorrow, log missed time)
+- [x] 10.2 Calendar view of everything dated: tasks, milestones, assessments, and bills
+- [x] 10.3 Weekly review: a guided checklist across every module, with counts and links to each fix
+- [x] 10.4 Undo for a few seconds after deleting a task, transaction, or item
 
 ## Import formats
 
@@ -331,7 +331,7 @@ A task's `recurrence` (and later a bill's or a habit's schedule) is a JSON rule,
 
 ### How tithing is figured
 
-Tithing is 10% of money in. A money-in transaction is tithed on by default, except transfers between accounts and money back into a spending category (a refund). A sale linked to resale items is tithed on its profit: the sale less the items' prices and costs. Income can be marked as paid without a payment (`POST /api/tithing/settle` with `incomeIds`, or `through` a date, and `settled: false` to undo): it counts as paid, shows as "marked as paid", and nothing is added to Money, so balances stay as they are. A choice on a transaction (`PUT /api/tithing/income/:id`, or `tithing` with `POST`/`PATCH /api/money/transactions`) turns it off or sets the amount it's figured on. A donation is a money-out transaction with a fund (`donation` on a transaction, or `POST /api/tithing/payments`); tithing payments are linked to income with an amount each (`PUT /api/tithing/payments/:id`), and income is unpaid, partly paid, or paid by what's linked to it.
+Tithing is 10% of money in. A money-in transaction is tithed on by default, except transfers between accounts, money back into a spending category (a refund), and a repayment matched to money owed back. A sale linked to resale items is tithed on its profit: the sale less the items' prices and costs. Income can be marked as paid without a payment (`POST /api/tithing/settle` with `incomeIds`, or `through` a date, and `settled: false` to undo): it counts as paid, shows as "marked as paid", and nothing is added to Money, so balances stay as they are. A choice on a transaction (`PUT /api/tithing/income/:id`, or `tithing` with `POST`/`PATCH /api/money/transactions`) turns it off or sets the amount it's figured on. A donation is a money-out transaction with a fund (`donation` on a transaction, or `POST /api/tithing/payments`); tithing payments are linked to income with an amount each (`PUT /api/tithing/payments/:id`), and income is unpaid, partly paid, or paid by what's linked to it.
 
 ### `hub-statement/v1`
 
@@ -361,7 +361,13 @@ Money > Import reads a file in the browser and sends clean transactions to `POST
 - **Duplicates:** a transaction with the bank's id (OFX `FITID`) is skipped when the account already has that id, or has a matching transaction entered without one. Otherwise a match is the same day, amount, and payee (ignoring case and spacing), counted, so two identical purchases on one day both import once.
 - **Undo:** each import is listed under Recent imports; undoing it removes the transactions it added, including any edited since.
 - **Rules:** "payee contains X → category Y", optionally only for money in or out, optionally renaming the payee. Imports apply them in order (first match wins) to rows the file didn't categorize, and duplicate matching accepts either the file's payee or the rule's cleaner one.
-- **Budgets:** a spending category's monthly budget applies from the month it's set and carries on until a later month changes it (0 ends it), so past months keep the budget they had. Spending is money out in the category, less refunds; transfers never count.
+- **Budgets:** a spending category's monthly budget applies from the month it's set and carries on until a later month changes it (0 ends it), so past months keep the budget they had. Spending is money out in the category, less refunds; transfers never count. A category can carry what's left into the next month, counted from the month that was turned on; overspending doesn't carry. A sinking fund is a category saving up for a cost by a date (once, or again every 6 or 12 months): what's carried over is what's saved, and it suggests the monthly budget to get there, rounded up to whole dollars.
+- **Owed back:** part of a spending transaction can be marked as owed back by someone. Money in near it (a week before to six months after) is suggested as the repayment when it's within $1 of what's owed, or names the person and covers it. Matching puts the repayment in the original's category (its largest part's, when split) as a refund, so spending counts only your share, and keeps it out of tithing. One repayment can settle several claims, up to what it brought in.
+- **Habits:** a habit is meant for every day, some days of the week, or a number of times a week, and is checked off at most once a day. Strength is a running average that moves toward 100 for each scheduled day done and toward 0 for each one missed, so a miss dips it instead of resetting it: half of an old result fades in 13 checks for a daily habit, proportionally fewer for one on some days, and 4 weeks for a weekly one. Today never counts as a miss before it's over, and neither does a week before it ends. The study habit is checked off by itself on days with at least the study minimum on courses, the same days the study streak counts. A habit with a reminder time gets one reminder that day, at that time, while it's still to do.
+- **Focus:** work and break blocks run in the browser and survive a reload. Each finished work block is saved as a time entry (noted "Focus") on what was picked, so it counts toward the week and, on a course, the study streak. Stopping early saves what was done; breaks aren't logged.
+- **Debts:** credit cards and loans that owe money, each with its yearly rate and minimum payment. A plan pays every minimum, then the extra to the first debt in its order (smallest balance first, highest rate first, or your own); each debt paid off passes its minimum on, so the monthly total stays the same. Interest is added monthly at a twelfth of the rate. The plan is worked out in the browser, so moving the extra answers right away, and it stops at 50 years or when payments stop covering the interest.
+- **Money health:** months covered is checking, savings, and cash over average monthly spending; the savings rate is income less spending, over income. Both use the last six full months (fewer for a newer book), with spending and income figured as Insights does. The projection grows investment accounts at the chosen yearly return, compounded monthly, adds each month's saving to them, and leaves everything else as it is.
+- **Insights:** spending is money out less refunds in spending categories, plus uncategorized money out. Each category's usual is the middle of its six months before; it's running high at half again its usual and at least $50 more, with spending in at least three of those months. Stores are payee groups, the same as sorting uses.
 - **Cards:** a card belongs to the account it spends from (a credit card to its credit card account, a debit card to checking), and only its last 4 digits are kept. Imports pick a transaction's card from card digits in the bank's text ("x1234", "card ending in 1234"), or, when the account has one card, from the account itself (credit cards, except payments) or from card words like "debit card" and "POS" (checking). Adding a card or its digits matches past transactions the same way. Transfers never have a card. Cash flow can show money out by payment method: the card that paid, or the account when no card did, with refunds coming off the card or account they went back to, so the total matches the category view.
 - **Rewards:** a card's program is cash back (a percent) or points (per dollar, with a value per point), a base rate, and bonus rates. A bonus rate is for a store (text found in the payee or the bank's text, ignoring case and punctuation; commas separate spellings) or a spending category, and can have dates (a rotating quarterly bonus) and a cap (only the first so much spent, in its dates or each calendar year; past it, the base rate). Store rates are tried before category rates. Purchases earn and refunds take back; transfers and money in to income categories (like a statement credit) don't count. These are estimates from the card's transactions; the statement is the final word. Each card's annual fee is weighed against what it earned, and against a flat-rate card (2% unless changed) on the same spending. For points, statement balances and redemptions (points used and what they were worth) give the real value per point, which replaces the set value once there are any; between the last two statement balances, the change plus points used is checked against Hub's estimate. "Use the best card" compares each card purchase with the book's card that would have earned the most on it, ignoring caps.
 - **Splits:** one charge in several categories, like a store run that was partly groceries and partly household things. The parts each have a spending or income category and add up to the transaction, which shows its largest part's category (so lists, rules, and an older build after a rollback still see a sensible one). Budgets, cash flow, rewards, and the category filter count each part in its own category. Changing the amount means changing the parts with it; picking one category, or linking the transaction as a transfer, takes the split away.

@@ -1,16 +1,18 @@
-import { CornerLeftUp, Plus } from "lucide-react";
+import { CornerLeftUp, Plus, X } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Sheet } from "../../../client/components/Sheet";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
   dangerButton,
   ghostButton,
+  iconButton,
   inputClass,
   labelClass,
   primaryButton,
   secondaryButton,
   textareaClass,
 } from "../../../client/components/ui";
+import { formatMinutesShort } from "../../../shared/quickAdd";
 import {
   monthWeekOf,
   nextInSeries,
@@ -29,6 +31,7 @@ import { formatShortDate, localDate } from "../dates";
 import {
   canCountFromCompletion,
   type Draft,
+  datesProblem,
   draftChanges,
   draftRule,
   type EndChoice,
@@ -43,11 +46,13 @@ import {
   type ProjectItem,
   type TaskDetail,
   useCreateTask,
-  useDeleteTask,
+  useDeleteTaskLater,
   useTask,
+  useTasks,
   useUpdateTask,
 } from "../queries";
 import { TaskCheckbox } from "./TaskList";
+import { SaveTemplate } from "./TemplatesSheet";
 
 type TaskSheetProps = {
   taskId: number | null;
@@ -137,7 +142,8 @@ function TaskEditor({
   const dirty = Object.keys(patch).length > 0;
   const titleMissing = draft.title.trim() === "";
   const repeatInvalid = repeatProblem(draft) !== null;
-  const blocked = titleMissing || repeatInvalid;
+  const datesInvalid = datesProblem(draft);
+  const blocked = titleMissing || repeatInvalid || datesInvalid !== null;
   const isSubtask = task.parentId !== null;
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -273,6 +279,8 @@ function TaskEditor({
           </div>
         </div>
 
+        <PlanFields task={task} draft={draft} problem={datesInvalid} onChange={set} />
+
         {isSubtask ? null : <RepeatFields draft={draft} today={today} onChange={set} />}
 
         <div>
@@ -384,6 +392,7 @@ function TaskEditor({
 
       <SubjectTime subject={{ type: "task", id: task.id }} />
       {isSubtask ? null : <Subtasks task={task} onOpenTask={onOpenTask} />}
+      {isSubtask ? null : <SaveTemplate from={{ taskId: task.id }} defaultName={task.title} />}
       <DeleteTask task={task} onDeleted={onDeleted} />
     </div>
   );
@@ -473,46 +482,24 @@ function Subtasks({ task, onOpenTask }: { task: TaskDetail; onOpenTask: (id: num
 }
 
 function DeleteTask({ task, onDeleted }: { task: TaskDetail; onDeleted: () => void }) {
-  const [confirming, setConfirming] = useState(false);
-  const remove = useDeleteTask();
+  const deleteLater = useDeleteTaskLater();
   const count = task.subtasks.length;
-
-  if (!confirming) {
-    return (
-      <div className="border-t border-surface-0/70 pt-4">
-        <button
-          type="button"
-          className={`${dangerButton} -ml-4`}
-          onClick={() => setConfirming(true)}
-        >
-          Delete task
-        </button>
-      </div>
-    );
-  }
   return (
-    <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
-      <p className="font-semibold text-fg">
-        Delete this task
-        {count > 0 ? ` and its ${count === 1 ? "subtask" : `${count} subtasks`}` : ""}? This can't
-        be undone.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={remove.isPending}
-          onClick={() => remove.mutate(task.id, { onSuccess: onDeleted })}
-          className="inline-flex h-11 items-center rounded-full bg-danger px-5 font-bold text-crust disabled:opacity-40"
-        >
-          {remove.isPending ? "Deleting…" : "Delete task"}
-        </button>
-        <button type="button" className={ghostButton} onClick={() => setConfirming(false)}>
-          Keep task
-        </button>
-      </div>
-      {remove.isError ? (
-        <p role="alert" className="text-sm text-danger">
-          {remove.error.message}
+    <div className="border-t border-surface-0/70 pt-4">
+      <button
+        type="button"
+        className={`${dangerButton} -ml-4`}
+        onClick={() => {
+          deleteLater(task);
+          onDeleted();
+        }}
+      >
+        Delete task
+      </button>
+      {count > 0 ? (
+        <p className="text-sm text-muted">
+          Its {count === 1 ? "subtask goes" : `${count} subtasks go`} too. Undo is there for a few
+          seconds.
         </p>
       ) : null}
     </div>
@@ -751,6 +738,177 @@ function RepeatFields({
               ? `Completing it adds the next one, due ${formatShortDate(next.dueDate, today)}.`
               : "This is the last one; completing it ends the series."}
       </p>
+    </div>
+  );
+}
+
+/** Estimates offered in the task sheet, in minutes. Others (from quick add) show too. */
+const ESTIMATES = [5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480];
+
+/**
+ * When it shows up and what it waits on: a start date ("don't show me until…"),
+ * Someday, This evening, and other tasks that have to be done first.
+ */
+function PlanFields({
+  task,
+  draft,
+  problem,
+  onChange,
+}: {
+  task: TaskDetail;
+  draft: Draft;
+  problem: string | null;
+  onChange: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+}) {
+  const ids = useId();
+  const open = useTasks("all");
+  const others = (open.data ?? []).filter(
+    (other) => other.id !== task.id && other.status !== "done",
+  );
+  // Names for tasks already chosen, whether saved or just picked.
+  const names = new Map<number, { title: string; done: boolean }>([
+    ...task.waitingOn.map((other) => [other.id, other] as const),
+    ...others.map((other) => [other.id, { title: other.title, done: false }] as const),
+  ]);
+  const choices = others.filter((other) => !draft.waitingOn.includes(other.id));
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`${ids}-start`} className={labelClass}>
+            Start date
+          </label>
+          <input
+            id={`${ids}-start`}
+            type="date"
+            value={draft.startDate}
+            onChange={(event) => onChange("startDate", event.target.value)}
+            aria-describedby={`${ids}-start-hint`}
+            aria-invalid={problem !== null}
+            className={`${inputClass} [color-scheme:dark]`}
+          />
+          {draft.startDate ? (
+            <button
+              type="button"
+              onClick={() => onChange("startDate", "")}
+              className="mt-1 h-11 rounded-full px-2 text-sm font-semibold text-accent-text hover:bg-surface-0"
+            >
+              Clear start date
+            </button>
+          ) : null}
+        </div>
+        <fieldset className="space-y-1">
+          <legend className={labelClass}>Show it</legend>
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              checked={draft.someday}
+              onChange={(event) => onChange("someday", event.target.checked)}
+              className="size-5 shrink-0 accent-accent"
+            />
+            Someday
+          </label>
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              checked={draft.evening}
+              onChange={(event) => onChange("evening", event.target.checked)}
+              className="size-5 shrink-0 accent-accent"
+            />
+            This evening
+          </label>
+        </fieldset>
+      </div>
+      <div>
+        <label htmlFor={`${ids}-estimate`} className={labelClass}>
+          Estimate
+        </label>
+        <select
+          id={`${ids}-estimate`}
+          value={draft.estimate}
+          onChange={(event) => onChange("estimate", event.target.value)}
+          className={`${inputClass} max-w-48`}
+        >
+          <option value="">None</option>
+          {ESTIMATES.map((minutes) => (
+            <option key={minutes} value={String(minutes)}>
+              {formatMinutesShort(minutes)}
+            </option>
+          ))}
+          {draft.estimate && !ESTIMATES.includes(Number(draft.estimate)) ? (
+            <option value={draft.estimate}>{formatMinutesShort(Number(draft.estimate))}</option>
+          ) : null}
+        </select>
+      </div>
+      <p
+        id={`${ids}-start-hint`}
+        className={`-mt-3 text-sm ${problem ? "text-danger" : "text-muted"}`}
+      >
+        {problem ??
+          "It stays out of Today and Anytime until the start date. Someday parks it; This evening puts it at the end of Today."}
+      </p>
+
+      <div>
+        <label htmlFor={`${ids}-wait`} className={labelClass}>
+          Waits on
+        </label>
+        {draft.waitingOn.length > 0 ? (
+          <ul aria-label="Tasks it waits on" className="mb-2 space-y-2">
+            {draft.waitingOn.map((id) => {
+              const other = names.get(id);
+              return (
+                <li
+                  key={id}
+                  className="flex items-center gap-2 rounded-tile bg-base/80 pl-4 ring-1 ring-surface-0/50"
+                >
+                  <span className="min-w-0 flex-1 py-2">
+                    <span className="block break-words text-fg">{other?.title ?? "A task"}</span>
+                    <span className="block text-sm text-muted">
+                      {other?.done ? "Done" : "Not done yet"}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange(
+                        "waitingOn",
+                        draft.waitingOn.filter((item) => item !== id),
+                      )
+                    }
+                    aria-label={`Stop waiting on ${other?.title ?? "this task"}`}
+                    className={iconButton}
+                  >
+                    <X aria-hidden="true" className="size-5" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        <select
+          id={`${ids}-wait`}
+          value=""
+          onChange={(event) => {
+            const id = Number(event.target.value);
+            if (id > 0) onChange("waitingOn", [...draft.waitingOn, id]);
+          }}
+          aria-describedby={`${ids}-wait-hint`}
+          className={inputClass}
+        >
+          <option value="">
+            {choices.length === 0 ? "No other open tasks" : "Add a task it waits on"}
+          </option>
+          {choices.map((other) => (
+            <option key={other.id} value={other.id}>
+              {other.title}
+            </option>
+          ))}
+        </select>
+        <p id={`${ids}-wait-hint`} className="mt-1.5 text-sm text-muted">
+          While any of these is open, this task stays out of Today.
+        </p>
+      </div>
     </div>
   );
 }

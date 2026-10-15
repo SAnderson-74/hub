@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Queryable } from "../../server/db/client";
 import { type Fund, type TithingStatus, tithingOwed, tithingStatus } from "../../shared/tithing";
+import { repaymentIds } from "../money/owedLinks";
 import { moneyCategories } from "../money/schema";
 import { resaleCosts, resaleItems, resaleItemTransactions } from "../resale/schema";
 import { tithingIncome, tithingLinks, tithingPayments } from "./schema";
@@ -58,7 +59,7 @@ export function inBatches<T>(ids: readonly number[], run: (batch: number[]) => T
 
 /**
  * How each money-in transaction stands. The default is to tithe on all of it, except
- * money back into a spending category (a refund). A sale linked to resale items is
+ * money back into a spending category (a refund) or repaying money owed back. A sale linked to resale items is
  * tithed on its profit: what it brought in less what those items cost. A choice the
  * person made (a row in tithing_income) wins over both.
  */
@@ -139,13 +140,17 @@ export function incomeFacts(
     paid.set(row.incomeId, row.total);
   }
 
+  // Money paid back for spending isn't income.
+  const repayments = repaymentIds(db, ids);
   for (const row of income) {
     const choice = choices.get(row.id);
     const category = row.categoryId === null ? undefined : categories.get(row.categoryId);
     const defaultBaseCents = sold.has(row.id)
       ? Math.max(0, row.amountCents - (sales.get(row.id) ?? 0))
       : row.amountCents;
-    const applies = choice ? choice.applies : category?.kind !== "expense";
+    const applies = choice
+      ? choice.applies
+      : category?.kind !== "expense" && !repayments.has(row.id);
     const baseCents = choice?.baseCents ?? defaultBaseCents;
     const owedCents = applies ? tithingOwed(baseCents) : 0;
     const paidCents = paid.get(row.id) ?? 0;
