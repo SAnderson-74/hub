@@ -2,9 +2,8 @@ import { expect, type Page, type TestInfo, test } from "@playwright/test";
 
 /**
  * Collects console errors and uncaught exceptions, including Content-Security-Policy
- * violations. Assert on it BEFORE taking a screenshot: in WebKit, Playwright inserts a
- * temporary <style> element to prepare screenshots, and the app's CSP correctly blocks it,
- * which logs an error that has nothing to do with the app.
+ * violations (the desktop run enforces the CSP; the WebKit run bypasses it, see
+ * playwright.config.ts). Assert on it before taking a screenshot all the same.
  */
 function trackErrors(page: Page): string[] {
   const errors: string[] = [];
