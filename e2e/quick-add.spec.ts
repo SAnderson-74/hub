@@ -16,7 +16,9 @@ test("quick add reads dates, priority, and tags, and shows them first", async ({
   // Both device runs share one database, so titles are unique per run.
   const id = `${testInfo.project.name}${Date.now() % 100000}`;
   await page.goto("/tasks");
-  const field = page.getByLabel("New task");
+  // By role: the command menu has a "New task" group too, still on screen for a moment
+  // after it's chosen from.
+  const field = page.getByRole("textbox", { name: "New task" });
   await field.fill(`Renew registration ${id} tomorrow !high #car`);
   const chips = page.getByRole("list", { name: "Read from the task" });
   await expect(chips.getByRole("listitem")).toHaveCount(3);
@@ -38,12 +40,6 @@ test("quick add reads dates, priority, and tags, and shows them first", async ({
   await page.getByRole("button", { name: "Search", exact: true }).locator("visible=true").click();
   const menu = page.getByRole("dialog", { name: "Search and commands" });
   await menu.getByRole("combobox").fill(`Water plants ${id} every week`);
-  // Search results arrive a moment later, above "Add as a task"; wait for them so the
-  // option doesn't move under the click.
-  await expect(menu.getByRole("listbox", { name: "Results" })).toHaveAttribute(
-    "aria-busy",
-    "false",
-  );
   await menu
     .getByRole("option", { name: new RegExp(`Add “Water plants ${id} every week” as a task`) })
     .click();
