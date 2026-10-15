@@ -239,6 +239,7 @@ describe("bills", () => {
       kind: "bill",
       title: "Rent",
       date: "2030-07-01",
+      href: `/money?book=${book.id}&do=bills`,
     });
   });
 });

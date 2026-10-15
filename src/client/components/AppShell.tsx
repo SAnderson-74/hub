@@ -9,6 +9,7 @@ import type { AppPage } from "../pages";
 import { BrandMark } from "./BrandMark";
 import { CommandMenu } from "./CommandMenu";
 import { ShortcutsSheet } from "./ShortcutsSheet";
+import { UndoBar } from "./UndoBar";
 
 /**
  * Layout for every page: a sidebar on wide screens, a bottom tab bar on phones.
@@ -142,6 +143,7 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
       <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} pages={pages} />
+      <UndoBar />
     </div>
   );
 }

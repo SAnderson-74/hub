@@ -70,7 +70,14 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 // What each reminder says
 
-export type DueItem = { key: string; kind: string; title: string; date: string };
+export type DueItem = {
+  key: string;
+  kind: string;
+  title: string;
+  date: string;
+  /** Where it opens in Hub. */
+  href: string;
+};
 
 /** Which module each kind of dated thing belongs to. */
 const MODULE_OF: Record<string, ModuleId> = {
@@ -101,7 +108,13 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
     .where(and(ne(tasks.status, "done"), gte(tasks.dueDate, from), lte(tasks.dueDate, to)))
     .all()) {
     if (task.date)
-      items.push({ key: `task:${task.id}`, kind: "task", title: task.title, date: task.date });
+      items.push({
+        key: `task:${task.id}`,
+        kind: "task",
+        title: task.title,
+        date: task.date,
+        href: `/tasks?task=${task.id}`,
+      });
   }
   const active = db
     .select({ id: goals.id, title: goals.title, date: goals.targetDate })
@@ -110,13 +123,24 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
     .all();
   for (const goal of active) {
     if (goal.date && goal.date >= from && goal.date <= to) {
-      items.push({ key: `goal:${goal.id}`, kind: "goal", title: goal.title, date: goal.date });
+      items.push({
+        key: `goal:${goal.id}`,
+        kind: "goal",
+        title: goal.title,
+        date: goal.date,
+        href: `/goals?goal=${goal.id}`,
+      });
     }
   }
   const goalIds = active.map((goal) => goal.id);
   if (goalIds.length > 0) {
     for (const milestone of db
-      .select({ id: milestones.id, title: milestones.title, date: milestones.targetDate })
+      .select({
+        id: milestones.id,
+        goalId: milestones.goalId,
+        title: milestones.title,
+        date: milestones.targetDate,
+      })
       .from(milestones)
       .where(
         and(
@@ -133,6 +157,7 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
           kind: "milestone",
           title: milestone.title,
           date: milestone.date,
+          href: `/goals?goal=${milestone.goalId}`,
         });
       }
     }
@@ -142,6 +167,8 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
       id: assessments.id,
       label: assessments.label,
       date: assessments.dueOn,
+      courseId: courses.id,
+      termId: courses.termId,
       code: courses.code,
       course: courses.title,
     })
@@ -157,6 +184,7 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
         kind: "assessment",
         title: `${assessment.label} (${assessment.code || assessment.course})`,
         date: assessment.date,
+        href: `/courses?term=${assessment.termId}&course=${assessment.courseId}`,
       });
     }
   }
@@ -177,6 +205,7 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
         kind: "business step",
         title: step.title,
         date: step.date,
+        href: "/business",
       });
     }
   }
@@ -202,6 +231,7 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
         kind: "lead",
         title: lead.nextStep ? `${lead.nextStep}: ${lead.name}` : lead.name,
         date: lead.date,
+        href: `/business?do=leads&lead=${lead.id}`,
       });
     }
   }
@@ -213,6 +243,7 @@ export function datedItems(db: Queryable, from: string, to: string): DueItem[] {
       kind: bill.kind === "income" ? "income" : "bill",
       title: bill.name,
       date: bill.date,
+      href: `/money?book=${bill.bookId}&do=bills`,
     });
   }
   // Only modules that are on: a turned-off module stays out of reminders and the calendar.

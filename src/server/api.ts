@@ -13,6 +13,7 @@ import { goalRoutes } from "../modules/goals/goals.routes";
 import { habitRoutes } from "../modules/habits/habits.routes";
 import { integrationRoutes } from "../modules/integrations/integrations.routes";
 import { moneyRoutes } from "../modules/money/money.routes";
+import { plannerRoutes } from "../modules/planner/planner.routes";
 import { pushRoutes } from "../modules/push/push.routes";
 import { resaleRoutes } from "../modules/resale/resale.routes";
 import { projectRoutes } from "../modules/tasks/projects.routes";
@@ -51,6 +52,7 @@ export function createApi(deps: Deps) {
     .route("/tithing", tithingRoutes(deps))
     .route("/business", businessRoutes(deps))
     .route("/integrations", integrationRoutes(deps))
+    .route("/planner", plannerRoutes(deps))
     .route("/push", pushRoutes(deps));
 }
 

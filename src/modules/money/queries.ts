@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, toApiError } from "../../client/lib/api";
+import { deleteLater } from "../../client/lib/undo";
 import type { BankImport } from "../../shared/bankImport";
 import type { BillCreate, BillDismiss, BillUpdate } from "../../shared/bills";
 import type {
@@ -258,11 +259,46 @@ export function useUpdateTransaction() {
   });
 }
 
-export function useDeleteTransaction() {
-  return useMoneyMutation(async (id: number) => {
-    const res = await api.money.transactions[":id"].$delete({ param: { id: String(id) } });
-    if (!res.ok) throw await toApiError(res);
-  });
+/**
+ * Deletes a transaction (both sides, for a transfer) after a few seconds, with Undo
+ * until then. It leaves the list at once.
+ */
+export function useDeleteTransactionLater() {
+  const queryClient = useQueryClient();
+  return (transaction: Pick<Transaction, "id" | "payee" | "transfer">) => {
+    const gone = new Set([transaction.id, transaction.transfer?.transactionId ?? 0]);
+    const name = transaction.transfer ? "the transfer" : transaction.payee || "the transaction";
+    const send = (keepalive: boolean) =>
+      api.money.transactions[":id"].$delete(
+        { param: { id: String(transaction.id) } },
+        { init: { keepalive } },
+      );
+    deleteLater(queryClient, {
+      message: `Deleted ${name}`,
+      restoredMessage: `Restored ${name}`,
+      hide: {
+        keys: [["money", "transactions"]],
+        remove: (data) => {
+          const page = data as TransactionPage;
+          const left = page.transactions.filter((item) => !gone.has(item.id));
+          return {
+            ...page,
+            transactions: left,
+            total: page.total - (page.transactions.length - left.length),
+          };
+        },
+      },
+      commit: async () => {
+        try {
+          const res = await send(false);
+          if (!res.ok) throw await toApiError(res);
+        } finally {
+          refreshMoney(queryClient);
+        }
+      },
+      flush: () => void send(true),
+    });
+  };
 }
 
 // Cards

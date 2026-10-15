@@ -260,6 +260,11 @@ function BookView({
   useCommand("forecast", () => chooseView("forecast"));
   useCommand("insights", () => chooseView("insights"));
   useCommand("debts", () => chooseView("debts"));
+  // From the weekly review: sort the uncategorized transactions.
+  useCommand("sort", () => {
+    chooseView("transactions");
+    setSortingOpen(true);
+  });
 
   const allAccounts = accounts.data ?? [];
   const openAccounts = allAccounts.filter((account) => !account.archived);

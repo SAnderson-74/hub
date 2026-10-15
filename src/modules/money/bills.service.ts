@@ -348,7 +348,14 @@ export function billOccurrences(
   db: Queryable,
   from: string,
   to: string,
-): Array<{ id: number; name: string; kind: BillKind; amountCents: number; date: string }> {
+): Array<{
+  id: number;
+  bookId: number;
+  name: string;
+  kind: BillKind;
+  amountCents: number;
+  date: string;
+}> {
   return db
     .select()
     .from(moneyBills)
@@ -357,6 +364,7 @@ export function billOccurrences(
     .flatMap((bill) =>
       billDates(bill.nextDate, bill.frequency, from, to).map((date) => ({
         id: bill.id,
+        bookId: bill.bookId,
         name: bill.name,
         kind: bill.kind,
         amountCents: bill.amountCents,

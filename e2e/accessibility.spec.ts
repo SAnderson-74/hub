@@ -19,6 +19,8 @@ const PAGES = [
   { path: "/tithing", heading: "Tithing" },
   { path: "/taxes", heading: "Taxes" },
   { path: "/business", heading: "Business" },
+  { path: "/calendar", heading: "Calendar" },
+  { path: "/review", heading: "Weekly review" },
   { path: "/settings", heading: "Settings" },
   { path: "/more", heading: "More" },
 ] as const;
@@ -194,4 +196,22 @@ test("resale aging and labels, and a goal's check-ins, meet WCAG 2.1 AA", async 
   const sheet = page.getByRole("dialog", { name: "Goal" });
   await expect(sheet.getByRole("list", { name: "Check-ins" })).toBeVisible();
   await checkSheet(page, sheet);
+});
+
+test("the undo bar meets WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/tasks", "Tasks");
+  await page.getByRole("button", { name: /^Replace the smoke detector batteries/ }).click();
+  await page
+    .getByRole("dialog", { name: "Task" })
+    .getByRole("button", { name: "Delete task" })
+    .click();
+  const bar = page.getByRole("status").filter({ hasText: "Deleted Replace the smoke detector" });
+  await expect(bar).toBeVisible();
+  // Held while checked, so the example task isn't deleted.
+  await bar.hover();
+  expect(await violations(page)).toEqual([]);
+  await bar.getByRole("button", { name: "Undo" }).click();
+  await expect(
+    page.getByRole("button", { name: /^Replace the smoke detector batteries/ }),
+  ).toBeVisible();
 });
