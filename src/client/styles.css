@@ -100,3 +100,39 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Printing labels (Resale > Labels): only the labels print, black on white, two to a
+ * row, each kept whole on a page.
+ */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  .print-labels,
+  .print-labels * {
+    visibility: visible !important;
+  }
+  .print-labels {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25in;
+  }
+  .print-labels .label-card {
+    break-inside: avoid;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: 1px solid #000;
+  }
+  @page {
+    margin: 0.5in;
+  }
+}

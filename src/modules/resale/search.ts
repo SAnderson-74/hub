@@ -9,7 +9,8 @@ export const resaleSearchers: Searcher[] = [
     kind: "resale_item",
     label: "Resale items",
     module: "resale",
-    // Items still in hand before sold and kept ones.
+    // By title, SKU (typed from a label), or where it's kept. Items still in hand come
+    // before sold and kept ones.
     search: (db, { words, limit }) =>
       db
         .select({
@@ -17,12 +18,15 @@ export const resaleSearchers: Searcher[] = [
           title: resaleItems.title,
           status: resaleItems.status,
           category: resaleItems.category,
+          sku: resaleItems.sku,
         })
         .from(resaleItems)
         .where(
           containsWords(
             [
               resaleItems.title,
+              resaleItems.sku,
+              resaleItems.spot,
               resaleItems.category,
               resaleItems.condition,
               resaleItems.purchaseFrom,
@@ -42,7 +46,9 @@ export const resaleSearchers: Searcher[] = [
         .map((row) => ({
           id: row.id,
           title: row.title,
-          detail: [ITEM_STATUS_LABELS[row.status], row.category].filter(Boolean).join(" · "),
+          detail: [ITEM_STATUS_LABELS[row.status], row.category, row.sku]
+            .filter(Boolean)
+            .join(" · "),
           date: null,
           amountCents: null,
           href: `/resale?item=${row.id}`,

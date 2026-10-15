@@ -173,3 +173,25 @@ test("the habit sheet meets WCAG 2.1 AA", async ({ page }) => {
     .click();
   await checkSheet(page, page.getByRole("dialog", { name: "Habit" }));
 });
+
+test("resale aging and labels, and a goal's check-ins, meet WCAG 2.1 AA", async ({ page }) => {
+  await open(page, "/resale", "Resale");
+  await page.getByRole("radio", { name: "Aging" }).check();
+  await expect(page.getByRole("region", { name: "What to do" })).toContainText("Typewriter");
+  expect(await violations(page), "Aging").toEqual([]);
+
+  await page.getByRole("radio", { name: "Labels" }).check();
+  await page.getByRole("button", { name: /^Pick all/ }).click();
+  await expect(page.getByRole("img", { name: "Barcode for BIKE-01" })).toBeVisible();
+  expect(await violations(page), "Labels").toEqual([]);
+  await page.getByRole("radio", { name: "Items" }).check();
+
+  await open(page, "/goals", "Goals");
+  await page
+    .getByRole("button", { name: /Emergency fund/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Goal" });
+  await expect(sheet.getByRole("list", { name: "Check-ins" })).toBeVisible();
+  await checkSheet(page, sheet);
+});

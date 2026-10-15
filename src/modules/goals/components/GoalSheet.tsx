@@ -36,6 +36,7 @@ import {
   useUpdateGoal,
   useUpdateMilestone,
 } from "../queries";
+import { GoalPace } from "./GoalPace";
 import { SavingsAccounts } from "./SavingsAccounts";
 
 const MODE_HINTS: Record<ProgressMode, string> = {
@@ -349,6 +350,7 @@ function GoalEditor({
         ) : null}
       </form>
 
+      <GoalPace goal={goal} />
       <Milestones goal={goal} />
       <LinkedTasks goal={goal} />
       <DeleteGoal goal={goal} onDeleted={onDeleted} />

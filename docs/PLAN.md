@@ -152,9 +152,9 @@ Money is always integer cents. Calendar dates are `YYYY-MM-DD` text.
 - [x] 9.2 Habits: flexible schedules, check-ins, and a strength score that dips for a miss instead of resetting
 - [x] 9.3 Habits on Home, a heat map, reminders, and the study streak linked as a habit
 - [x] 9.4 Focus timer: work and break blocks on a task or course, saved as time entries
-- [ ] 9.5 Inventory aging and stale listings: age groups, sell-through, days to sell, and suggestions to reprice or relist
-- [ ] 9.6 Storage spots and SKUs for resale items, with printable labels
-- [ ] 9.7 Goal pace: on track or behind, a projected finish date, what's needed each week, and check-in notes
+- [x] 9.5 Inventory aging and stale listings: age groups, sell-through, days to sell, and suggestions to reprice or relist
+- [x] 9.6 Storage spots and SKUs for resale items, with printable labels
+- [x] 9.7 Goal pace: on track or behind, a projected finish date, what's needed each week, and check-in notes
 
 ### Phase 10: Plan and review
 

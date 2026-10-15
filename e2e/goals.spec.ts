@@ -86,3 +86,40 @@ test("goals track progress and show on the timeline", async ({ page }, testInfo)
   await expect(sheet).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test("check-ins note progress, and the pace says what each week needs", async ({
+  page,
+}, testInfo) => {
+  const title = `Emergency fund ${testInfo.project.name} ${Date.now()}`;
+  const errors = trackErrors(page);
+  const made = await page.request.post("/api/goals", {
+    data: {
+      title,
+      targetDate: daysFromNow(70),
+      progressMode: "amount",
+      targetCents: 500_000,
+      currentCents: 100_000,
+    },
+  });
+  expect(made.status()).toBe(201);
+  const goal = (await made.json()) as { id: number };
+
+  await page.goto(`/goals?goal=${goal.id}`);
+  const sheet = page.getByRole("dialog", { name: "Goal" });
+  const pace = sheet.getByRole("region", { name: "Pace" });
+  // Added today, so it's too soon for a pace, but not for what's needed: $4,000 in 10 weeks.
+  await expect(pace).toContainText("Too early to tell");
+  await expect(pace).toContainText("Needs about $400 a week to finish by");
+
+  await pace.getByLabel("Check-in note").fill("Set up an automatic transfer");
+  await pace.getByRole("button", { name: "Check in" }).click();
+  await expect(pace.getByRole("status")).toHaveText("Checked in at 20%");
+  const checkins = pace.getByRole("list", { name: "Check-ins" });
+  await expect(checkins).toContainText(/\w{3}, \w{3} \d+ · 20%/);
+  await expect(checkins).toContainText("Set up an automatic transfer");
+  await expect(pace.getByLabel("Check-in note")).toHaveValue("");
+
+  await checkins.getByRole("button", { name: /^Delete the check-in from / }).click();
+  await expect(checkins).toBeHidden();
+  expect(errors).toEqual([]);
+});

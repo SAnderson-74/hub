@@ -43,6 +43,7 @@ import {
   listTerms,
 } from "../education/education.service";
 import { createGoal, createMilestone, deleteGoal } from "../goals/goals.service";
+import { goalCheckins } from "../goals/schema";
 import { createHabit, deleteHabit, setCheckin } from "../habits/habits.service";
 import { habits } from "../habits/schema";
 import { createBill, deleteBill, listBills } from "../money/bills.service";
@@ -183,6 +184,16 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
       milestoneCreateSchema.parse({ title: "First $1,000", targetDate: day(30) }),
       actor,
     );
+    // A check-in a month ago, so its pace shows. It goes with the goal.
+    db.insert(goalCheckins)
+      .values({
+        goalId: fund.id,
+        date: day(-30),
+        percent: 20,
+        currentCents: 60_000,
+        note: "Setting aside $50 a week.",
+      })
+      .run();
     const run = note(
       "goal",
       createGoal(db, goalCreateSchema.parse({ title: "Run a 10K", targetDate: day(90) }), actor),
@@ -288,6 +299,8 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
         purchasedOn: day(-20),
         purchaseCents: 12_000,
         purchasePlatformId: platform?.id ?? null,
+        sku: "BIKE-01",
+        spot: "Garage rack",
       },
       {
         title: "Desk lamp, brass",
@@ -305,6 +318,16 @@ export function seedDemo(db: Db, actor: string, today: string, now = new Date())
         category: "Cameras",
         purchasedOn: day(-5),
         purchaseCents: 2_500,
+        sku: "CAM-01",
+        spot: "Closet bin 2",
+      },
+      {
+        title: "Typewriter",
+        status: "acquired",
+        category: "Home",
+        purchasedOn: day(-75),
+        purchaseCents: 1_500,
+        spot: "Garage shelf B",
       },
     ];
     for (const item of items) {

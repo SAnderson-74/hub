@@ -100,6 +100,10 @@ export type ItemJson = {
   /** Imported with missing or unreadable values; `reviewNote` says what. */
   needsReview: boolean;
   reviewNote: string;
+  /** Its label code, if it has one. */
+  sku: string | null;
+  /** Where it's kept, or "". */
+  spot: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -331,6 +335,8 @@ function itemsJson(db: Queryable, rows: ItemRow[], now = new Date()): ItemJson[]
       transactions: transactionsByItem.get(row.id) ?? [],
       needsReview: row.needsReview,
       reviewNote: row.reviewNote,
+      sku: row.sku,
+      spot: row.spot,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -381,6 +387,8 @@ function tracked(row: ItemRow, names: Map<number, string>) {
     soldVia: row.salePlatformId === null ? null : (names.get(row.salePlatformId) ?? null),
     buyerNotes: row.buyerNotes,
     needsReview: row.needsReview,
+    sku: row.sku,
+    spot: row.spot,
   };
 }
 
@@ -409,6 +417,20 @@ function endOpenListings(tx: Queryable, itemId: number, endedOn: string) {
     .run();
 }
 
+/** A SKU no other item has, or null. */
+function checkSku(db: Queryable, sku: string | null, exceptId?: number): string | null {
+  if (!sku) return null;
+  const taken = db
+    .select({ id: resaleItems.id, title: resaleItems.title })
+    .from(resaleItems)
+    .where(eq(resaleItems.sku, sku))
+    .get();
+  if (taken && taken.id !== exceptId) {
+    throw conflict(`${taken.title} already has the SKU ${sku}. Pick another.`);
+  }
+  return sku;
+}
+
 export function createItem(db: Db, input: ItemCreate, actor: string, today: string): ItemJson {
   return db.transaction((tx) => {
     if (input.purchasePlatformId != null) requirePlatform(tx, input.purchasePlatformId, "body");
@@ -430,6 +452,8 @@ export function createItem(db: Db, input: ItemCreate, actor: string, today: stri
         saleCents: input.saleCents ?? null,
         salePlatformId: input.salePlatformId ?? null,
         buyerNotes: input.buyerNotes ?? "",
+        sku: checkSku(tx, input.sku ?? null),
+        spot: input.spot ?? "",
       })
       .returning()
       .get();
@@ -477,6 +501,8 @@ export function updateItem(
       salePlatformId: keep(patch.salePlatformId, current.salePlatformId),
       buyerNotes: keep(patch.buyerNotes, current.buyerNotes),
       needsReview: keep(patch.needsReview, current.needsReview),
+      sku: patch.sku === undefined ? current.sku : checkSku(tx, patch.sku, id),
+      spot: keep(patch.spot, current.spot),
     };
     // Marking an item reviewed clears the note that explained why.
     if (!next.needsReview) next.reviewNote = "";

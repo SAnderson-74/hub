@@ -71,3 +71,26 @@ export const goalAccounts = sqliteTable(
     index("goal_accounts_account_idx").on(t.accountId),
   ],
 );
+
+/**
+ * A note on how a goal is going, with its progress at the time, so its pace can be
+ * worked out: how fast it's moving, and when it would finish at that rate.
+ */
+export const goalCheckins = sqliteTable(
+  "goal_checkins",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    goalId: integer("goal_id")
+      .notNull()
+      .references(() => goals.id),
+    /** YYYY-MM-DD, in Hub's time zone. */
+    date: text("date").notNull(),
+    /** Progress from 0 to 100 when checked in. */
+    percent: integer("percent").notNull(),
+    /** For an amount goal, the amount saved then. */
+    currentCents: integer("current_cents"),
+    note: text("note").notNull().default(""),
+    ...timestamps(),
+  },
+  (t) => [index("goal_checkins_goal_idx").on(t.goalId)],
+);
