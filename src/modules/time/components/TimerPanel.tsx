@@ -109,7 +109,7 @@ function RunningTimerRow({ timer }: { timer: RunningTimer }) {
   return (
     <li
       aria-label={name}
-      className="flex items-center gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+      className="flex items-center gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
     >
       <div className="min-w-0 flex-1">
         <p

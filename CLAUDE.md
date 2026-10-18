@@ -58,13 +58,14 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 
 ## UI rules
 
-- Design for iPhone first, then desktop. Touch targets at least 44px. Respect safe areas.
+- Design for iPhone first, then desktop, and keep it compact so more fits on a screen. The root font size is 14px (`src/client/styles.css`), so everything in rem shrinks with it; buttons and fields are `h-11` (38.5px). Fields keep 16px text on touch screens so Safari doesn't zoom. Respect safe areas.
 - Tailwind v4 with the tokens in `src/client/styles.css` only (the default palette is removed): `bg-base`, `bg-mantle`, `bg-surface-0..2`, `text-fg`, `text-muted`, `text-faint`, `ok`, `warn`, `danger`, `accent`, `text-accent-text` (text in the accent color), `text-on-accent` (text on accent backgrounds).
 - Page grids use `grid-cols-1` on phones (for example `grid grid-cols-1 gap-4 lg:grid-cols-12`) so long or truncated text can't widen the page.
 - Radius by level: `rounded-panel` for `Panel`, `rounded-tile` for tiles inside panels, `rounded-control` for inputs and nav items, `rounded-full` for buttons and chips. No drop shadows.
 - Reuse `Panel`, `PageHeader`, `StatusDot`, `LoadingRows`, `ErrorNote`, `ProgressBar`, and `Sheet` (a `<dialog>` that is a bottom sheet on phones) plus the control classes in `src/client/components/ui.ts`. Status colors always come with text.
+- A page's buttons go in `PageHeader`'s `actions`. Its views (like Money's Transactions, Budget, Bills) use `PageTabs`, which sit in the header on tablets and desktops. Related actions share a `MenuButton` (Import holds the import and paste choices). Buttons whose icon says it all (add an account, categories, rules) are icon-only: an `aria-label`, `data-tip` for the hover name (`src/client/components/Tooltips.tsx`), and `iconSecondaryButton`. Rarely used setup, like money books, lives in Settings.
 - The phone tab bar shows five items; with more pages, the first four get tabs and the rest are listed on the More page (`src/client/lib/nav.ts`).
-- Copy: sentence case, plain verbs. Buttons say what happens ("Save accent") and confirmations reuse the verb ("Accent saved"). Errors say what happened and how to fix it. No all-caps labels.
+- Copy: sentence case, plain verbs. Buttons with text say what happens ("Save accent") and confirmations reuse the verb ("Accent saved"). Errors say what happened and how to fix it. No all-caps labels.
 - Charts: `recharts`, colors from CSS variables, always with a one-line text summary. Put the screen-reader table inside a `<div className="sr-only">`; a table ignores the 1px width and would widen the page. The chart itself sits in an `aria-hidden` wrapper, so pass `accessibilityLayer={false}` (otherwise it's focusable inside hidden content).
 - The Content-Security-Policy only allows scripts, styles, and fonts from the app itself: no inline scripts, CDNs, injected `<style>` tags, or `data:` fonts.
 - Icons come from `lucide-react`.

@@ -9,7 +9,7 @@ function trackErrors(page: Page): string[] {
   return errors;
 }
 
-/** The search button: in the header on phones, the sidebar on wider screens. */
+/** The search button: an icon in the phone header, a wide pill in the desktop header. */
 const searchButton = (page: Page) =>
   page.getByRole("button", { name: "Search", exact: true }).locator("visible=true");
 

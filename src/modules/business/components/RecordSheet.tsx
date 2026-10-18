@@ -253,7 +253,7 @@ export function RecordSheet({
       {onDelete ? (
         <div className="mt-6 border-t border-surface-0/70 pt-4">
           {confirming ? (
-            <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+            <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
               <p className="font-semibold text-fg">
                 Delete this {noun}? This can't be undone.{deleteWarning ? ` ${deleteWarning}` : ""}
               </p>

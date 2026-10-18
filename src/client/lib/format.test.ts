@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatDuration, formatHour, formatRelative, greetingFor } from "./format";
+import {
+  formatBytes,
+  formatDuration,
+  formatHour,
+  formatRelative,
+  greetingFor,
+  initialsFor,
+} from "./format";
 
 describe("formatting", () => {
   it("formats sizes and durations", () => {
@@ -22,5 +29,13 @@ describe("formatting", () => {
     expect(greetingFor(14)).toBe("Good afternoon");
     expect(greetingFor(22)).toBe("Good evening");
     expect(greetingFor(2)).toBe("Good evening");
+  });
+
+  it("makes avatar initials from a name or login", () => {
+    expect(initialsFor("John Smith")).toBe("JS");
+    expect(initialsFor("John Q. Smith")).toBe("JS");
+    expect(initialsFor("  john  ")).toBe("J");
+    expect(initialsFor("john.smith@example.com")).toBe("J");
+    expect(initialsFor("")).toBe("");
   });
 });

@@ -411,7 +411,7 @@ function TransactionForm({
         ) : null}
 
         {isTransferSide && transaction?.transfer ? (
-          <div className="flex items-start gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+          <div className="flex items-start gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
             <ArrowLeftRight aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
             <div className="min-w-0">
               <p className="font-semibold text-fg tabular-nums">
@@ -429,7 +429,7 @@ function TransactionForm({
         ) : null}
 
         {transaction && transaction.resaleItems.length > 0 ? (
-          <div className="flex items-start gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+          <div className="flex items-start gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
             <Package aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
             <div className="min-w-0">
               <p className="font-semibold text-fg">Resale</p>
@@ -732,7 +732,7 @@ function TransactionForm({
           </>
         ) : null}
         {showDonation ? (
-          <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+          <div className="min-w-0 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
             <div className="flex items-start gap-3">
               <HandCoins aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
               <div className="min-w-0 flex-1">

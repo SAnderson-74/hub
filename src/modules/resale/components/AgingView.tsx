@@ -27,7 +27,7 @@ export function AgingView({
   const largest = Math.max(1, ...aging.groups.map((group) => group.count));
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <div className="grid grid-cols-2 gap-3 lg:col-span-12 lg:grid-cols-4">
         <Stat label="In stock" value={String(aging.inStock)} />
         <Stat label="Tied up" value={formatCents(aging.stockCents)} note="Paid plus costs" />

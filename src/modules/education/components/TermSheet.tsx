@@ -175,7 +175,7 @@ function TermForm({
 
       {term ? (
         confirmDelete ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+          <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
             <p className="font-semibold text-fg">
               Delete this term
               {term.courses.length > 0

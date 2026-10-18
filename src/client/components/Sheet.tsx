@@ -61,7 +61,7 @@ export function Sheet({
       }}
       className={`fixed inset-x-0 top-auto bottom-0 m-0 h-auto max-h-[92dvh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-panel bg-mantle p-0 text-fg ring-1 ring-surface-0/60 backdrop:bg-crust/75 open:block ${variants[variant]}`}
     >
-      <div className="sticky top-0 z-10 flex items-start gap-3 bg-mantle px-5 pt-5 pb-3 md:px-6 md:pt-6">
+      <div className="sticky top-0 z-10 flex items-start gap-3 bg-mantle px-4 pt-4 pb-3 md:px-5 md:pt-5">
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="text-lg font-semibold tracking-[-0.01em] break-words">
             {title}
@@ -77,7 +77,7 @@ export function Sheet({
           <X aria-hidden="true" className="size-5" />
         </button>
       </div>
-      <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] md:px-6">{children}</div>
+      <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:px-5">{children}</div>
     </dialog>
   );
 }

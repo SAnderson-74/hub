@@ -16,7 +16,16 @@ test("a book gets accounts and transactions, with balances that follow", async (
   const book = `Personal ${testInfo.project.name} ${Date.now() % 100000}`;
   const errors = trackErrors(page);
 
-  await page.goto("/");
+  // Books are kept in Settings; Money opens on a new one.
+  await page.goto("/settings");
+  await page.getByRole("region", { name: "Books" }).getByRole("button", { name: "Books" }).click();
+  const books = page.getByRole("dialog", { name: "Books" });
+  await books.getByLabel("New book").fill(book);
+  await expect(books.getByLabel("Start with common categories")).toBeChecked();
+  await books.getByRole("button", { name: "Add book" }).click();
+  await expect(books.getByText(book, { exact: true })).toBeVisible();
+  await books.getByRole("button", { name: "Close" }).click();
+
   const nav = page.getByRole("navigation", { name: "Main" });
   if (testInfo.project.name === "iphone") {
     await nav.getByRole("link", { name: "More" }).click();
@@ -28,15 +37,6 @@ test("a book gets accounts and transactions, with balances that follow", async (
     await nav.getByRole("link", { name: "Money" }).click();
   }
   await expect(page.getByRole("heading", { level: 1, name: "Money" })).toBeVisible();
-
-  // The first run starts with no books; later ones open the Books sheet instead.
-  await page.getByRole("button", { name: /^(Add a book|Books)$/ }).click();
-  const books = page.getByRole("dialog", { name: "Books" });
-  await books.getByLabel("New book").fill(book);
-  await expect(books.getByLabel("Start with common categories")).toBeChecked();
-  await books.getByRole("button", { name: "Add book" }).click();
-  await expect(books.getByText(book, { exact: true })).toBeVisible();
-  await books.getByRole("button", { name: "Close" }).click();
 
   // A new book starts empty and asks for an account.
   await expect(page.getByRole("region", { name: "Add your accounts" })).toBeVisible();
@@ -168,6 +168,7 @@ test("bank files import once, remember their columns, and can be undone", async 
   const file = { name: "checking.csv", mimeType: "text/csv", buffer: Buffer.from(csv) };
 
   await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a bank file" }).click();
   let sheet = page.getByRole("dialog", { name: "Import transactions" });
   await sheet.getByLabel("File", { exact: true }).setInputFiles(file);
   await expect(sheet.getByText("Choose the date column")).toBeVisible();
@@ -191,6 +192,7 @@ test("bank files import once, remember their columns, and can be undone", async 
 
   // The same file again: its columns come back, and nothing is added twice.
   await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a bank file" }).click();
   sheet = page.getByRole("dialog", { name: "Import transactions" });
   await sheet.getByLabel("File", { exact: true }).setInputFiles(file);
   await expect(sheet.getByLabel("Date", { exact: true })).toHaveValue("0");
@@ -280,6 +282,7 @@ test("rules sort payees, and transfers stay out of spending", async ({ page }, t
     "2030-01-06,ONLINE TRANSFER TO SAV,-200.00,",
   ].join("\n");
   await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a bank file" }).click();
   const importing = page.getByRole("dialog", { name: "Import transactions" });
   await importing.getByLabel("Into account").selectOption({ label: "Checking" });
   await importing
@@ -634,6 +637,7 @@ test("an OFX file's own balance is checked against Hub's", async ({ page }, test
     "</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>",
   ].join("\n");
   await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a bank file" }).click();
   const sheet = page.getByRole("dialog", { name: "Import transactions" });
   await sheet.getByLabel("File", { exact: true }).setInputFiles({
     name: "statement.ofx",

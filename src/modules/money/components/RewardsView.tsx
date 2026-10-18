@@ -142,7 +142,7 @@ export function RewardsView({
         </Panel>
       ) : (
         <div
-          className={`grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6 ${
+          className={`grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4 ${
             report.isPlaceholderData ? "opacity-60" : ""
           }`}
         >
@@ -313,7 +313,7 @@ function WorthIt({
   const gap = netCents - flatCents;
   const flat = `a flat ${rateLabel("cash_back", baseline)} card`;
   return (
-    <div className="mt-4 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="mt-4 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <dl className="grid grid-cols-3 gap-3 text-sm tabular-nums">
         <div className="min-w-0">
           <dt className="text-muted">Annual fee</dt>

@@ -2,6 +2,7 @@ import { ChartNoAxesGantt, ChevronDown, Plus, Target } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
+import { type PageTab, PageTabs } from "../../../client/components/PageTabs";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { primaryButton } from "../../../client/components/ui";
 import { useCommand } from "../../../client/lib/useCommand";
@@ -16,6 +17,10 @@ import { buildTimeline } from "../timeline";
 
 type View = "goals" | "timeline";
 const VIEW_KEY = "hub.goals.view";
+const VIEW_TABS: readonly PageTab<View>[] = [
+  { value: "goals", label: "Goals", icon: Target },
+  { value: "timeline", label: "Timeline", icon: ChartNoAxesGantt },
+];
 
 function storedView(): View {
   try {
@@ -32,6 +37,14 @@ export function GoalsPage() {
   const location = useLocation();
   const today = localDate(useNow());
   const [view, setView] = useState<View>(storedView);
+  const chooseView = (next: View) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Private browsing; the choice still applies to this visit.
+    }
+  };
   const [creating, setCreating] = useState(false);
   useCommand("add-goal", () => setCreating(true));
   const openGoalId = Number(params.get("goal")) || null;
@@ -67,45 +80,14 @@ export function GoalsPage() {
               : `${active.length} active${closed.length > 0 ? `, ${closed.length} achieved or dropped` : ""}.`
             : undefined
         }
+        actions={
+          <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" className="size-[1.125rem]" />
+            New goal
+          </button>
+        }
       />
-
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <fieldset className="flex rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
-          <legend className="sr-only">View</legend>
-          {(
-            [
-              ["goals", "Goals", Target],
-              ["timeline", "Timeline", ChartNoAxesGantt],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <label key={value} className="relative">
-              <input
-                type="radio"
-                name="goal-view"
-                value={value}
-                checked={view === value}
-                onChange={() => {
-                  setView(value);
-                  try {
-                    localStorage.setItem(VIEW_KEY, value);
-                  } catch {
-                    // Private browsing; the choice still applies to this visit.
-                  }
-                }}
-                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-              />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg">
-                <Icon aria-hidden="true" className="size-4" />
-                {label}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
-          <Plus aria-hidden="true" className="size-5" />
-          New goal
-        </button>
-      </div>
+      <PageTabs label="View" name="goal-view" tabs={VIEW_TABS} value={view} onChange={chooseView} />
 
       {goals.isPending ? (
         <LoadingRows rows={3} />
@@ -121,7 +103,7 @@ export function GoalsPage() {
       ) : (
         <div className="space-y-6">
           {active.length === 0 ? (
-            <p className="rounded-tile bg-mantle p-5 text-muted ring-1 ring-surface-0/60">
+            <p className="rounded-tile bg-mantle p-4 text-muted ring-1 ring-surface-0/60">
               Goals track something you want to reach by a date, through milestones, tasks, an
               amount, or your own estimate.
             </p>

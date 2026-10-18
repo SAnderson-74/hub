@@ -48,7 +48,7 @@ function HealthNumber({
   note: string;
 }) {
   return (
-    <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="min-w-0 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <p className="text-sm font-semibold text-muted">{label}</p>
       <p className="mt-2 truncate text-2xl font-bold tracking-[-0.02em] text-fg">{value}</p>
       {level ? (
@@ -136,7 +136,7 @@ function Projection({ health, worth }: { health: Health; worth: NetWorth }) {
       description="A rough guide, not a promise: it assumes what you save is invested, and returns go up and down."
       className="lg:col-span-12"
     >
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
         <div className="space-y-2 lg:col-span-4">
           <Slider
             label="Saved each month"

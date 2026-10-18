@@ -243,7 +243,7 @@ function PaymentForm({
   return (
     <form onSubmit={onSubmit} className="space-y-5" noValidate>
       {existing || marking ? (
-        <div className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <div className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="font-semibold break-words text-fg">
             {formatCents(existing?.amountCents ?? marking?.amountCents ?? 0)} to{" "}
             {(existing?.payee || marking?.payee) ?? "No payee"}
@@ -472,7 +472,7 @@ function PaymentForm({
 
       {existing ? (
         confirmClear ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+          <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
             <p className="font-semibold text-fg">
               Stop counting this as a donation? The transaction stays in Money, and income it paid
               for goes back to unpaid.

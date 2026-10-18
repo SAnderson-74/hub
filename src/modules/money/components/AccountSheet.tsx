@@ -137,7 +137,7 @@ function AccountForm({
   return (
     <div className="space-y-8">
       {account ? (
-        <div className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <div className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="text-sm font-semibold text-muted">Balance</p>
           <p className="mt-1 text-3xl font-bold tracking-[-0.02em] text-fg tabular-nums">
             {formatSigned(account.balanceCents)}
@@ -287,7 +287,7 @@ function AccountForm({
               : "Archive an account you've closed. Its transactions and balances stay."}
           </p>
           {account.transactionCount > 0 || account.snapshotCount > 0 ? null : confirmDelete ? (
-            <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+            <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
               <p className="font-semibold text-fg">Delete {account.name}? This can't be undone.</p>
               <div className="flex flex-wrap gap-2">
                 <button

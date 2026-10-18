@@ -82,3 +82,27 @@ test("unknown pages show a way back", async ({ page }) => {
   await expect(page).toHaveURL(/\/$/);
   expect(errors).toEqual([]);
 });
+
+test("wide screens name each page in the rail and show who is signed in", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name === "iphone", "Phones use the tab bar.");
+  const errors = trackErrors(page);
+  await page.goto("/");
+  await expect(page.getByRole("banner").getByText("john.smith@example.com")).toBeVisible();
+
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
+  const goals = nav.getByRole("link", { name: "Goals" });
+  // The name and its shortcut show beside the icon, and Escape hides them.
+  await goals.hover();
+  const name = page.getByText("G G", { exact: true });
+  await expect(name).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(name).toBeHidden();
+
+  await goals.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Goals" })).toBeVisible();
+  await expect(goals).toHaveAttribute("aria-current", "page");
+  expect(errors).toEqual([]);
+});

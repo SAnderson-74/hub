@@ -37,7 +37,7 @@ export function BalanceCheck({
     );
   }
   return (
-    <div className="space-y-2 rounded-tile bg-base p-4 ring-1 ring-warn/40">
+    <div className="space-y-2 rounded-tile bg-base p-3 ring-1 ring-warn/40">
       <p className="text-fg">
         <span className="font-semibold text-warn">
           {formatCents(Math.abs(gap))} {gap < 0 ? "less" : "more"} than your bank.{" "}

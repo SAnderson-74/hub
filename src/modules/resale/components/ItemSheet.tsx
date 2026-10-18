@@ -205,7 +205,7 @@ function ItemForm({
   return (
     <div className="space-y-8">
       {item?.needsReview ? (
-        <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-warn/50">
+        <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-warn/50">
           <p className="flex items-center gap-2 font-semibold text-warn">
             <StatusDot tone="warn" />
             Needs review

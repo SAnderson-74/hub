@@ -144,7 +144,7 @@ export function PasteItemsForm({
             {preview.rows.map((row) => (
               <li
                 key={row.row}
-                className="space-y-1 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+                className="space-y-1 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
               >
                 <span className="flex items-start gap-3">
                   <PackagePlus aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />

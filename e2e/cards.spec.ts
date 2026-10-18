@@ -14,14 +14,16 @@ test("cards on an account show which one paid", async ({ page }, testInfo) => {
   const id = `${testInfo.project.name} ${Date.now() % 100000}`;
   const errors = trackErrors(page);
 
-  await page.goto("/money");
-  await expect(page.getByRole("heading", { level: 1, name: "Money" })).toBeVisible();
-  await page.getByRole("button", { name: /^(Add a book|Books)$/ }).click();
+  await page.goto("/settings");
+  await page.getByRole("region", { name: "Books" }).getByRole("button", { name: "Books" }).click();
   const books = page.getByRole("dialog", { name: "Books" });
   await books.getByLabel("New book").fill(`Cards ${id}`);
   await books.getByRole("button", { name: "Add book" }).click();
   await expect(books.getByText(`Cards ${id}`, { exact: true })).toBeVisible();
   await books.getByRole("button", { name: "Close" }).click();
+  // Money opens on the new book.
+  await page.goto("/money");
+  await expect(page.getByRole("heading", { level: 1, name: "Money" })).toBeVisible();
 
   await page.getByRole("button", { name: "Add account" }).first().click();
   let sheet = page.getByRole("dialog", { name: "Add account" });

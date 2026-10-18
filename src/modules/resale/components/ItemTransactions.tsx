@@ -181,7 +181,7 @@ function Picker({
     );
 
   return (
-    <div className="mt-2 space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="mt-2 space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="relative">
         <Search
           aria-hidden="true"

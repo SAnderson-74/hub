@@ -341,7 +341,7 @@ function TaskEditor({
         </div>
 
         {pendingLeave ? (
-          <div role="alert" className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-warn/50">
+          <div role="alert" className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-warn/50">
             <p className="font-semibold text-fg">You have unsaved changes.</p>
             <div className="flex flex-wrap gap-2">
               <button

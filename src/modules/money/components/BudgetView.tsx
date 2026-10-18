@@ -82,7 +82,7 @@ export function BudgetView({ book, today }: { book: Book; today: string }) {
         <ErrorNote error={budget.error} onRetry={() => void budget.refetch()} />
       ) : (
         <div
-          className={`grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6 ${
+          className={`grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4 ${
             budget.isPlaceholderData ? "opacity-60" : ""
           }`}
         >
@@ -271,7 +271,7 @@ function CategoryRow({
   ].filter(Boolean);
 
   return (
-    <li className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={`font-semibold break-words ${row.archived ? "text-muted" : "text-fg"}`}>
@@ -395,7 +395,7 @@ function SavingUp({ data, today }: { data: BudgetMonth; today: string }) {
           return (
             <li
               key={row.id}
-              className="space-y-2 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+              className="space-y-2 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="font-semibold break-words text-fg">{row.name}</p>
