@@ -1,26 +1,34 @@
-import { Ellipsis, type LucideIcon, Search } from "lucide-react";
+import { Ellipsis, Keyboard, type LucideIcon, Search } from "lucide-react";
 import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { appCommands, menuKeyLabel } from "../lib/commands";
+import { initialsFor } from "../lib/format";
 import { phoneNav } from "../lib/nav";
 import { useModules, useSystem } from "../lib/queries";
 import { useShortcuts } from "../lib/useShortcuts";
 import type { AppPage } from "../pages";
 import { BrandMark } from "./BrandMark";
 import { CommandMenu } from "./CommandMenu";
+import { NavRail } from "./NavRail";
 import { ShortcutsSheet } from "./ShortcutsSheet";
 import { UndoBar } from "./UndoBar";
+import { iconButton } from "./ui";
+
+/** A floating pill in the wide-screen header. */
+const pillClass = "flex h-14 items-center gap-3 rounded-full bg-mantle ring-1 ring-surface-0/60";
 
 /**
- * Layout for every page: a sidebar on wide screens, a bottom tab bar on phones.
- * Safe-area insets keep content clear of the iPhone notch and home indicator.
+ * Layout for every page. Phones get a top bar and a bottom tab bar. Wider screens
+ * get a header of floating pills (name, search, shortcuts, who is signed in) and a
+ * rail of page icons down the left edge. Safe-area insets keep content clear of the
+ * iPhone notch and home indicator.
  */
 export function AppShell({ pages }: { pages: AppPage[] }) {
   const system = useSystem();
   const { pathname } = useLocation();
   const { tabs, more } = phoneNav(pages);
   const appName = system.data?.appName ?? "Hub";
-  const version = system.data?.version;
+  const user = system.data?.user;
   const modules = useModules();
   const [menuOpen, setMenuOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -41,73 +49,58 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
         Skip to content
       </a>
 
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col bg-mantle px-4 pt-[calc(env(safe-area-inset-top)+1.75rem)] pb-6 ring-1 ring-surface-0/60 md:flex">
-        <div className="flex items-center gap-3 px-2">
-          <BrandMark />
-          <span className="text-lg font-bold tracking-[-0.02em]">{appName}</span>
-        </div>
+      <header className="sticky top-0 z-10 hidden grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-base/85 pt-[calc(env(safe-area-inset-top)+1rem)] pr-[calc(env(safe-area-inset-right)+1rem)] pb-3 pl-[calc(env(safe-area-inset-left)+1rem)] backdrop-blur-md md:grid">
+        <Link to="/" className={`${pillClass} justify-self-start p-1.5 pr-5 hover:ring-surface-1`}>
+          <BrandMark className="size-11 shrink-0" />
+          <span className="truncate text-lg font-bold tracking-[-0.02em]">{appName}</span>
+        </Link>
         <button
           type="button"
           onClick={() => setMenuOpen(true)}
           aria-keyshortcuts="Control+K Meta+K /"
-          className="mt-7 flex h-11 items-center gap-3 rounded-control bg-base px-3 text-muted ring-1 ring-surface-0 hover:text-fg hover:ring-surface-1"
+          className={`${pillClass} w-full px-5 text-muted hover:text-fg hover:ring-surface-1`}
         >
-          <Search aria-hidden="true" className="size-5" />
+          <Search aria-hidden="true" className="size-5 shrink-0" />
           <span className="flex-1 text-left font-semibold">Search</span>
-          <span aria-hidden="true" className="text-sm text-muted">
+          <span aria-hidden="true" className="rounded-full bg-surface-0 px-2.5 py-0.5 text-sm">
             {menuKey}
           </span>
         </button>
-        <nav aria-label="Main" className="mt-5">
-          <ul className="flex flex-col gap-1">
-            {pages.map((page) => (
-              <li key={page.id}>
-                <NavLink
-                  to={page.path}
-                  end={page.path === "/"}
-                  className={({ isActive }) =>
-                    `flex h-11 items-center gap-3 rounded-control px-3 font-semibold transition-colors ${
-                      isActive
-                        ? "bg-surface-0 text-fg"
-                        : "text-muted hover:bg-surface-0/50 hover:text-fg"
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <page.icon
-                        aria-hidden="true"
-                        className={`size-5 ${isActive ? "text-accent-text" : ""}`}
-                      />
-                      {page.label}
-                    </>
-                  )}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        {version ? <p className="mt-auto px-3 text-sm text-faint">Version {version}</p> : null}
-      </aside>
+        <div className="flex items-center gap-2 justify-self-end">
+          <div className={`${pillClass} p-1.5`}>
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              aria-label="Keyboard shortcuts"
+              aria-keyshortcuts="?"
+              className={iconButton}
+            >
+              <Keyboard aria-hidden="true" className="size-5" />
+            </button>
+          </div>
+          {user ? <UserPill name={user.name} login={user.login} /> : null}
+        </div>
+      </header>
+      <NavRail pages={pages} />
 
-      <div className="md:pl-64">
-        <header className="sticky top-0 z-10 flex items-center gap-3 bg-base/85 px-5 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 backdrop-blur-md md:hidden">
-          <BrandMark className="size-8" />
-          <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-[-0.02em]">
-            {appName}
-          </span>
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Search"
-            className="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-0 hover:text-fg"
-          >
-            <Search aria-hidden="true" className="size-5" />
-          </button>
-        </header>
+      <header className="sticky top-0 z-10 flex items-center gap-3 bg-base/85 px-5 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 backdrop-blur-md md:hidden">
+        <BrandMark className="size-8" />
+        <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-[-0.02em]">
+          {appName}
+        </span>
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Search"
+          className="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-0 hover:text-fg"
+        >
+          <Search aria-hidden="true" className="size-5" />
+        </button>
+      </header>
+      <div className="md:pl-[calc(env(safe-area-inset-left)+4.5rem)]">
         <main
           id="main"
-          className="mx-auto w-full max-w-6xl px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:px-10 md:pt-12 md:pb-16"
+          className="mx-auto w-full max-w-6xl px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:px-8 md:pt-6 md:pb-16 lg:px-10"
         >
           <Outlet />
         </main>
@@ -144,6 +137,27 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
       />
       <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} pages={pages} />
       <UndoBar />
+    </div>
+  );
+}
+
+/** Who is signed in. The name and login show on large screens; the initials always. */
+function UserPill({ name, login }: { name: string; login: string }) {
+  return (
+    <div className={`${pillClass} min-w-0 p-1.5 lg:pr-5`}>
+      <span
+        aria-hidden="true"
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-0 font-bold text-accent-text"
+      >
+        {initialsFor(name || login)}
+      </span>
+      <span className="sr-only min-w-0 lg:not-sr-only">
+        <span className="sr-only">Signed in as </span>
+        <span className="block max-w-48 truncate text-sm font-semibold text-fg">{name}</span>
+        {login !== name ? (
+          <span className="block max-w-48 truncate text-xs text-muted">{login}</span>
+        ) : null}
+      </span>
     </div>
   );
 }

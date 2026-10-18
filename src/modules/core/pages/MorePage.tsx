@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import type { AppPage } from "../../../client/pages";
 
-/** Pages that don't fit in the phone tab bar. The desktop sidebar lists them all. */
+/** Pages that don't fit in the phone tab bar. The wide-screen rail lists them all. */
 export function MorePage({ pages }: { pages: AppPage[] }) {
   return (
     <>
