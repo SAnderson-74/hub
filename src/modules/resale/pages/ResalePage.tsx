@@ -259,7 +259,8 @@ function StatusFilter({
   return (
     // relative: the radios are positioned inside the scroller, not the page. min-w-0:
     // a fieldset otherwise grows to fit its content and widens the page on phones.
-    <fieldset className="relative -mx-4 mb-4 min-w-0 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+    // -mx-3.5 reaches the screen edge: it matches the page's phone padding (AppShell).
+    <fieldset className="relative -mx-3.5 mb-3 min-w-0 overflow-x-auto px-3.5 pb-2 sm:mx-0 sm:px-0">
       <legend className="sr-only">Show</legend>
       <div className="flex w-max gap-2">
         {options.map(([filter, label]) => (
