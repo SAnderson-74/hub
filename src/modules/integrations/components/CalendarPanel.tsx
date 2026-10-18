@@ -125,7 +125,7 @@ export function CalendarPanel() {
       </details>
 
       {confirming ? (
-        <div className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <div className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="text-sm text-fg">
             {confirming === "renew"
               ? "Make a new address? Calendars using this one stop updating until you add the new one."

@@ -108,7 +108,7 @@ function Planner({ book, data, today }: { book: Book; data: DebtsData; today: st
   const ids = useId();
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <div className="grid grid-cols-2 gap-3 lg:col-span-12 lg:grid-cols-4">
         <Stat label="Owed" value={formatCents(totalOwed)} />
         <Stat
@@ -373,7 +373,7 @@ function TermsRow({ debt }: { debt: DebtRow }) {
   };
 
   return (
-    <li className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold break-words text-fg">{debt.name}</p>

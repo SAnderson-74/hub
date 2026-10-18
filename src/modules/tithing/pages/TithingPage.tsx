@@ -7,6 +7,7 @@ import { Stat } from "../../../client/components/Stat";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
 import {
+  iconSecondaryButton,
   inputClass,
   labelClass,
   primaryButton,
@@ -62,34 +63,13 @@ export function TithingPage() {
       <PageHeader
         title="Tithing"
         subtitle="A tenth of what comes in. Red until it's paid, green once it is."
-      />
-      {overview.isPending ? (
-        <LoadingRows rows={4} />
-      ) : overview.isError || !data ? (
-        <ErrorNote
-          error={overview.error ?? new Error("Nothing came back.")}
-          onRetry={() => void overview.refetch()}
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-          <div className="flex flex-wrap items-center gap-3 lg:col-span-12">
-            <button
-              type="button"
-              className={primaryButton}
-              onClick={() => setPayment({ kind: "new" })}
-            >
-              <Plus aria-hidden="true" className="size-5" />
-              Record payment
-            </button>
-            <button type="button" className={secondaryButton} onClick={() => setPasting(true)}>
-              <ClipboardPaste aria-hidden="true" className="size-4" />
-              Paste from Claude
-            </button>
-            <div className="ml-auto flex items-center gap-3">
-              <label htmlFor={yearId} className="text-sm font-semibold text-muted">
+        actions={
+          data ? (
+            <>
+              <label htmlFor={yearId} className="sr-only">
                 Year
               </label>
-              <div className="w-32">
+              <div className="w-28">
                 <select
                   id={yearId}
                   value={data.year}
@@ -103,9 +83,36 @@ export function TithingPage() {
                   ))}
                 </select>
               </div>
-            </div>
-          </div>
-
+              <button
+                type="button"
+                className={primaryButton}
+                onClick={() => setPayment({ kind: "new" })}
+              >
+                <Plus aria-hidden="true" className="size-[1.125rem]" />
+                Record payment
+              </button>
+              <button
+                type="button"
+                aria-label="Paste from Claude"
+                data-tip=""
+                className={iconSecondaryButton}
+                onClick={() => setPasting(true)}
+              >
+                <ClipboardPaste aria-hidden="true" className="size-[1.125rem]" />
+              </button>
+            </>
+          ) : undefined
+        }
+      />
+      {overview.isPending ? (
+        <LoadingRows rows={4} />
+      ) : overview.isError || !data ? (
+        <ErrorNote
+          error={overview.error ?? new Error("Nothing came back.")}
+          onRetry={() => void overview.refetch()}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
           <Summary data={data} />
 
           <div className="grid grid-cols-1 gap-4 lg:col-span-7">
@@ -220,7 +227,7 @@ function Summary({ data }: { data: Overview }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-12 lg:grid-cols-4">
       <div
-        className={`min-w-0 rounded-tile bg-base/80 p-4 ring-1 ${unpaid ? "ring-danger/50" : "ring-ok/40"}`}
+        className={`min-w-0 rounded-tile bg-base/80 p-3 ring-1 ${unpaid ? "ring-danger/50" : "ring-ok/40"}`}
       >
         <p className="text-sm font-semibold text-muted">Unpaid</p>
         <p
@@ -333,7 +340,7 @@ function OpenPanel({
       }
     >
       {marked ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-ok/40">
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-ok/40">
           <p role="status" className="min-w-0 flex-1 font-semibold text-ok">
             Marked {marked.length} {marked.length === 1 ? "income" : "incomes"} as paid.
           </p>
@@ -608,7 +615,7 @@ function PaymentsPanel({
   return (
     <Panel title={`Payments in ${data.year}`} description="Tap one to match it to income.">
       {data.unlinkedPayments.length > 0 ? (
-        <div className="mb-4 rounded-tile bg-base/80 p-4 ring-1 ring-warn/40">
+        <div className="mb-4 rounded-tile bg-base/80 p-3 ring-1 ring-warn/40">
           <p className="flex items-center gap-2 font-semibold text-warn">
             <StatusDot tone="warn" />
             {formatCents(data.summary.unlinkedCents)} paid but not matched

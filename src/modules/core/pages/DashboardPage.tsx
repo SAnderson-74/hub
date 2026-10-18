@@ -1,7 +1,7 @@
 import { Settings2 } from "lucide-react";
 import { Link } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
-import { ghostButton } from "../../../client/components/ui";
+import { iconSecondaryButton } from "../../../client/components/ui";
 import { homeWidgetViews } from "../../../client/homeWidgets";
 import { formatLongDate, greetingFor } from "../../../client/lib/format";
 import { useModules, useSettings, useSystem } from "../../../client/lib/queries";
@@ -25,24 +25,31 @@ export function DashboardPage() {
       <PageHeader
         title={firstName ? `${greeting}, ${firstName}` : greeting}
         subtitle={formatLongDate(now)}
+        actions={
+          <Link
+            to="/settings#home"
+            aria-label="Choose what Home shows"
+            data-tip=""
+            className={iconSecondaryButton}
+          >
+            <Settings2 aria-hidden="true" className="size-[1.125rem]" />
+          </Link>
+        }
       />
-      {/* Two to a row on wide screens; each row's panels share a height. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+      {/* Two to a row on wide screens, three on large ones; each row's panels share a height. */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4 2xl:grid-cols-3">
         {widgets.map((id) => {
           const view = homeWidgetViews[id];
           return (
-            <div key={id} className={`grid min-w-0 ${view.wide ? "lg:col-span-2" : ""}`}>
+            <div
+              key={id}
+              className={`grid min-w-0 ${view.wide ? "lg:col-span-2 2xl:col-span-3" : ""}`}
+            >
               {view.render({ today, className: "" })}
             </div>
           );
         })}
       </div>
-      <p className="mt-6 text-center">
-        <Link to="/settings#home" className={ghostButton}>
-          <Settings2 aria-hidden="true" className="size-4" />
-          Choose what Home shows
-        </Link>
-      </p>
     </>
   );
 }

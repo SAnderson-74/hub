@@ -107,7 +107,7 @@ function Groups({
   return (
     <div className="space-y-5">
       {peopleToFill > 0 ? (
-        <div className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <div className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="flex items-start gap-2 text-fg">
             <UserRound aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
             {peopleToFill === 1
@@ -244,7 +244,7 @@ function GroupCard({
   return (
     <li
       aria-labelledby={`${ids}-name`}
-      className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+      className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <p id={`${ids}-name`} className="min-w-0 font-semibold break-words text-fg">

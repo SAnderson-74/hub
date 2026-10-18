@@ -12,11 +12,13 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { MenuButton } from "../../../client/components/MenuButton";
 import { PageHeader } from "../../../client/components/PageHeader";
+import { type PageTab, PageTabs } from "../../../client/components/PageTabs";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
-import { primaryButton, secondaryButton } from "../../../client/components/ui";
+import { iconSecondaryButton, primaryButton, secondaryButton } from "../../../client/components/ui";
 import { useCommand } from "../../../client/lib/useCommand";
 import { useNow } from "../../../client/lib/useNow";
 import { formatCents } from "../../../shared/money";
@@ -40,6 +42,13 @@ import { heldFor, STATUS_TONES, stockSummary } from "../stock";
 type Filter = "all" | "review" | ItemStatus;
 type View = "items" | "aging" | "labels" | "profit" | "calculator";
 const VIEWS: readonly View[] = ["items", "aging", "labels", "profit", "calculator"];
+const VIEW_TABS: readonly PageTab<View>[] = [
+  { value: "items", label: "Items", icon: Package },
+  { value: "aging", label: "Aging", icon: Hourglass },
+  { value: "labels", label: "Labels", icon: Tag },
+  { value: "profit", label: "Profit", icon: ChartColumn },
+  { value: "calculator", label: "Calculator", icon: Calculator },
+];
 
 const VIEW_KEY = "hub.resale.view";
 
@@ -60,6 +69,14 @@ export function ResalePage() {
   const today = localDate(useNow());
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<View>(storedView);
+  const chooseView = (next: View) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Private browsing; the choice still applies to this visit.
+    }
+  };
   const [adding, setAdding] = useState(false);
   useCommand("add-item", () => setAdding(true));
   useCommand("resale-aging", () => setView("aging"));
@@ -101,65 +118,47 @@ export function ResalePage() {
 
   return (
     <>
-      <PageHeader title="Resale" subtitle={items.data ? stockSummary(all) : undefined} />
-
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        {/* Five views are wider than a phone; they scroll sideways there. */}
-        <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
-          <legend className="sr-only">View</legend>
-          {(
-            [
-              ["items", "Items", Package],
-              ["aging", "Aging", Hourglass],
-              ["labels", "Labels", Tag],
-              ["profit", "Profit", ChartColumn],
-              ["calculator", "Calculator", Calculator],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <label key={value} className="relative shrink-0">
-              <input
-                type="radio"
-                name="resale-view"
-                value={value}
-                checked={view === value}
-                onChange={() => {
-                  setView(value);
-                  try {
-                    localStorage.setItem(VIEW_KEY, value);
-                  } catch {
-                    // Private browsing; the choice still applies to this visit.
-                  }
-                }}
-                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-              />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-                <Icon aria-hidden="true" className="size-4" />
-                {label}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <button type="button" className={primaryButton} onClick={() => setAdding(true)}>
-          <Plus aria-hidden="true" className="size-5" />
-          Add item
-        </button>
-        <button type="button" className={secondaryButton} onClick={() => setManaging(true)}>
-          <Store aria-hidden="true" className="size-4" />
-          Platforms
-        </button>
-        <button type="button" className={secondaryButton} onClick={() => setImporting(true)}>
-          <FileUp aria-hidden="true" className="size-4" />
-          Import
-        </button>
-        <button type="button" className={secondaryButton} onClick={() => setPasting(true)}>
-          <ClipboardPaste aria-hidden="true" className="size-4" />
-          Paste listing
-        </button>
-        <button type="button" className={secondaryButton} onClick={() => setPastingItems(true)}>
-          <PackagePlus aria-hidden="true" className="size-4" />
-          Paste items
-        </button>
-      </div>
+      <PageHeader
+        title="Resale"
+        subtitle={items.data ? stockSummary(all) : undefined}
+        actions={
+          <>
+            <button type="button" className={primaryButton} onClick={() => setAdding(true)}>
+              <Plus aria-hidden="true" className="size-[1.125rem]" />
+              Add item
+            </button>
+            <MenuButton
+              label="Import"
+              icon={FileUp}
+              items={[
+                { label: "Import a spreadsheet", icon: FileUp, onSelect: () => setImporting(true) },
+                {
+                  label: "Paste a listing",
+                  icon: ClipboardPaste,
+                  onSelect: () => setPasting(true),
+                },
+                { label: "Paste items", icon: PackagePlus, onSelect: () => setPastingItems(true) },
+              ]}
+            />
+            <button
+              type="button"
+              aria-label="Platforms"
+              data-tip=""
+              className={iconSecondaryButton}
+              onClick={() => setManaging(true)}
+            >
+              <Store aria-hidden="true" className="size-[1.125rem]" />
+            </button>
+          </>
+        }
+      />
+      <PageTabs
+        label="View"
+        name="resale-view"
+        tabs={VIEW_TABS}
+        value={view}
+        onChange={chooseView}
+      />
 
       {view === "calculator" ? (
         // Works before anything is tracked; the history part loads items itself.
@@ -202,7 +201,7 @@ export function ResalePage() {
         <>
           <StatusFilter items={all} value={filter} onChange={setFilter} />
           {shown.length === 0 ? (
-            <p className="rounded-tile bg-mantle p-5 text-muted ring-1 ring-surface-0/60">
+            <p className="rounded-tile bg-mantle p-4 text-muted ring-1 ring-surface-0/60">
               {filter === "review"
                 ? "Nothing needs review."
                 : `No items are ${ITEM_STATUS_LABELS[filter as ItemStatus].toLowerCase()} right now.`}
@@ -313,7 +312,7 @@ function ItemCard({ item, today, onOpen }: { item: Item; today: string; onOpen: 
     <button
       type="button"
       onClick={onOpen}
-      className="block w-full rounded-tile bg-mantle p-4 text-left ring-1 ring-surface-0/60 hover:ring-surface-1"
+      className="block w-full rounded-tile bg-mantle p-3 text-left ring-1 ring-surface-0/60 hover:ring-surface-1"
     >
       <span className="flex items-start justify-between gap-3">
         <span className="min-w-0 font-semibold break-words text-fg">{item.title}</span>

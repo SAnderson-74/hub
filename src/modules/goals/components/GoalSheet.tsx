@@ -293,7 +293,7 @@ function GoalEditor({
         </div>
 
         {confirmClose ? (
-          <div role="alert" className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-warn/50">
+          <div role="alert" className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-warn/50">
             <p className="font-semibold text-fg">
               {blocked ? "Some changes can't be saved yet." : "You have unsaved changes."}
             </p>
@@ -630,7 +630,7 @@ function DeleteGoal({ goal, onDeleted }: { goal: GoalDetail; onDeleted: () => vo
     );
   }
   return (
-    <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+    <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
       <p className="font-semibold text-fg">
         Delete this goal and its milestones? Linked tasks stay. This can't be undone.
       </p>

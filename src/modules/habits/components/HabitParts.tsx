@@ -69,7 +69,7 @@ export function HabitCard({
   onOpen: () => void;
 }) {
   return (
-    <li className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"

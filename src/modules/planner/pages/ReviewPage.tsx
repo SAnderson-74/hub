@@ -47,7 +47,7 @@ export function ReviewPage() {
           lastFinished ? `Last finished the week of ${formatLongDate(lastFinished)}.` : ""
         }`.trim()}
       />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
         <Panel
           title="Steps"
           description="Work down the list. Each link opens the place to fix it; come back and tick it off."

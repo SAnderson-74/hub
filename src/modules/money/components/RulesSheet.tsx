@@ -98,7 +98,7 @@ function RuleList({ book, categories }: { book: Book; categories: Category[] }) 
       <form
         onSubmit={onAdd}
         noValidate
-        className="space-y-4 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+        className="space-y-4 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="min-w-0">

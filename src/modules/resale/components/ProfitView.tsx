@@ -28,7 +28,7 @@ const PlatformChart = lazy(() =>
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="min-w-0 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <p className="text-sm font-semibold text-muted">{label}</p>
       <p className="mt-2 truncate text-2xl font-bold tracking-[-0.02em] text-fg tabular-nums">
         {value}
@@ -77,7 +77,7 @@ export function ProfitView({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <Panel
         title="Profit"
         description={gaps.length > 0 ? gaps.join(" ") : "Sale price minus price paid and costs."}
@@ -122,7 +122,7 @@ export function ProfitView({
                 <button
                   type="button"
                   onClick={() => onOpen(item.id)}
-                  className="block w-full rounded-tile bg-base/80 p-4 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
+                  className="block w-full rounded-tile bg-base/80 p-3 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
                 >
                   <span className="flex items-start justify-between gap-3">
                     <span className="min-w-0 font-semibold break-words text-fg">{item.title}</span>

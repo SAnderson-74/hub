@@ -80,7 +80,7 @@ function ListingRow({
   const ended = listing.endedOn !== null;
 
   return (
-    <li className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={`font-semibold break-words ${ended ? "text-muted" : "text-fg"}`}>{name}</p>

@@ -38,7 +38,7 @@ export function UndoBar() {
   }, [pending]);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-30 flex justify-center px-4 md:bottom-6 md:pl-18">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-30 flex justify-center px-4 md:bottom-6 md:pl-16">
       {/* Always there, so a screen reader hears each new message. */}
       <div role="status" className="w-full max-w-md">
         {undo.kind === "idle" ? null : (

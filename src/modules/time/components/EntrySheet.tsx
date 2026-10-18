@@ -172,7 +172,7 @@ function EntryForm({ entry, onDone }: { entry: TimeEntry | null; onDone: () => v
 
       {entry && !running ? (
         confirmDelete ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+          <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
             <p className="font-semibold text-fg">Delete this time entry? This can't be undone.</p>
             <div className="flex flex-wrap gap-2">
               <button

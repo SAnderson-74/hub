@@ -6,6 +6,7 @@ import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
   iconButton,
+  iconSecondaryButton,
   inputClass,
   primaryButton,
   secondaryButton,
@@ -82,7 +83,7 @@ export function CoursesPage() {
         </Panel>
       ) : (
         <>
-          <div className="mb-6 flex flex-wrap items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="flex w-full min-w-0 items-center gap-1 sm:w-auto sm:max-w-sm sm:flex-1">
               <label htmlFor="course-term" className="sr-only">
                 Term
@@ -103,6 +104,7 @@ export function CoursesPage() {
                 type="button"
                 className={iconButton}
                 aria-label={`Edit term ${term.name}`}
+                data-tip=""
                 onClick={() => setTermSheet(term)}
               >
                 <Pencil aria-hidden="true" className="size-5" />
@@ -111,19 +113,25 @@ export function CoursesPage() {
                 type="button"
                 className={iconButton}
                 aria-label="New term"
+                data-tip=""
                 onClick={() => setTermSheet("new")}
               >
                 <CalendarPlus aria-hidden="true" className="size-5" />
               </button>
             </div>
-            <button type="button" className={secondaryButton} onClick={() => setImporting(true)}>
-              <FileUp aria-hidden="true" className="size-4" />
-              Import
+            <button
+              type="button"
+              aria-label="Import a plan"
+              data-tip=""
+              className={iconSecondaryButton}
+              onClick={() => setImporting(true)}
+            >
+              <FileUp aria-hidden="true" className="size-[1.125rem]" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-            <div className="grid grid-cols-1 gap-4 lg:col-span-5 lg:gap-6">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
+            <div className="grid grid-cols-1 gap-3 lg:col-span-5 lg:gap-4">
               <Panel title="Credits">
                 <TermSummary term={term} today={today} />
               </Panel>
@@ -205,7 +213,7 @@ function CourseList({ term, onOpen }: { term: Term; onOpen: (course: Course) => 
             <button
               type="button"
               onClick={() => onOpen(course)}
-              className="block w-full rounded-tile bg-base/80 p-4 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
+              className="block w-full rounded-tile bg-base/80 p-3 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
             >
               <span className="flex items-start justify-between gap-3">
                 <span className="min-w-0">

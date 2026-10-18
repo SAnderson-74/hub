@@ -128,7 +128,7 @@ function TemplateRow({
   };
 
   return (
-    <li className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="font-semibold break-words text-fg">{template.name}</p>

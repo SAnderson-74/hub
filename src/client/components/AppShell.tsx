@@ -10,17 +10,19 @@ import type { AppPage } from "../pages";
 import { BrandMark } from "./BrandMark";
 import { CommandMenu } from "./CommandMenu";
 import { NavRail } from "./NavRail";
+import { HeaderTabsSlot } from "./PageTabs";
 import { ShortcutsSheet } from "./ShortcutsSheet";
+import { Tooltips } from "./Tooltips";
 import { UndoBar } from "./UndoBar";
 import { iconButton } from "./ui";
 
 /** A floating pill in the wide-screen header. */
-const pillClass = "flex h-14 items-center gap-3 rounded-full bg-mantle ring-1 ring-surface-0/60";
+const pillClass = "flex h-12 items-center gap-2.5 rounded-full bg-mantle ring-1 ring-surface-0/60";
 
 /**
  * Layout for every page. Phones get a top bar and a bottom tab bar. Wider screens
- * get a header of floating pills (name, search, shortcuts, who is signed in) and a
- * rail of page icons down the left edge. Safe-area insets keep content clear of the
+ * get a header of floating pills (name, the page's tabs, search, shortcuts, who is
+ * signed in) and a rail of page icons down the left edge. Safe-area insets keep content clear of the
  * iPhone notch and home indicator.
  */
 export function AppShell({ pages }: { pages: AppPage[] }) {
@@ -32,6 +34,7 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
   const modules = useModules();
   const [menuOpen, setMenuOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null);
   useShortcuts({
     pages,
     onToggleMenu: () => setMenuOpen((value) => !value),
@@ -49,33 +52,34 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
         Skip to content
       </a>
 
-      <header className="sticky top-0 z-10 hidden grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-base/85 pt-[calc(env(safe-area-inset-top)+1rem)] pr-[calc(env(safe-area-inset-right)+1rem)] pb-3 pl-[calc(env(safe-area-inset-left)+1rem)] backdrop-blur-md md:grid">
-        <Link to="/" className={`${pillClass} justify-self-start p-1.5 pr-5 hover:ring-surface-1`}>
-          <BrandMark className="size-11 shrink-0" />
-          <span className="truncate text-lg font-bold tracking-[-0.02em]">{appName}</span>
+      <header className="sticky top-0 z-10 hidden grid-cols-[1fr_minmax(0,max-content)_1fr] items-center gap-3 bg-base/85 pt-[calc(env(safe-area-inset-top)+0.75rem)] pr-[calc(env(safe-area-inset-right)+1rem)] pb-3 pl-[calc(env(safe-area-inset-left)+1rem)] backdrop-blur-md md:grid">
+        <Link to="/" className={`${pillClass} justify-self-start p-1 pr-4 hover:ring-surface-1`}>
+          <BrandMark className="size-10 shrink-0" />
+          <span className="truncate text-[1.0625rem] font-bold tracking-[-0.02em]">{appName}</span>
         </Link>
-        <button
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          aria-keyshortcuts="Control+K Meta+K /"
-          className={`${pillClass} w-full px-5 text-muted hover:text-fg hover:ring-surface-1`}
-        >
-          <Search aria-hidden="true" className="size-5 shrink-0" />
-          <span className="flex-1 text-left font-semibold">Search</span>
-          <span aria-hidden="true" className="rounded-full bg-surface-0 px-2.5 py-0.5 text-sm">
-            {menuKey}
-          </span>
-        </button>
+        {/* The page's tabs, when it has them (PageTabs). */}
+        <div ref={setTabsSlot} className="flex min-w-0 justify-center" />
         <div className="flex items-center gap-2 justify-self-end">
-          <div className={`${pillClass} p-1.5`}>
+          <div className={`${pillClass} gap-0.5 p-1`}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Search"
+              aria-keyshortcuts="Control+K Meta+K /"
+              data-tip={menuKey}
+              className={`${iconButton} size-10`}
+            >
+              <Search aria-hidden="true" className="size-[1.125rem]" />
+            </button>
             <button
               type="button"
               onClick={() => setShortcutsOpen(true)}
               aria-label="Keyboard shortcuts"
               aria-keyshortcuts="?"
-              className={iconButton}
+              data-tip="?"
+              className={`${iconButton} size-10`}
             >
-              <Keyboard aria-hidden="true" className="size-5" />
+              <Keyboard aria-hidden="true" className="size-[1.125rem]" />
             </button>
           </div>
           {user ? <UserPill name={user.name} login={user.login} /> : null}
@@ -83,7 +87,7 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
       </header>
       <NavRail pages={pages} />
 
-      <header className="sticky top-0 z-10 flex items-center gap-3 bg-base/85 px-5 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 backdrop-blur-md md:hidden">
+      <header className="sticky top-0 z-10 flex items-center gap-2.5 bg-base/85 px-3.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 backdrop-blur-md md:hidden">
         <BrandMark className="size-8" />
         <span className="min-w-0 flex-1 truncate text-lg font-bold tracking-[-0.02em]">
           {appName}
@@ -97,12 +101,14 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
           <Search aria-hidden="true" className="size-5" />
         </button>
       </header>
-      <div className="md:pl-[calc(env(safe-area-inset-left)+4.5rem)]">
+      <div className="md:pl-[calc(env(safe-area-inset-left)+4rem)]">
         <main
           id="main"
-          className="mx-auto w-full max-w-6xl px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:px-8 md:pt-6 md:pb-16 lg:px-10"
+          className="mx-auto w-full max-w-[120rem] px-3.5 pt-2 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-3 md:pb-10"
         >
-          <Outlet />
+          <HeaderTabsSlot value={tabsSlot}>
+            <Outlet />
+          </HeaderTabsSlot>
         </main>
       </div>
 
@@ -137,21 +143,22 @@ export function AppShell({ pages }: { pages: AppPage[] }) {
       />
       <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} pages={pages} />
       <UndoBar />
+      <Tooltips />
     </div>
   );
 }
 
-/** Who is signed in. The name and login show on large screens; the initials always. */
+/** Who is signed in. The name and login show on large displays; the initials always. */
 function UserPill({ name, login }: { name: string; login: string }) {
   return (
-    <div className={`${pillClass} min-w-0 p-1.5 lg:pr-5`}>
+    <div className={`${pillClass} min-w-0 p-1 2xl:pr-4`}>
       <span
         aria-hidden="true"
-        className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-0 font-bold text-accent-text"
+        className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-0 text-sm font-bold text-accent-text"
       >
         {initialsFor(name || login)}
       </span>
-      <span className="sr-only min-w-0 lg:not-sr-only">
+      <span className="sr-only min-w-0 2xl:not-sr-only">
         <span className="sr-only">Signed in as </span>
         <span className="block max-w-48 truncate text-sm font-semibold text-fg">{name}</span>
         {login !== name ? (

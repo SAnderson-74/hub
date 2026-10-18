@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { PageHeader } from "../../../client/components/PageHeader";
+import { type PageTab, PageTabs } from "../../../client/components/PageTabs";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { useSettings } from "../../../client/lib/queries";
 import { useCommand } from "../../../client/lib/useCommand";
@@ -33,6 +34,11 @@ const VIEWS = [
   ["notes", "Notes", NotebookPen],
 ] as const satisfies ReadonlyArray<readonly [string, string, LucideIcon]>;
 type View = (typeof VIEWS)[number][0];
+const VIEW_TABS: readonly PageTab<View>[] = VIEWS.map(([value, label, icon]) => ({
+  value,
+  label,
+  icon,
+}));
 
 function storedView(): View {
   try {
@@ -76,25 +82,7 @@ export function BusinessPage() {
   return (
     <>
       <PageHeader title="Business" subtitle={business.data ? summary(business.data) : undefined} />
-      <fieldset className="mb-6 flex max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60 sm:w-fit">
-        <legend className="sr-only">View</legend>
-        {VIEWS.map(([value, label, Icon]) => (
-          <label key={value} className="relative shrink-0">
-            <input
-              type="radio"
-              name="business-view"
-              value={value}
-              checked={view === value}
-              onChange={() => choose(value)}
-              className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-            />
-            <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text sm:px-4">
-              <Icon aria-hidden="true" className="hidden size-4 sm:block" />
-              {label}
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <PageTabs label="View" name="business-view" tabs={VIEW_TABS} value={view} onChange={choose} />
 
       {view === "rate" ? (
         settings.isPending ? (

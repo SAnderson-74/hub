@@ -18,7 +18,7 @@ export function ModuleChoices({
         {MODULES.map((module) => (
           <label
             key={module.id}
-            className="flex min-h-16 cursor-pointer items-start gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50 has-checked:ring-accent-text/60 has-focus-visible:ring-2 has-focus-visible:ring-accent-text"
+            className="flex min-h-16 cursor-pointer items-start gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50 has-checked:ring-accent-text/60 has-focus-visible:ring-2 has-focus-visible:ring-accent-text"
           >
             <input
               type="checkbox"

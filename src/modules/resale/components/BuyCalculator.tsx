@@ -163,7 +163,7 @@ export function BuyCalculator() {
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <Panel
         title="Buy calculator"
         description="The most to pay so a sale still makes your target margin."
@@ -181,7 +181,7 @@ export function BuyCalculator() {
           {input ? (
             <OfferResult input={input} askingCents={asking ?? null} />
           ) : (
-            <p className="rounded-tile bg-base/80 p-4 text-muted ring-1 ring-surface-0/50">
+            <p className="rounded-tile bg-base/80 p-3 text-muted ring-1 ring-surface-0/50">
               {sale === null
                 ? "Enter the price you expect it to sell for to see your max offer."
                 : "Fix the numbers marked in red to see your max offer."}
@@ -218,7 +218,7 @@ function OfferResult({ input, askingCents }: { input: OfferInput; askingCents: n
   const atAsking = askingCents === null ? null : profitAt(input, askingCents);
 
   return (
-    <div className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       {fits ? (
         <>
           <p className="text-sm font-semibold text-muted">Offer up to</p>

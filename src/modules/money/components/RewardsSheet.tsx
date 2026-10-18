@@ -310,7 +310,7 @@ function RewardsForm({
                 return (
                   <li
                     key={rate.key}
-                    className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+                    className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
                   >
                     <div className="flex items-start gap-2">
                       <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
@@ -494,7 +494,7 @@ function RewardsForm({
 
       {entry.program ? (
         confirmOff ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+          <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
             <p className="font-semibold text-fg">
               Turn off rewards for {entry.card.name}? Its rates are removed; its transactions stay.
             </p>

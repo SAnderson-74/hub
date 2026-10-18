@@ -90,7 +90,7 @@ export function BackupsPanel({ startedAt }: { startedAt: string | null }) {
   };
 
   const confirmBox = (what: string) => (
-    <div className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-danger/50">
+    <div className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-danger/50">
       <p className="text-sm text-fg">
         Replace everything in Hub with {what}? Anything changed since that backup was made is lost.
         Hub saves your current data as a backup first, then restarts.
@@ -142,7 +142,7 @@ export function BackupsPanel({ startedAt }: { startedAt: string | null }) {
               return (
                 <li
                   key={backup.name}
-                  className="space-y-2 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+                  className="space-y-2 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                     <div className="min-w-0">

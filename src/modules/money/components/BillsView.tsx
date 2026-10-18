@@ -85,7 +85,7 @@ export function BillsView({
   const actionError = update.error ?? dismiss.error;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <div className="space-y-4 lg:col-span-7">
         <p role="status" className={message ? "text-sm font-semibold text-ok" : "sr-only"}>
           {message}
@@ -100,7 +100,7 @@ export function BillsView({
           <Panel title="Needs a look" description="Price changes and payments that didn't come.">
             <ul className="space-y-2">
               {alerts.map((bill) => (
-                <li key={bill.id} className="rounded-tile bg-base/80 p-4 ring-1 ring-warn/40">
+                <li key={bill.id} className="rounded-tile bg-base/80 p-3 ring-1 ring-warn/40">
                   {bill.alert?.kind === "changed" ? (
                     <>
                       <p className="font-semibold text-fg">
@@ -180,7 +180,7 @@ export function BillsView({
               {data.suggestions.map((suggestion) => (
                 <li
                   key={suggestion.matchKey}
-                  className="flex flex-wrap items-center gap-2 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+                  className="flex flex-wrap items-center gap-2 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold break-words text-fg">{suggestion.name}</p>
@@ -256,7 +256,7 @@ export function BillsView({
                           <button
                             type="button"
                             onClick={() => setTarget({ mode: "edit", bill })}
-                            className="flex w-full items-start justify-between gap-3 rounded-tile bg-base/80 p-4 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
+                            className="flex w-full items-start justify-between gap-3 rounded-tile bg-base/80 p-3 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
                           >
                             <span className="min-w-0">
                               <span className="block font-semibold break-words text-fg">

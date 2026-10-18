@@ -8,3 +8,12 @@ export function storedBookId(): number | null {
     return null;
   }
 }
+
+/** Remembers the book for Money to show next. */
+export function storeBookId(id: number): void {
+  try {
+    localStorage.setItem(BOOK_KEY, String(id));
+  } catch {
+    // Private browsing; Money falls back to the first book.
+  }
+}

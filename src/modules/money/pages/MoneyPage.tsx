@@ -1,7 +1,6 @@
 import {
   ArrowLeftRight,
   BadgePercent,
-  BookOpen,
   CalendarDays,
   ChartLine,
   FileUp,
@@ -20,11 +19,14 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { useSearchParams } from "react-router";
+import { MenuButton } from "../../../client/components/MenuButton";
 import { PageHeader } from "../../../client/components/PageHeader";
+import { type PageTab, PageTabs } from "../../../client/components/PageTabs";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
   ghostButton,
+  iconSecondaryButton,
   inputClass,
   labelClass,
   primaryButton,
@@ -83,7 +85,7 @@ import {
   useTransactions,
   useTransferSuggestions,
 } from "../queries";
-import { BOOK_KEY, storedBookId } from "../storedBook";
+import { storeBookId, storedBookId } from "../storedBook";
 import { accountsSummary, netBalance } from "../summary";
 
 const VIEW_KEY = "hub.money.view";
@@ -123,15 +125,10 @@ export function MoneyPage() {
   const [managingBooks, setManagingBooks] = useState(false);
   const active = (books.data ?? []).filter((book) => !book.archived);
   const book = active.find((item) => item.id === chosenId) ?? active[0] ?? null;
-  const accounts = useAccounts(book?.id ?? null);
 
   const choose = (id: number) => {
     setChosenId(id);
-    try {
-      localStorage.setItem(BOOK_KEY, String(id));
-    } catch {
-      // Private browsing; the choice still applies to this visit.
-    }
+    storeBookId(id);
   };
   // A search result names its book (?book=2) so its transaction opens in the right one.
   useOpenParam(
@@ -144,12 +141,8 @@ export function MoneyPage() {
 
   return (
     <>
-      <PageHeader
-        title="Money"
-        subtitle={
-          book && accounts.data ? `${book.name}: ${accountsSummary(accounts.data)}` : undefined
-        }
-      />
+      {/* With a book showing, its view puts up the header, with its buttons. */}
+      {book === null || !books.isSuccess ? <PageHeader title="Money" /> : null}
       {books.isPending ? (
         <LoadingRows rows={3} />
       ) : books.isError ? (
@@ -169,13 +162,7 @@ export function MoneyPage() {
           </button>
         </Panel>
       ) : (
-        <BookView
-          key={book.id}
-          book={book}
-          books={active}
-          onChooseBook={choose}
-          onManageBooks={() => setManagingBooks(true)}
-        />
+        <BookView key={book.id} book={book} books={active} onChooseBook={choose} />
       )}
       <BooksSheet
         open={managingBooks}
@@ -186,16 +173,25 @@ export function MoneyPage() {
   );
 }
 
+const VIEW_TABS: readonly PageTab<View>[] = [
+  { value: "transactions", label: "Transactions", icon: List },
+  { value: "budget", label: "Budget", icon: PiggyBank },
+  { value: "bills", label: "Bills", icon: CalendarDays },
+  { value: "forecast", label: "Forecast", icon: ChartLine },
+  { value: "insights", label: "Insights", icon: Lightbulb },
+  { value: "debts", label: "Debts", icon: Landmark },
+  { value: "rewards", label: "Rewards", icon: BadgePercent },
+  { value: "net-worth", label: "Net worth", icon: TrendingUp },
+];
+
 function BookView({
   book,
   books,
   onChooseBook,
-  onManageBooks,
 }: {
   book: Book;
   books: Book[];
   onChooseBook: (id: number) => void;
-  onManageBooks: () => void;
 }) {
   const today = localDate(useNow());
   const accounts = useAccounts(book.id);
@@ -279,107 +275,90 @@ function BookView({
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        {/* Four views can be wider than a phone; they scroll sideways there. */}
-        <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
-          <legend className="sr-only">View</legend>
-          {(
-            [
-              ["transactions", "Transactions", List],
-              ["budget", "Budget", PiggyBank],
-              ["bills", "Bills", CalendarDays],
-              ["forecast", "Forecast", ChartLine],
-              ["insights", "Insights", Lightbulb],
-              ["debts", "Debts", Landmark],
-              ["rewards", "Rewards", BadgePercent],
-              ["net-worth", "Net worth", TrendingUp],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <label key={value} className="relative shrink-0">
-              <input
-                type="radio"
-                name="money-view"
-                value={value}
-                checked={view === value}
-                onChange={() => chooseView(value)}
-                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-              />
-              <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-2.5 text-[13px] font-semibold whitespace-nowrap text-muted sm:px-4 sm:text-sm peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-                {/* Icons only where there's room for them. */}
-                <Icon aria-hidden="true" className="hidden size-4 sm:block" />
-                {label}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        {books.length > 1 ? (
-          <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
-            <legend className="sr-only">Book</legend>
-            {books.map((item) => (
-              <label key={item.id} className="relative shrink-0">
-                <input
-                  type="radio"
-                  name="money-book"
-                  value={item.id}
-                  checked={item.id === book.id}
-                  onChange={() => onChooseBook(item.id)}
-                  className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-                />
-                <span className="pointer-events-none flex h-10 items-center rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
-                  {item.name}
-                </span>
-              </label>
-            ))}
-          </fieldset>
-        ) : null}
-        <button
-          type="button"
-          className={primaryButton}
-          disabled={openAccounts.length === 0}
-          onClick={() => setTransactionTarget("new")}
-        >
-          <Plus aria-hidden="true" className="size-5" />
-          Add transaction
-        </button>
-        <button
-          type="button"
-          className={secondaryButton}
-          disabled={openAccounts.length === 0}
-          onClick={() => setImporting(true)}
-        >
-          <FileUp aria-hidden="true" className="size-4" />
-          Import
-        </button>
-        <button
-          type="button"
-          className={secondaryButton}
-          disabled={openAccounts.length === 0}
-          onClick={() => setPastingReceipts(true)}
-        >
-          <ReceiptText aria-hidden="true" className="size-4" />
-          Paste receipts
-        </button>
-        <button type="button" className={secondaryButton} onClick={() => setAccountTarget("new")}>
-          <WalletCards aria-hidden="true" className="size-4" />
-          Add account
-        </button>
-        <button
-          type="button"
-          className={secondaryButton}
-          onClick={() => setManagingCategories(true)}
-        >
-          <Tags aria-hidden="true" className="size-4" />
-          Categories
-        </button>
-        <button type="button" className={secondaryButton} onClick={() => setManagingRules(true)}>
-          <Wand2 aria-hidden="true" className="size-4" />
-          Rules
-        </button>
-        <button type="button" className={secondaryButton} onClick={onManageBooks}>
-          <BookOpen aria-hidden="true" className="size-4" />
-          Books
-        </button>
-      </div>
+      <PageHeader
+        title="Money"
+        subtitle={accounts.data ? `${book.name}: ${accountsSummary(accounts.data)}` : undefined}
+        actions={
+          <>
+            {books.length > 1 ? (
+              <fieldset className="flex min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60">
+                <legend className="sr-only">Book</legend>
+                {books.map((item) => (
+                  <label key={item.id} className="relative shrink-0">
+                    <input
+                      type="radio"
+                      name="money-book"
+                      value={item.id}
+                      checked={item.id === book.id}
+                      onChange={() => onChooseBook(item.id)}
+                      className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
+                    />
+                    <span className="pointer-events-none flex h-9 items-center rounded-full px-3 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
+                      {item.name}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
+            <button
+              type="button"
+              className={primaryButton}
+              disabled={openAccounts.length === 0}
+              onClick={() => setTransactionTarget("new")}
+            >
+              <Plus aria-hidden="true" className="size-[1.125rem]" />
+              Add transaction
+            </button>
+            <MenuButton
+              label="Import"
+              icon={FileUp}
+              disabled={openAccounts.length === 0}
+              items={[
+                { label: "Import a bank file", icon: FileUp, onSelect: () => setImporting(true) },
+                {
+                  label: "Paste receipts",
+                  icon: ReceiptText,
+                  onSelect: () => setPastingReceipts(true),
+                },
+              ]}
+            />
+            <button
+              type="button"
+              aria-label="Add account"
+              data-tip=""
+              className={iconSecondaryButton}
+              onClick={() => setAccountTarget("new")}
+            >
+              <WalletCards aria-hidden="true" className="size-[1.125rem]" />
+            </button>
+            <button
+              type="button"
+              aria-label="Categories"
+              data-tip=""
+              className={iconSecondaryButton}
+              onClick={() => setManagingCategories(true)}
+            >
+              <Tags aria-hidden="true" className="size-[1.125rem]" />
+            </button>
+            <button
+              type="button"
+              aria-label="Rules"
+              data-tip=""
+              className={iconSecondaryButton}
+              onClick={() => setManagingRules(true)}
+            >
+              <Wand2 aria-hidden="true" className="size-[1.125rem]" />
+            </button>
+          </>
+        }
+      />
+      <PageTabs
+        label="View"
+        name="money-view"
+        tabs={VIEW_TABS}
+        value={view}
+        onChange={chooseView}
+      />
 
       {view === "budget" ? (
         <BudgetView book={book} today={today} />
@@ -425,7 +404,7 @@ function BookView({
           </button>
         </Panel>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
           <div className="space-y-4 lg:col-span-4 lg:space-y-6">
             <AccountsPanel
               accounts={allAccounts}
@@ -530,7 +509,7 @@ function AccountsPanel({
             <button
               type="button"
               onClick={() => onOpen(account)}
-              className="flex w-full items-start justify-between gap-3 rounded-tile bg-base/80 p-4 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
+              className="flex w-full items-start justify-between gap-3 rounded-tile bg-base/80 p-3 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
             >
               <span className="min-w-0">
                 <span
@@ -866,7 +845,7 @@ function TransactionsPanel({
       />
 
       {possibleTransfers > 0 ? (
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="flex min-w-0 items-start gap-2 text-fg">
             <ArrowLeftRight aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
             {possibleTransfers === 1
@@ -880,7 +859,7 @@ function TransactionsPanel({
       ) : null}
 
       {toSort && (toSort.uncategorized > 0 || toSort.peopleToFill > 0) ? (
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="flex min-w-0 items-start gap-2 text-fg">
             <Sparkles aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
             {sortLine(toSort)}

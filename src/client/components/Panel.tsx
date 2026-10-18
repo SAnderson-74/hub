@@ -14,14 +14,14 @@ export function Panel({ title, description, action, children, className = "" }: 
   return (
     <section
       aria-labelledby={headingId}
-      className={`rounded-panel bg-mantle p-5 ring-1 ring-surface-0/60 md:p-6 ${className}`}
+      className={`rounded-panel bg-mantle p-4 ring-1 ring-surface-0/60 md:p-5 ${className}`}
     >
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id={headingId} className="text-lg font-semibold tracking-[-0.01em] text-fg">
             {title}
           </h2>
-          {description ? <div className="mt-1 text-sm text-muted">{description}</div> : null}
+          {description ? <div className="mt-0.5 text-sm text-muted">{description}</div> : null}
         </div>
         {action}
       </div>

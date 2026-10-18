@@ -28,7 +28,7 @@ export function LabelsView({ items }: { items: Item[] }) {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <Panel
         title="Pick items"
         description="In stock: bought, in repair, or listed."

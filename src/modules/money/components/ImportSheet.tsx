@@ -490,7 +490,7 @@ export function ImportForm({
       ) : null}
 
       {preview && read ? (
-        <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-surface-1">
+        <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-surface-1">
           <p className="font-semibold text-fg">Importing will do this:</p>
           <ul className="list-disc space-y-1 pl-5 text-fg">
             <li>
@@ -630,7 +630,7 @@ function RecentImports({ book, today }: { book: Book; today: string }) {
           {imports.data.map((record: ImportRecord) => (
             <li
               key={record.id}
-              className="space-y-2 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+              className="space-y-2 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
             >
               <p className="font-semibold break-words text-fg">
                 {record.fileName || (record.source === "ofx" ? "Bank statement" : "CSV file")}
