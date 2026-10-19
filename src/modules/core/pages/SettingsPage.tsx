@@ -244,7 +244,7 @@ function StudyMinimum({ saved }: { saved: number }) {
           }}
           aria-invalid={problem !== null}
           aria-describedby={problem ? errorId : undefined}
-          className={`${inputClass.replace("w-full", "w-32")} tabular-nums`}
+          className={`${inputClass} max-w-32 tabular-nums`}
         />
         {problem ? (
           <p id={errorId} className="mt-2 text-sm text-danger">
