@@ -39,6 +39,14 @@ const SHOWN_PER_DAY = 2;
 
 const things = (n: number) => `${n} ${n === 1 ? "thing" : "things"}`;
 
+const MONTH_SHORT = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" });
+
+/** "Sat, Oct", read before a day's number. */
+function weekdayAndMonth(date: string): string {
+  const day = new Date(`${date}T00:00:00Z`);
+  return `${WEEKDAY_SHORT[(day.getUTCDay() + 6) % 7]}, ${MONTH_SHORT.format(day)}`;
+}
+
 /** Everything dated, a month at a time: tasks, goals, milestones, assessments, bills, and leads. */
 export function CalendarPage() {
   // Until a month is picked, the one with today in it, by Hub's time zone once known.
@@ -133,9 +141,6 @@ export function CalendarPage() {
                         type="button"
                         aria-pressed={isSelected}
                         aria-current={isToday ? "date" : undefined}
-                        aria-label={`${formatShortDate(date, today)}${isToday ? " (today)" : ""}: ${
-                          dayItems.length === 0 ? "nothing dated" : things(dayItems.length)
-                        }`}
                         onClick={() => setSelected(isSelected ? null : date)}
                         className={`flex min-h-12 w-full flex-col items-center gap-1 rounded-control p-1 text-left lg:min-h-24 lg:items-stretch lg:p-1.5 ${
                           isSelected
@@ -145,6 +150,9 @@ export function CalendarPage() {
                               : "bg-base/60 ring-1 ring-surface-0/50 hover:bg-surface-0"
                         }`}
                       >
+                        {/* Named by what it shows, so voice control can say it: the day,
+                            then the count (phones) or the titles (wide screens). */}
+                        <span className="sr-only">{weekdayAndMonth(date)} </span>
                         <span
                           className={`text-sm tabular-nums ${
                             isToday
@@ -155,12 +163,17 @@ export function CalendarPage() {
                           }`}
                         >
                           {Number(date.slice(8))}
+                          <span className="sr-only">:</span>
                         </span>
                         {dayItems.length > 0 ? (
                           <>
                             {/* Phones: a count. Wide screens: the first titles. */}
                             <span className="rounded-full bg-accent/20 px-1.5 text-xs font-semibold text-accent-text tabular-nums lg:hidden">
                               {dayItems.length}
+                              <span className="sr-only">
+                                {" "}
+                                {dayItems.length === 1 ? "thing" : "things"}
+                              </span>
                             </span>
                             <span className="hidden min-w-0 space-y-0.5 lg:block">
                               {dayItems.slice(0, SHOWN_PER_DAY).map((item) => (
@@ -180,7 +193,9 @@ export function CalendarPage() {
                               ) : null}
                             </span>
                           </>
-                        ) : null}
+                        ) : (
+                          <span className="sr-only">nothing dated</span>
+                        )}
                       </button>
                     </li>
                   );

@@ -45,7 +45,9 @@ test("the calendar shows what's dated, by month, and opens each thing", async ({
 
   // Today's cell counts it; picking the day lists only that day.
   const days = page.getByRole("list", { name: /^Days in / });
-  const todayCell = days.getByRole("button", { name: /\(today\): \d+ things?$/ });
+  const todayCell = days.locator('button[aria-current="date"]');
+  // Named by what it shows: "Sun, Nov 1: 1 thing" on phones, the titles on desktop.
+  await expect(todayCell).toHaveAccessibleName(/^\w{3}, \w{3} \d+ ?: \S/);
   await expect(todayCell).toBeVisible();
   await todayCell.click();
   await expect(todayCell).toHaveAttribute("aria-pressed", "true");
