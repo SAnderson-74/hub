@@ -67,7 +67,9 @@ export function TaskBoard({
   };
 
   return (
-    <div className="relative -mx-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0">
+    // On phones the columns scroll to the screen edge: -mx-3.5 matches the page's
+    // phone padding (AppShell).
+    <div className="relative -mx-3.5 flex snap-x snap-mandatory scroll-px-3.5 gap-3 overflow-x-auto px-3.5 pb-2 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0">
       {TASK_STATUSES.map((status) => {
         const column = columns[status];
         const target = drop?.status === status ? drop.index : null;

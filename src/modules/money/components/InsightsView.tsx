@@ -86,7 +86,7 @@ export function InsightsView({ book, today }: { book: Book; today: string }) {
         <ErrorNote error={insights.error} onRetry={() => void insights.refetch()} />
       ) : (
         <div
-          className={`grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6 ${
+          className={`grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4 ${
             insights.isPlaceholderData ? "opacity-60" : ""
           }`}
         >

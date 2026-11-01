@@ -330,7 +330,7 @@ function ReceiptRow({
         ? "text-warn"
         : "text-muted";
   return (
-    <li className="space-y-2 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="space-y-2 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div className="flex items-start justify-between gap-3">
         <span className="flex min-w-0 items-start gap-3">
           <ReceiptText aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />

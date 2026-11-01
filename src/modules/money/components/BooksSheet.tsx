@@ -61,7 +61,7 @@ function BookList({ onCreated }: { onCreated: (book: Book) => void }) {
     <div className="space-y-6">
       <form
         onSubmit={onAdd}
-        className="space-y-4 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+        className="space-y-4 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="min-w-0">

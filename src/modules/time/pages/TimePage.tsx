@@ -32,7 +32,7 @@ export function TimePage() {
   return (
     <>
       <PageHeader title="Time" subtitle="Track what you spend time on and see how the week went." />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
         <div className="space-y-4 lg:col-span-5 lg:space-y-6">
           <TimerPanel />
           <FocusPanel />

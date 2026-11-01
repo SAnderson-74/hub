@@ -41,7 +41,7 @@ export function PlanView({ phases, today }: { phases: Phase[]; today: string }) 
   const all = planTotals(phases.flatMap((phase) => phase.steps));
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       {phases.length === 0 ? (
         <Panel
           title="Start your plan"

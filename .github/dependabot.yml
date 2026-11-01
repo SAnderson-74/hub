@@ -8,6 +8,11 @@ updates:
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Node's types follow the oldest Node Hub supports ("engines" in package.json), so
+      # TypeScript flags any API that version lacks. Raise them by hand with engines.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

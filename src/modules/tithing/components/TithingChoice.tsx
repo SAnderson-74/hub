@@ -74,7 +74,7 @@ export function TithingChoice({
   const baseCents = draft.custom ? typed : wholeCents;
   const invalid = tried && draft.applies && draft.custom && typed === null;
   return (
-    <fieldset className="min-w-0 space-y-4 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <fieldset className="min-w-0 space-y-4 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <legend className="sr-only">Tithing</legend>
       <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4">
         <span className="min-w-0">

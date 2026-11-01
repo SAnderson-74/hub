@@ -178,7 +178,7 @@ function CardForm({
   };
 
   return (
-    <div className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <form onSubmit={onSubmit} noValidate className="space-y-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="min-w-0 sm:col-span-2">
@@ -270,7 +270,7 @@ function CardForm({
         </div>
       ) : null}
       {card && confirmDelete ? (
-        <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+        <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
           <p className="font-semibold text-fg">
             Delete {card.name}?{" "}
             {card.transactionCount > 0

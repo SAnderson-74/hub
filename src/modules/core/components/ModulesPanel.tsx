@@ -82,7 +82,7 @@ export function ModulesPanel({ saved }: { saved: { modules: ModuleSettings; time
             Hub has the example tasks, goals, course, items, budget, and business steps from setup.
           </p>
           {confirmRemove ? (
-            <div className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+            <div className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
               <p className="text-sm text-fg">
                 Remove the example data? Anything you added to it, like a transaction in the example
                 account, stays along with what holds it.

@@ -54,7 +54,7 @@ function Pairs({ book, today }: { book: Book; today: string }) {
             <li
               key={`${pair.from.id}-${pair.to.id}`}
               aria-labelledby={`${ids}-${pair.from.id}`}
-              className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+              className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
             >
               <p
                 id={`${ids}-${pair.from.id}`}

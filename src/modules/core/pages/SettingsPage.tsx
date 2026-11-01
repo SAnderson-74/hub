@@ -1,14 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
+import { BookOpen, Check } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
 import { Panel } from "../../../client/components/Panel";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import { StatusDot } from "../../../client/components/StatusDot";
-import { inputClass, primaryButton } from "../../../client/components/ui";
+import { inputClass, primaryButton, secondaryButton } from "../../../client/components/ui";
 import { formatHour } from "../../../client/lib/format";
-import { useSaveSettings, useSettings, useSystem } from "../../../client/lib/queries";
+import { useModules, useSaveSettings, useSettings, useSystem } from "../../../client/lib/queries";
 import { applyAccent, previewAccent } from "../../../client/theme";
 import { BASE_BACKGROUND, contrastRatio, isHexColor, readableTextOn } from "../../../shared/color";
 import { ACCENT_PRESETS, settingsSchema } from "../../../shared/settings";
@@ -16,6 +16,8 @@ import { streakKey } from "../../education/queries";
 import { CalendarPanel } from "../../integrations/components/CalendarPanel";
 import { HomeAssistantPanel } from "../../integrations/components/HomeAssistantPanel";
 import { RemindersPanel } from "../../integrations/components/RemindersPanel";
+import { BooksSheet } from "../../money/components/BooksSheet";
+import { storeBookId } from "../../money/storedBook";
 import { PushPanel } from "../../push/components/PushPanel";
 import { usePushStatus } from "../../push/queries";
 import { BackupsPanel } from "../components/BackupsPanel";
@@ -147,7 +149,7 @@ function AccentPicker({ saved }: { saved: string }) {
         ) : null}
       </div>
 
-      <div className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+      <div className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
         <p className="text-sm font-semibold text-muted">Preview</p>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3">
           <span className="inline-flex h-10 items-center rounded-full bg-accent px-4 text-sm font-bold text-on-accent">
@@ -274,6 +276,8 @@ export function SettingsPage() {
   const info = system.data;
   const { hash } = useLocation();
   const loaded = settings.data !== undefined;
+  const modules = useModules();
+  const [managingBooks, setManagingBooks] = useState(false);
 
   // A link like /settings#home opens at that section once it has loaded.
   useEffect(() => {
@@ -296,9 +300,9 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Appearance, modules and time zone, Home, study streak, Home Assistant, reminders, calendar, imports, the Claude Project, backups, and details about this installation."
+        subtitle="Appearance, modules and time zone, Home, study streak, Home Assistant, reminders, calendar, imports, the Claude Project, backups, money books, and details about this installation."
       />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
         <Panel
           title="Accent color"
           description="Used for highlights, active items, and buttons."
@@ -448,7 +452,30 @@ export function SettingsPage() {
             <LoadingRows />
           )}
         </Panel>
+
+        {modules.money ? (
+          <Panel
+            title="Books"
+            description="Each book keeps its own accounts and categories, like personal money and a business."
+            className="lg:col-span-5 lg:col-start-8 lg:row-start-2"
+          >
+            <button
+              type="button"
+              className={secondaryButton}
+              onClick={() => setManagingBooks(true)}
+            >
+              <BookOpen aria-hidden="true" className="size-4" />
+              Books
+            </button>
+          </Panel>
+        ) : null}
       </div>
+      <BooksSheet
+        open={managingBooks}
+        onClose={() => setManagingBooks(false)}
+        // Money opens on a new book next.
+        onCreated={(created) => storeBookId(created.id)}
+      />
     </>
   );
 }

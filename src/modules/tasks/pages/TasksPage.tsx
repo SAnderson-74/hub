@@ -1,18 +1,25 @@
 import {
+  Archive,
+  BookCheck,
+  CalendarDays,
   ClipboardPaste,
   FolderPlus,
+  Layers,
   LayoutTemplate,
   List,
+  ListTodo,
   Moon,
   Pencil,
   Plus,
   SquareKanban,
+  Star,
   Sunrise,
   X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "../../../client/components/PageHeader";
+import { type PageTab, PageTabs } from "../../../client/components/PageTabs";
 import { ErrorNote, LoadingRows } from "../../../client/components/States";
 import {
   iconButton,
@@ -81,6 +88,22 @@ function projectLabel(filter: ProjectFilter, projects: ProjectItem[]): string {
   if (filter === "inbox") return "the inbox";
   return projects.find((project) => project.id === filter)?.name ?? "this project";
 }
+
+const LIST_ICONS = {
+  today: Star,
+  upcoming: CalendarDays,
+  anytime: Layers,
+  someday: Archive,
+  logbook: BookCheck,
+} as const;
+const LIST_TABS: readonly PageTab<SmartList | "all">[] = [
+  { value: "all", label: "All", icon: ListTodo },
+  ...SMART_LISTS.map((value) => ({
+    value,
+    label: SMART_LIST_LABELS[value],
+    icon: LIST_ICONS[value],
+  })),
+];
 
 export function TasksPage() {
   const [params, setParams] = useSearchParams();
@@ -257,7 +280,9 @@ export function TasksPage() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <PageTabs label="Show" name="task-list" tabs={LIST_TABS} value={list} onChange={selectList} />
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex w-full min-w-0 items-center gap-1 sm:w-auto sm:max-w-sm sm:flex-1">
           <label htmlFor="task-project" className="sr-only">
             Project
@@ -294,34 +319,38 @@ export function TasksPage() {
               type="button"
               className={iconButton}
               aria-label={`Edit project ${selectedProject.name}`}
+              data-tip=""
               onClick={() => setProjectSheet(selectedProject)}
             >
-              <Pencil aria-hidden="true" className="size-5" />
+              <Pencil aria-hidden="true" className="size-[1.125rem]" />
             </button>
           ) : null}
           <button
             type="button"
             className={iconButton}
             aria-label="New project"
+            data-tip=""
             onClick={() => setProjectSheet("new")}
           >
-            <FolderPlus aria-hidden="true" className="size-5" />
+            <FolderPlus aria-hidden="true" className="size-[1.125rem]" />
           </button>
           <button
             type="button"
             className={iconButton}
             aria-label="Templates"
+            data-tip=""
             onClick={() => setTemplatesOpen(true)}
           >
-            <LayoutTemplate aria-hidden="true" className="size-5" />
+            <LayoutTemplate aria-hidden="true" className="size-[1.125rem]" />
           </button>
           <button
             type="button"
             className={iconButton}
             aria-label="Paste tasks from Claude"
+            data-tip=""
             onClick={() => setPastingTasks(true)}
           >
-            <ClipboardPaste aria-hidden="true" className="size-5" />
+            <ClipboardPaste aria-hidden="true" className="size-[1.125rem]" />
           </button>
         </div>
 
@@ -344,36 +373,17 @@ export function TasksPage() {
                     setView(value);
                     rememberView(value);
                   }}
+                  aria-label={label}
+                  data-tip=""
                   className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
                 />
-                <span className="pointer-events-none flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted peer-checked:bg-surface-0 peer-checked:text-fg">
+                <span className="pointer-events-none grid size-9 place-items-center rounded-full text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text">
                   <Icon aria-hidden="true" className="size-4" />
-                  {label}
                 </span>
               </label>
             ))}
           </fieldset>
         ) : null}
-
-        {/* Many choices for a phone's width; the row scrolls sideways there. */}
-        <fieldset className="flex w-full min-w-0 max-w-full overflow-x-auto rounded-full bg-mantle p-1 ring-1 ring-surface-0/60 sm:w-fit">
-          <legend className="sr-only">Show</legend>
-          {(["all", ...SMART_LISTS] as const).map((value) => (
-            <label key={value} className="relative shrink-0">
-              <input
-                type="radio"
-                name="task-list"
-                value={value}
-                checked={list === value}
-                onChange={() => selectList(value)}
-                className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full"
-              />
-              <span className="pointer-events-none flex h-10 items-center rounded-full px-3 text-sm font-semibold whitespace-nowrap text-muted peer-checked:bg-surface-0 peer-checked:text-fg peer-focus-visible:ring-2 peer-focus-visible:ring-accent-text sm:px-4">
-                {value === "all" ? "All" : SMART_LIST_LABELS[value]}
-              </span>
-            </label>
-          ))}
-        </fieldset>
       </div>
 
       <form onSubmit={onAdd} className="mb-2 flex gap-2">
@@ -422,7 +432,7 @@ export function TasksPage() {
       {createTask.isError || updateTask.isError ? (
         <p
           role="alert"
-          className="mb-4 rounded-tile bg-mantle p-4 text-sm text-danger ring-1 ring-danger/40"
+          className="mb-4 rounded-tile bg-mantle p-3 text-sm text-danger ring-1 ring-danger/40"
         >
           {(createTask.error ?? updateTask.error)?.message}
         </p>

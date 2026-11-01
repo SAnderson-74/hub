@@ -42,6 +42,7 @@ test("a statement pasted from the Claude Project imports like a bank file", asyn
   }, String(book.id));
   await page.goto("/money");
   await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a bank file" }).click();
   const sheet = page.getByRole("dialog", { name: "Import transactions" });
 
   const answer = {

@@ -9,7 +9,7 @@ function CheckTiles({ checks }: { checks: SystemCheck[] }) {
   return (
     <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {checks.map((check) => (
-        <li key={check.id} className="min-w-0 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+        <li key={check.id} className="min-w-0 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
           <p className="flex items-center gap-2 text-sm font-semibold text-muted">
             <StatusDot tone={check.tone} />
             {check.label}

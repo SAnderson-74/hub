@@ -306,7 +306,7 @@ function CourseForm({
 
       {course ? (
         confirmDelete ? (
-          <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-danger/40">
+          <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-danger/40">
             <p className="font-semibold text-fg">
               Delete this course and its assessments? Time logged on it stays. This can't be undone.
             </p>

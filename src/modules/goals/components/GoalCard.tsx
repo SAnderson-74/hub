@@ -61,7 +61,7 @@ export function GoalCard({
       <button
         type="button"
         onClick={onOpen}
-        className="block w-full rounded-tile bg-base/80 p-4 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
+        className="block w-full rounded-tile bg-base/80 p-3 text-left ring-1 ring-surface-0/50 hover:ring-surface-1"
       >
         <span className="flex items-start justify-between gap-3">
           <span className="min-w-0 font-semibold break-words text-fg">{goal.title}</span>

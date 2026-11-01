@@ -238,7 +238,7 @@ function PreviewRow({
 }) {
   const Icon = icon === "goal" ? Target : CircleCheck;
   return (
-    <li className="rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <li className="rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <span className="flex items-start gap-3">
         <Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted" />
         <span className="min-w-0">

@@ -142,7 +142,7 @@ export function StudyPlanForm({
       </div>
 
       {preview ? (
-        <div className="space-y-3 rounded-tile bg-base p-4 ring-1 ring-surface-1">
+        <div className="space-y-3 rounded-tile bg-base p-3 ring-1 ring-surface-1">
           <p className="font-semibold text-fg">Importing will make these changes:</p>
           <ul className="list-disc space-y-1 pl-5 text-fg">
             {describe(preview.summary).map((line) => (

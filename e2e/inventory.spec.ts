@@ -31,7 +31,8 @@ test("items to sell, pasted from the Claude Project, are added at once", async (
   };
 
   await page.goto("/resale");
-  await page.getByRole("button", { name: "Paste items" }).first().click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Paste items" }).click();
   const sheet = page.getByRole("dialog", { name: "Paste items" });
   await sheet
     .getByLabel("Claude Project answer")

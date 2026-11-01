@@ -24,7 +24,16 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "iphone", use: { ...devices["iPhone 17"] }, testIgnore: A11Y },
+    {
+      name: "iphone",
+      // WebKit applies the app's Content-Security-Policy to Playwright's own helpers, which
+      // add <style> elements of their own (for screenshots, and since 1.64 during actions
+      // too). The blocked styles log console errors that have nothing to do with the app.
+      // Chromium exempts its helpers, so the desktop run still enforces the real policy
+      // and catches any style the app itself injects.
+      use: { ...devices["iPhone 17"], bypassCSP: true },
+      testIgnore: A11Y,
+    },
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },

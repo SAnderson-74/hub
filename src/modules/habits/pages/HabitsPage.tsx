@@ -51,27 +51,29 @@ export function HabitsPage() {
                 : `${left} left for today.`
             : undefined
         }
+        actions={
+          <>
+            <button
+              type="button"
+              className={primaryButton}
+              onClick={() => setTarget({ mode: "new", kind: "check" })}
+            >
+              <Plus aria-hidden="true" className="size-[1.125rem]" />
+              Add habit
+            </button>
+            {modules.courses && habits.data && !hasStudy ? (
+              <button
+                type="button"
+                className={secondaryButton}
+                onClick={() => setTarget({ mode: "new", kind: "study" })}
+              >
+                <GraduationCap aria-hidden="true" className="size-4" />
+                Track study as a habit
+              </button>
+            ) : null}
+          </>
+        }
       />
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={primaryButton}
-          onClick={() => setTarget({ mode: "new", kind: "check" })}
-        >
-          <Plus aria-hidden="true" className="size-5" />
-          Add habit
-        </button>
-        {modules.courses && habits.data && !hasStudy ? (
-          <button
-            type="button"
-            className={secondaryButton}
-            onClick={() => setTarget({ mode: "new", kind: "study" })}
-          >
-            <GraduationCap aria-hidden="true" className="size-4" />
-            Track study as a habit
-          </button>
-        ) : null}
-      </div>
       <p role="status" className="mb-4 text-sm font-semibold text-ok empty:hidden">
         {message}
       </p>
@@ -81,7 +83,7 @@ export function HabitsPage() {
       ) : habits.isError ? (
         <ErrorNote error={habits.error} onRetry={() => void habits.refetch()} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
           <Panel
             title="Today"
             description="Habits meant for today, and weekly ones still short of their count."

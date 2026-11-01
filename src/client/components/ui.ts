@@ -1,16 +1,16 @@
 // Class names for common controls, so forms look the same on every page.
-// Heights are at least 44px (h-11) for touch.
+// Buttons and fields are h-11: 38.5px with the 14px root (src/client/styles.css).
 
 export const inputClass =
-  "h-12 w-full rounded-control bg-base px-4 text-fg ring-1 ring-surface-1 placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent-text focus-visible:outline-none aria-invalid:ring-danger disabled:opacity-50";
+  "h-11 w-full rounded-control bg-base px-3.5 text-fg ring-1 ring-surface-1 placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent-text focus-visible:outline-none aria-invalid:ring-danger disabled:opacity-50";
 
 export const textareaClass =
-  "min-h-28 w-full rounded-control bg-base px-4 py-3 text-fg ring-1 ring-surface-1 placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent-text focus-visible:outline-none";
+  "min-h-24 w-full rounded-control bg-base px-3.5 py-2.5 text-fg ring-1 ring-surface-1 placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent-text focus-visible:outline-none";
 
-export const labelClass = "mb-1.5 block text-sm font-semibold text-muted";
+export const labelClass = "mb-1 block text-sm font-semibold text-muted";
 
 export const primaryButton =
-  "inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-5 font-bold text-on-accent transition-opacity disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-4 font-bold text-on-accent transition-opacity disabled:cursor-not-allowed disabled:opacity-40";
 
 export const secondaryButton =
   "inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-surface-0 px-4 font-semibold text-fg hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-40";
@@ -23,3 +23,10 @@ export const dangerButton =
 
 export const iconButton =
   "grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-0 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40";
+
+/**
+ * A secondary button with only an icon. Give it an aria-label and `data-tip` so its
+ * name shows on hover and focus (src/client/components/Tooltips.tsx).
+ */
+export const iconSecondaryButton =
+  "grid size-11 shrink-0 place-items-center rounded-full bg-surface-0 text-fg hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-40";

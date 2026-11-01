@@ -49,28 +49,29 @@ export function TaxesPage() {
       <PageHeader
         title="Taxes"
         subtitle="US federal basics for resale income. Education, not tax advice."
+        actions={
+          <>
+            <label htmlFor={`${ids}-year`} className="text-sm font-semibold text-muted">
+              Tax year
+            </label>
+            <div className="w-28">
+              <select
+                id={`${ids}-year`}
+                value={year}
+                onChange={(event) => setChosenYear(Number(event.target.value))}
+                className={inputClass}
+              >
+                {years.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        }
       />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
-        <div className="flex flex-wrap items-center gap-3 lg:col-span-12">
-          <label htmlFor={`${ids}-year`} className="text-sm font-semibold text-muted">
-            Tax year
-          </label>
-          <div className="w-36">
-            <select
-              id={`${ids}-year`}
-              value={year}
-              onChange={(event) => setChosenYear(Number(event.target.value))}
-              className={inputClass}
-            >
-              {years.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
         {items.isPending ? (
           <div className="lg:col-span-12">
             <LoadingRows rows={3} />

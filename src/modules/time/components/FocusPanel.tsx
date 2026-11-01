@@ -125,7 +125,7 @@ export function FocusPanel({ className }: { className?: string }) {
     >
       <div className="space-y-4">
         {running ? (
-          <div className="rounded-tile bg-base/80 p-4 text-center ring-1 ring-surface-0/50">
+          <div className="rounded-tile bg-base/80 p-3 text-center ring-1 ring-surface-0/50">
             <p className="text-sm font-semibold text-muted">
               {state.phase === "work" ? "Working" : "Break"}
               {state.rounds > 0 ? ` · ${state.rounds} done` : ""}

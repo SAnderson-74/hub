@@ -139,7 +139,7 @@ export function NetWorthView({
         </Panel>
       ) : (
         <div
-          className={`grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6 ${
+          className={`grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4 ${
             worth.isPlaceholderData ? "opacity-60" : ""
           }`}
         >

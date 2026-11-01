@@ -155,10 +155,8 @@ test("a spreadsheet imports, with incomplete rows flagged to review", async ({
   ].join("\n");
 
   await page.goto("/resale");
-  await page
-    .getByRole("button", { name: /^Import( a spreadsheet)?$/ })
-    .first()
-    .click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a spreadsheet" }).click();
   const sheet = page.getByRole("dialog", { name: "Import from a spreadsheet" });
   await sheet.getByLabel("Or paste it").fill(csv);
   await sheet.getByRole("button", { name: "Read columns" }).click();
@@ -193,7 +191,8 @@ test("a spreadsheet imports, with incomplete rows flagged to review", async ({
   );
 
   // The same file again adds nothing.
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import a spreadsheet" }).click();
   await sheet.getByLabel("Or paste it").fill(csv);
   await sheet.getByRole("button", { name: "Read columns" }).click();
   await sheet.getByRole("button", { name: "Check import" }).click();
@@ -227,7 +226,8 @@ test("a pasted listing adds an item, and a Shortcut can add another listing", as
   };
 
   await page.goto("/resale");
-  await page.getByRole("button", { name: "Paste listing" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Paste a listing" }).click();
   const sheet = page.getByRole("dialog", { name: "Paste a listing" });
   await sheet.getByLabel("Listing").fill("{ not json");
   await sheet.getByRole("button", { name: "Check listing" }).click();

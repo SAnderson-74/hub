@@ -52,7 +52,7 @@ export function SmartTaskList(
   return (
     <div className="space-y-6">
       {sections.length === 0 ? (
-        <p className="rounded-tile bg-mantle p-5 text-muted ring-1 ring-surface-0/60">
+        <p className="rounded-tile bg-mantle p-4 text-muted ring-1 ring-surface-0/60">
           {EMPTY[list]}
         </p>
       ) : null}

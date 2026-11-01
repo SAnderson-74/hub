@@ -32,7 +32,7 @@ export function ReceiptBox({
   return (
     <section
       aria-label="Receipt"
-      className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+      className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
     >
       <div className="flex items-start justify-between gap-3">
         <span className="flex min-w-0 items-start gap-3">

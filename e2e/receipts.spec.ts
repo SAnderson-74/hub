@@ -43,7 +43,8 @@ test("receipts pasted from the Claude Project fill in transactions", async ({ pa
     localStorage.setItem("hub.money.view", "transactions");
   }, String(book.id));
   await page.goto("/money");
-  await page.getByRole("button", { name: "Paste receipts" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Paste receipts" }).click();
   const sheet = page.getByRole("dialog", { name: "Paste receipts" });
 
   // What the Project answers, code fence and all.

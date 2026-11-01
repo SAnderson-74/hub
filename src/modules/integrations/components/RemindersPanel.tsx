@@ -106,7 +106,7 @@ export function RemindersPanel({
   return (
     <div className="space-y-6">
       {!configured ? (
-        <p className="rounded-tile bg-base/80 p-4 text-sm text-fg ring-1 ring-surface-0/50">
+        <p className="rounded-tile bg-base/80 p-3 text-sm text-fg ring-1 ring-surface-0/50">
           Reminders go out as notifications on devices that turn them on (Notifications, below), or
           through Home Assistant's reminder webhook. Until one is set up, you can see what they'd
           say below.
@@ -120,7 +120,7 @@ export function RemindersPanel({
           return (
             <fieldset
               key={kind}
-              className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50"
+              className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50"
             >
               <legend className="sr-only">{REMINDER_LABELS[kind]}</legend>
               <label className="flex min-h-11 items-center gap-3 font-semibold text-fg">

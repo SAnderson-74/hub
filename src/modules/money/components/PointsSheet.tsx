@@ -57,7 +57,7 @@ function PointsHistory({ entry, today }: { entry: CardRewards; today: string }) 
   const { balances, redemptions, realValue } = points.data;
   return (
     <div className="space-y-8">
-      <p className="rounded-tile bg-base/80 p-4 text-sm text-muted ring-1 ring-surface-0/50">
+      <p className="rounded-tile bg-base/80 p-3 text-sm text-muted ring-1 ring-surface-0/50">
         {realValue === null
           ? `Points count at the ${pointValueLabel(setValue)} you set. Add what you get when you use them, and Hub counts them at that instead.`
           : `Your redemptions averaged ${pointValueLabel(realValue)} a point, so Hub counts points at that (you set ${pointValueLabel(setValue)}).`}

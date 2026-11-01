@@ -120,7 +120,7 @@ function TurnOn({
 
   if (!support.ok) {
     return (
-      <p className="rounded-tile bg-base/80 p-4 text-sm text-fg ring-1 ring-surface-0/50">
+      <p className="rounded-tile bg-base/80 p-3 text-sm text-fg ring-1 ring-surface-0/50">
         {support.reason === "home-screen"
           ? "On an iPhone or iPad, notifications work from the Home Screen app. In Safari, tap Share, then Add to Home Screen, and open Hub from there."
           : support.reason === "blocked"
@@ -150,7 +150,7 @@ function TurnOn({
   };
 
   return (
-    <div className="space-y-3 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="space-y-3 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <p className="flex items-center gap-2 font-semibold text-fg">
         <BellOff aria-hidden="true" className="size-5 text-muted" />
         Off on this device
@@ -207,7 +207,7 @@ function ThisDevice({
   };
 
   return (
-    <div className="space-y-4 rounded-tile bg-base/80 p-4 ring-1 ring-surface-0/50">
+    <div className="space-y-4 rounded-tile bg-base/80 p-3 ring-1 ring-surface-0/50">
       <div>
         <p className="flex items-center gap-2 font-semibold text-fg">
           <BellRing aria-hidden="true" className="size-5 text-accent-text" />

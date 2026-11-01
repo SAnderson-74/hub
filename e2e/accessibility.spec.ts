@@ -185,6 +185,8 @@ test("resale aging and labels, and a goal's check-ins, meet WCAG 2.1 AA", async 
   await page.getByRole("radio", { name: "Labels" }).check();
   await page.getByRole("button", { name: /^Pick all/ }).click();
   await expect(page.getByRole("img", { name: "Barcode for BIKE-01" })).toBeVisible();
+  // Print labels fades in from its disabled look; check its colors once it has.
+  await expect(page.getByRole("button", { name: "Print labels" })).toHaveCSS("opacity", "1");
   expect(await violations(page), "Labels").toEqual([]);
   await page.getByRole("radio", { name: "Items" }).check();
 

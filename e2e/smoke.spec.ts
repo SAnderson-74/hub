@@ -2,9 +2,8 @@ import { expect, type Page, type TestInfo, test } from "@playwright/test";
 
 /**
  * Collects console errors and uncaught exceptions, including Content-Security-Policy
- * violations. Assert on it BEFORE taking a screenshot: in WebKit, Playwright inserts a
- * temporary <style> element to prepare screenshots, and the app's CSP correctly blocks it,
- * which logs an error that has nothing to do with the app.
+ * violations (the desktop run enforces the CSP; the WebKit run bypasses it, see
+ * playwright.config.ts). Assert on it before taking a screenshot all the same.
  */
 function trackErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -81,5 +80,29 @@ test("unknown pages show a way back", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
   await page.getByRole("link", { name: "Go to home" }).click();
   await expect(page).toHaveURL(/\/$/);
+  expect(errors).toEqual([]);
+});
+
+test("wide screens name each page in the rail and show who is signed in", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name === "iphone", "Phones use the tab bar.");
+  const errors = trackErrors(page);
+  await page.goto("/");
+  await expect(page.getByRole("banner").getByText("john.smith@example.com")).toBeVisible();
+
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
+  const goals = nav.getByRole("link", { name: "Goals" });
+  // The name and its shortcut show beside the icon, and Escape hides them.
+  await goals.hover();
+  const name = page.getByText("G G", { exact: true });
+  await expect(name).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(name).toBeHidden();
+
+  await goals.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Goals" })).toBeVisible();
+  await expect(goals).toHaveAttribute("aria-current", "page");
   expect(errors).toEqual([]);
 });

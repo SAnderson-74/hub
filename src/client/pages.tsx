@@ -34,7 +34,7 @@ import type { ModuleId } from "../shared/modules";
 
 export type AppPage = {
   id: string;
-  /** Short label for the tab bar and sidebar. */
+  /** Short label for the tab bar, and beside its icon in the wide-screen rail. */
   label: string;
   /** "/" for home, otherwise a single segment like "/tasks". */
   path: string;

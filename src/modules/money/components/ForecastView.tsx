@@ -57,7 +57,7 @@ export function ForecastView({ book, today }: { book: Book; today: string }) {
     .slice(0, 12);
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-6">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start lg:gap-4">
       <Panel
         title="Forecast"
         description="Today's balances plus bills and income on their schedules."
