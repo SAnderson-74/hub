@@ -172,7 +172,7 @@ function NewPrice({ listing, onDone }: { listing: Listing; onDone: () => void })
         inputMode="decimal"
         aria-label="New price"
         aria-invalid={cents === null}
-        className={`${inputClass} w-32 tabular-nums`}
+        className={`${inputClass} max-w-32 tabular-nums`}
       />
       <button
         type="submit"

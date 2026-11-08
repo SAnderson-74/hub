@@ -150,7 +150,7 @@ export function RemindersPanel({
                     value={part.time}
                     disabled={!part.enabled}
                     onChange={(event) => setPart(kind, { time: event.target.value })}
-                    className={`${inputClass} w-36`}
+                    className={inputClass}
                   />
                 </div>
                 {kind === "due_soon" ? (
@@ -173,7 +173,7 @@ export function RemindersPanel({
                         }));
                         setMessage("");
                       }}
-                      className={`${inputClass} w-52`}
+                      className={inputClass}
                     >
                       {DUE_SOON_DAYS.map((days) => (
                         <option key={days} value={days}>

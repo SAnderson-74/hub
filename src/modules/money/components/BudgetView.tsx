@@ -338,7 +338,7 @@ function CategoryRow({
               placeholder="0.00"
               aria-invalid={tried && invalid}
               aria-describedby={`${ids}-hint`}
-              className={`${inputClass} w-36 tabular-nums`}
+              className={`${inputClass} max-w-36 tabular-nums`}
             />
             <button type="submit" className={primaryButton} disabled={save.isPending}>
               Save budget
