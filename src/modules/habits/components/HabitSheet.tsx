@@ -10,7 +10,6 @@ import {
 } from "../../../client/components/ui";
 import { type HabitSchedule, WEEKDAY_SHORT } from "../../../shared/habits";
 import { addDays } from "../../../shared/recurrence";
-import { formatShortDate } from "../../tasks/dates";
 import {
   type Habit,
   useCheckin,
@@ -308,6 +307,8 @@ function HabitForm({
   );
 }
 
+const MONTH_SHORT = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" });
+
 /** The last two weeks, to check off days that were done but not marked. */
 function PastDays({ habit: opened, today }: { habit: Habit; today: string }) {
   const checkin = useCheckin();
@@ -327,8 +328,9 @@ function PastDays({ habit: opened, today }: { habit: Habit; today: string }) {
             <button
               key={date}
               type="button"
+              // Named by what it shows ("Wed 28"), plus the month for screen readers;
+              // aria-pressed says whether it's done.
               aria-pressed={on}
-              aria-label={`${formatShortDate(date, today)}: ${on ? "done" : "not done"}`}
               disabled={checkin.isPending}
               onClick={() => checkin.mutate({ id: habit.id, date, done: !on })}
               className={`flex min-h-11 flex-col items-center justify-center rounded-control text-xs tabular-nums ${
@@ -337,8 +339,9 @@ function PastDays({ habit: opened, today }: { habit: Habit; today: string }) {
                   : "bg-base text-muted ring-1 ring-surface-0"
               }`}
             >
-              <span aria-hidden="true">{WEEKDAY_SHORT[(day.getUTCDay() + 6) % 7]}</span>
-              <span aria-hidden="true">{day.getUTCDate()}</span>
+              <span>{WEEKDAY_SHORT[(day.getUTCDay() + 6) % 7]}</span>{" "}
+              <span>{day.getUTCDate()}</span>
+              <span className="sr-only"> {MONTH_SHORT.format(day)}</span>
             </button>
           );
         })}

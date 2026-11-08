@@ -212,7 +212,7 @@ export function BillsView({
                         },
                       )
                     }
-                    aria-label={`${suggestion.name} isn't a bill`}
+                    aria-label={`Not a bill: ${suggestion.name}`}
                   >
                     Not a bill
                   </button>
