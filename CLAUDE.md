@@ -73,7 +73,7 @@ Hub is a private, self-hosted web app for tasks and goals, courses, resale track
 
 ## Cloud sessions
 
-- Node 22 is the default there; the app supports Node 22 and newer (production runs Node 24).
+- Node 22 is the default there; the app supports Node 22 and newer (production runs Node 26).
 - `npm ci` may compile `better-sqlite3` from source. That's expected.
 - Browsers for Playwright usually aren't installed. Rely on unit tests and the CI browser tests, and describe UI changes in the pull request.
 
